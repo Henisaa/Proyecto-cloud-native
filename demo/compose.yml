@@ -1,0 +1,53 @@
+services:
+  notify:
+    build: .
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      SECURITY_ENABLED: "false"
+      NOTIFY_FROM: no-reply@rutaexpress.local
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
