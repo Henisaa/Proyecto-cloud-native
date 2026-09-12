@@ -1,4 +1,4 @@
-# ms-rutaexpress-audit (Kotlin Edition)
+# ms-rutaexpress-audit
 
 Microservicio de auditoría y línea de tiempo (*timeline*) para la plataforma RutaExpress, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4**.  
 Encargado de ingestar eventos desde Kafka, persistirlos en Oracle y exponer endpoints de solo lectura (`/api/audit/*`).
