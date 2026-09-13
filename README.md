@@ -1,6 +1,6 @@
-# ms-rutaexpress-report (Kotlin Edition)
+# ms-rutaexpress-report
 
-Microservicio de reportería, KPIs y analítica operacional para la plataforma **RutaExpress**, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4** siguiendo una arquitectura minimalista (filosofía *Ponytail* / YAGNI).
+Microservicio de reportería, KPIs y analítica operacional para la plataforma **RutaExpress**, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4** siguiendo una arquitectura minimalista.
 
 Ingesta eventos del ciclo de vida de envíos vía **Kafka**, consolida métricas agregadas en **Oracle** y expone consultas analíticas optimizadas de solo lectura bajo `/api/report/*` aceleradas con caché en memoria **Caffeine**.
 
