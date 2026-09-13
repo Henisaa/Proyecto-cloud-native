@@ -1,11 +1,11 @@
-package com.rutaexpress.demo
+package com.rutaexpress.report
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class DemoApplication
+class MsRutaexpressReportApplication
 
 fun main(args: Array<String>) {
-	runApplication<DemoApplication>(*args)
+    runApplication<MsRutaexpressReportApplication>(*args)
 }
