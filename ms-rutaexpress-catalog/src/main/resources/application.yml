@@ -1,0 +1,107 @@
+server:
+  port: ${PORT:8081}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: ms-rutaexpress-catalog
+
+  # Perfil activo por defecto (prod con Oracle, o local/test)
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # Base de Datos Oracle por defecto para despliegue Cloud / EC2
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_NAME:FREEPDB1}}
+    username: ${SPRING_DATASOURCE_USERNAME:c##rutaexpress}
+    password: ${SPRING_DATASOURCE_PASSWORD:secret}
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+
+  # JPA / Hibernate
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.OracleDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Flyway Migrations
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # Seguridad IDaaS Azure AD
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/${AZURE_AD_TENANT_ID:common}/v2.0}
+
+  # Kafka Event Streaming
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        spring.json.add.type.headers: false
+
+# Configuración personalizada de la aplicación RutaExpress
+app:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+    azure:
+      audience: ${AZURE_AD_AUDIENCE:api://rutaexpress-catalog}
+  kafka:
+    topics:
+      catalog-events: ${KAFKA_TOPIC_CATALOG_EVENTS:catalog.events}
+
+# Springdoc OpenAPI / Swagger UI
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    enabled: true
+
+# Actuator & Prometheus Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.rutaexpress.catalog: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO
