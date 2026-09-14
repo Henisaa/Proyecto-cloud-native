@@ -562,3 +562,61 @@ html, body {
   gap: 12px;
   background: var(--gray-850);
 }
+
+/* Navegación por Microservicios en Topbar */
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 8px;
+  background: var(--gray-950);
+  border: 1px solid var(--gray-800);
+  border-radius: 8px;
+  margin: 0 16px;
+}
+
+.topbar-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 6px;
+  color: var(--gray-300);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.topbar-nav-item:hover {
+  background: var(--gray-850);
+  color: var(--gray-100);
+}
+
+.topbar-nav-item.active {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--yellow-400);
+  border-color: rgba(245, 158, 11, 0.35);
+  font-weight: 600;
+}
+
+.topbar-nav-item.active svg {
+  color: var(--yellow-400);
+}
+
+.nav-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gray-600);
+}
+
+.nav-status-dot.active-live {
+  background: var(--color-success);
+  box-shadow: 0 0 6px var(--color-success);
+}
+

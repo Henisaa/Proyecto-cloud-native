@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
+import { MicroservicePlaceholder } from './components/common/MicroservicePlaceholder';
 import { ServicesView } from './components/catalog/ServicesView';
 import { FleetCapacityView } from './components/catalog/FleetCapacityView';
 import { TariffMatrixView } from './components/catalog/TariffMatrixView';
@@ -16,6 +17,10 @@ import {
 } from './data/mockData';
 
 export function App() {
+  // Dominio activo seleccionado en la Navbar ('catalog' | 'notify' | 'shipments' | 'audit' | 'report' | 'bff' | 'messaging')
+  const [activeDomain, setActiveDomain] = useState('catalog');
+  
+  // Sub-vista activa dentro del dominio seleccionado
   const [currentView, setCurrentView] = useState('services');
 
   // Estado del Dominio de Catálogo (ms-rutaexpress-catalog)
@@ -26,6 +31,16 @@ export function App() {
   // Estado del Dominio de Notificaciones (ms-rutaexpress-notify)
   const [queues, setQueues] = useState(initialQueuesTelemetry);
   const [logs, setLogs] = useState(initialNotificationLogs);
+
+  // Cambio de dominio desde la Navbar o Sidebar
+  const handleSelectDomain = (domainId) => {
+    setActiveDomain(domainId);
+    if (domainId === 'catalog') {
+      setCurrentView('services');
+    } else if (domainId === 'notify') {
+      setCurrentView('queues');
+    }
+  };
 
   // Handlers para Catálogo
   const handleAddService = (newSrv) => {
@@ -109,19 +124,24 @@ export function App() {
   return (
     <div className="app-container">
       <Sidebar 
+        activeDomain={activeDomain}
         currentView={currentView} 
-        onSelectView={setCurrentView} 
+        onSelectView={setCurrentView}
+        onSelectDomain={handleSelectDomain}
       />
 
       <div className="main-content">
         <Navbar
+          activeDomain={activeDomain}
+          onSelectDomain={handleSelectDomain}
           totalServices={services.length}
           avgCapacity={avgCapacity}
           onResetData={handleResetData}
         />
 
         <main className="content-viewport">
-          {currentView === 'services' && (
+          {/* VISTAS DE CATÁLOGO */}
+          {activeDomain === 'catalog' && currentView === 'services' && (
             <ServicesView
               services={services}
               onAddService={handleAddService}
@@ -130,7 +150,7 @@ export function App() {
             />
           )}
 
-          {currentView === 'capacity' && (
+          {activeDomain === 'catalog' && currentView === 'capacity' && (
             <FleetCapacityView
               capacities={capacities}
               services={services}
@@ -139,7 +159,7 @@ export function App() {
             />
           )}
 
-          {currentView === 'tariffs' && (
+          {activeDomain === 'catalog' && currentView === 'tariffs' && (
             <TariffMatrixView
               tariffs={tariffs}
               services={services}
@@ -147,7 +167,8 @@ export function App() {
             />
           )}
 
-          {currentView === 'queues' && (
+          {/* VISTAS DE NOTIFICACIONES */}
+          {activeDomain === 'notify' && currentView === 'queues' && (
             <NotificationMonitorView
               queues={queues}
               logs={logs}
@@ -155,13 +176,21 @@ export function App() {
             />
           )}
 
-          {currentView === 'documents' && (
+          {activeDomain === 'notify' && currentView === 'documents' && (
             <DocumentViewer />
           )}
 
-          {currentView === 'dispatch' && (
+          {activeDomain === 'notify' && currentView === 'dispatch' && (
             <DispatcherSimulatorView
               onDispatchEvent={handleDispatchEvent}
+            />
+          )}
+
+          {/* ESPACIO RESERVADO PARA LOS OTROS MICROSERVICIOS */}
+          {!['catalog', 'notify'].includes(activeDomain) && (
+            <MicroservicePlaceholder
+              microserviceId={activeDomain}
+              onSwitchToDemoDomain={handleSelectDomain}
             />
           )}
         </main>

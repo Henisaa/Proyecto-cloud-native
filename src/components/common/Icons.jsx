@@ -244,3 +244,44 @@ export function IconShield(props) {
     </svg>
   );
 }
+
+export function IconChartBar(props) {
+  return (
+    <svg {...defaultProps} {...props}>
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+      <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  );
+}
+
+export function IconServer(props) {
+  return (
+    <svg {...defaultProps} {...props}>
+      <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+      <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+      <line x1="6" x2="6.01" y1="6" y2="6" />
+      <line x1="6" x2="6.01" y1="18" y2="18" />
+    </svg>
+  );
+}
+
+export function IconMapPin(props) {
+  return (
+    <svg {...defaultProps} {...props}>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+export function IconCode(props) {
+  return (
+    <svg {...defaultProps} {...props}>
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
