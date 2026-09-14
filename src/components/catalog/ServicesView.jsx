@@ -136,13 +136,14 @@ export function ServicesView({ services, onAddService, onUpdateService, onToggle
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <div className="card">
           <div className="card-subtitle">TOTAL SERVICIOS</div>
-          <div className="metric-value" style={{ fontSize: '26px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '6px' }}>
+          <div className="metric-value" style={{ fontSize: '26px', fontWeight: '800', color: 'var(--yellow-400)', marginTop: '6px' }}>
             {services.length}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--gray-400)', marginTop: '4px' }}>
             Registrados en base de datos Oracle
           </div>
         </div>
+
 
         <div className="card">
           <div className="card-subtitle">SERVICIOS ACTIVOS</div>
@@ -245,19 +246,20 @@ export function ServicesView({ services, onAddService, onUpdateService, onToggle
                     </div>
                   </td>
                   <td>
-                    <span className="badge badge-gray">
+                    <span className="badge badge-yellow">
                       {srv.category}
                     </span>
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--gray-200)' }}>
-                      <IconClock width={14} height={14} style={{ color: 'var(--yellow-500)' }} />
+                      <IconClock width={14} height={14} style={{ color: 'var(--yellow-400)' }} />
                       <span className="tabular-data font-semibold">{srv.estimatedDeliveryHours} horas</span>
                     </div>
                   </td>
-                  <td className="tabular-data" style={{ fontWeight: '700', color: 'var(--gray-100)' }}>
+                  <td className="tabular-data" style={{ fontWeight: '700', color: 'var(--yellow-300)' }}>
                     {formatCLP(srv.basePrice)}
                   </td>
+
                   <td className="tabular-data" style={{ fontSize: '12px', color: 'var(--gray-400)' }}>
                     <div>Km: <strong style={{ color: 'var(--gray-200)' }}>{formatCLP(srv.pricePerKm)}</strong></div>
                     <div>Kg: <strong style={{ color: 'var(--gray-200)' }}>{formatCLP(srv.pricePerKg)}</strong></div>

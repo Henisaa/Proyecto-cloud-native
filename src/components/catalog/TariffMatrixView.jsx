@@ -119,12 +119,13 @@ export function TariffMatrixView({ tariffs, services, onAddTariff }) {
                         <span>{t.destinationZone}</span>
                       </div>
                     </td>
-                    <td className="tabular-data font-semibold">{formatCLP(t.baseFare)}</td>
-                    <td className="tabular-data" style={{ color: 'var(--gray-300)' }}>{formatCLP(t.perKmRate)} / km</td>
-                    <td className="tabular-data" style={{ color: 'var(--gray-300)' }}>{formatCLP(t.perKgRate)} / kg</td>
-                    <td className="tabular-data font-semibold" style={{ color: 'var(--gray-100)' }}>
+                    <td className="tabular-data font-semibold" style={{ color: 'var(--yellow-400)' }}>{formatCLP(t.baseFare)}</td>
+                    <td className="tabular-data" style={{ color: 'var(--gray-300)' }}><strong style={{ color: 'var(--yellow-300)' }}>{formatCLP(t.perKmRate)}</strong> / km</td>
+                    <td className="tabular-data" style={{ color: 'var(--gray-300)' }}><strong style={{ color: 'var(--yellow-300)' }}>{formatCLP(t.perKgRate)}</strong> / kg</td>
+                    <td className="tabular-data font-semibold" style={{ color: 'var(--yellow-400)' }}>
                       {formatCLP(t.minFare)}
                     </td>
+
                   </tr>
                 ))}
               </tbody>

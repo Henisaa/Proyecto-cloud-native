@@ -151,7 +151,8 @@ export function FleetCapacityView({ capacities, services, onReserveSlot, onRelea
                       width: '40px', 
                       height: '40px', 
                       borderRadius: '8px', 
-                      background: 'var(--gray-800)', 
+                      background: 'rgba(245, 158, 11, 0.12)', 
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center',
@@ -170,6 +171,7 @@ export function FleetCapacityView({ capacities, services, onReserveSlot, onRelea
                       </div>
                     </div>
                   </div>
+
 
                   <div>
                     {isFull ? (
@@ -194,8 +196,8 @@ export function FleetCapacityView({ capacities, services, onReserveSlot, onRelea
                 {/* Barra de progreso */}
                 <div style={{ marginTop: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                    <span style={{ color: 'var(--gray-400)' }}>
-                      Paquetes reservados: <strong className="tabular-data" style={{ color: 'var(--gray-100)' }}>{cap.currentBookedPackages}</strong> de <strong className="tabular-data">{cap.maxDailyPackages}</strong>
+                    <span style={{ color: 'var(--gray-300)' }}>
+                      Paquetes reservados: <strong className="tabular-data" style={{ color: 'var(--yellow-400)' }}>{cap.currentBookedPackages}</strong> de <strong className="tabular-data" style={{ color: 'var(--gray-100)' }}>{cap.maxDailyPackages}</strong>
                     </span>
                     <span className="tabular-data" style={{ fontWeight: '700', color: isFull ? 'var(--color-danger)' : 'var(--yellow-400)' }}>
                       {cap.maxDailyPackages - cap.currentBookedPackages} cupos disponibles
@@ -209,13 +211,14 @@ export function FleetCapacityView({ capacities, services, onReserveSlot, onRelea
                 {/* Especificaciones técnicas de carga */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--gray-800)', fontSize: '12px' }}>
                   <div>
-                    <span style={{ color: 'var(--gray-500)' }}>Límite de peso por bulto: </span>
-                    <strong className="tabular-data" style={{ color: 'var(--gray-200)' }}>{cap.maxWeightKg} kg</strong>
+                    <span style={{ color: 'var(--gray-400)' }}>Límite de peso por bulto: </span>
+                    <strong className="tabular-data" style={{ color: 'var(--yellow-300)' }}>{cap.maxWeightKg} kg</strong>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--gray-500)' }}>Volumen máximo: </span>
-                    <strong className="tabular-data" style={{ color: 'var(--gray-200)' }}>{cap.maxVolumeM3} m³</strong>
+                    <span style={{ color: 'var(--gray-400)' }}>Volumen máximo: </span>
+                    <strong className="tabular-data" style={{ color: 'var(--yellow-300)' }}>{cap.maxVolumeM3} m³</strong>
                   </div>
+
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       onClick={() => onReserveSlot(cap.id, 1)}
