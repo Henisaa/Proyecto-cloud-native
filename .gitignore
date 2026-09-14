@@ -1,2 +1,23 @@
+# Node & Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
 
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDEs & OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.sw?
+
+# Project docs
 Caso 3 - RutaExpress.docx
