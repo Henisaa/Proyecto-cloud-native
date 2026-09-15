@@ -72,7 +72,9 @@ Frontend unificado para la plataforma **RutaExpress**, desarrollado en **React J
 frontend/
 ├── index.html                    # Documento HTML principal
 ├── package.json                  # Dependencias y scripts Vite + React
-├── vite.config.js                # Configuración Vite con proxies hacia :8083 y :8084
+├── vite.config.js                # Configuración Vite (puerto 3000 y proxies hacia :8083 y :8084)
+├── .env.example                  # Plantilla de variables de entorno
+├── .env                          # Configuración local de endpoints y Azure AD
 ├── PRODUCT.md                    # Definición y requerimientos de producto
 ├── DESIGN.md                     # Sistema de diseño, tokens y principios
 ├── README.md                     # Documentación de uso
@@ -80,6 +82,8 @@ frontend/
     ├── main.jsx                  # Punto de entrada React
     ├── App.jsx                   # Orquestador de pestañas y estado global
     ├── index.css                 # Tokens de diseño, estilos y componentes
+    ├── config/
+    │   └── authConfig.js         # Configuración MSAL (Azure AD) y rutas del BFF
     ├── data/
     │   ├── mockData.js           # Datos semilla para Catálogo y Notificaciones
     │   └── auditReportData.js    # Datos semilla y contratos para Auditoría y Reportes
@@ -87,7 +91,8 @@ frontend/
         ├── common/
         │   ├── Navbar.jsx        # Barra superior con selector de pestañas
         │   ├── Sidebar.jsx       # Menú lateral por dominios y sub-apartados
-        │   └── Icons.jsx         # Biblioteca de iconos SVG vectoriales
+        │   ├── Icons.jsx         # Biblioteca de iconos SVG vectoriales
+        │   └── MicroservicePlaceholder.jsx # Vista y diagrama para módulos en arquitectura
         ├── catalog/
         │   ├── ServicesView.jsx      # Gestión de servicios
         │   ├── FleetCapacityView.jsx # Capacidad y simulador de cupos
@@ -112,9 +117,15 @@ El frontend está configurado para autenticarse contra el registro de aplicació
 |---|---|---|
 | `VITE_AZURE_CLIENT_ID` | `f3136620-804c-4b15-b22d-b6fad957937e` | Client ID de la App Registration en Azure AD |
 | `VITE_AZURE_TENANT_ID` | `bc307149-9a0a-45b8-9f7d-2dfc104f9a09` | Tenant ID del directorio institucional |
-| `VITE_AZURE_SCOPE` | `api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user` | Scope OAuth2 para acceso a la API |
-| `VITE_AZURE_REDIRECT_URI` | `http://localhost:5173` | URI de redirección local en Vite |
+| `VITE_AZURE_AUTHORITY` | `https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09` | Endpoint de emisión de tokens OAuth2 |
+| `VITE_AZURE_SCOPE` | `api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user` | Scope OAuth2 para acceso a la API del BFF |
+| `VITE_AZURE_REDIRECT_URI` | `http://localhost:3000` | URI de redirección local (puerto configurado en `vite.config.js`) |
 | `VITE_BFF_API_BASE_URL` | `http://localhost:8080` | URL base del Backend For Frontend |
+
+> [!IMPORTANT]
+> **Aviso sobre variables de entorno (`.env` y `.env.example`):**
+> 1. **Puerto de redirección Azure AD (`VITE_AZURE_REDIRECT_URI`):** `vite.config.js` está configurado para ejecutar el servidor local en el **puerto 3000** (`http://localhost:3000`). Si en el portal de Microsoft Entra ID (Azure AD) la *Redirect URI* de la App Registration fue dada de alta con el puerto por defecto de Vite (`http://localhost:5173`), asegúrate de que ambos valores coincidan (ajustando la variable a `:5173` o actualizando la URI permitida en Azure a `:3000`) para prevenir errores de tipo `AADSTS50011 (Redirect URI mismatch)`.
+> 2. **Emisor OAuth2 (`VITE_AZURE_AUTHORITY`):** Se incorporó explícitamente la URL completa de autoridad con el Tenant ID para asegurar que MSAL resuelva el endpoint OpenID Connect correcto sin depender de fallbacks.
 
 ---
 
@@ -124,16 +135,19 @@ El frontend está configurado para autenticarse contra el registro de aplicació
 # 1. Instalar dependencias
 npm install
 
-# 2. Iniciar consola unificada en modo desarrollo
-
-# 2. Copiar archivo de variables de entorno
+# 2. Configurar variables de entorno locales
+# Linux / macOS / Git Bash:
 cp .env.example .env
+# Windows (PowerShell):
+Copy-Item .env.example .env
+# Windows (CMD):
+copy .env.example .env
 
-# 3. Iniciar servidor de desarrollo local
+# 3. Iniciar servidor de desarrollo local (disponible en http://localhost:3000)
 npm run dev
 
-# 4. Construir para producción
+# 4. Construir para producción (opcional)
 npm run build
 ```
 
-> **Conectividad Backend:** La consola consulta automáticamente los microservicios backend si están levantados en sus respectivos puertos (`ms-rutaexpress-audit` en `:8083` y `ms-rutaexpress-report` en `:8084`) a través del proxy de Vite. Si los microservicios no están encendidos, conmuta de forma transparente a los datos semilla integrados para permitir la operación continua de la interfaz.
+> **Conectividad Backend & Modo Híbrido:** La consola consulta automáticamente los microservicios backend si están levantados en sus respectivos puertos (`ms-rutaexpress-audit` en `:8083` y `ms-rutaexpress-report` en `:8084`) a través del proxy inverso de Vite (`/api/audit` y `/api/report`). Si los microservicios no están encendidos o no responden, conmuta de forma transparente y sin caídas a los datos semilla locales, permitiendo la operación y evaluación completa de la interfaz en cualquier momento.
