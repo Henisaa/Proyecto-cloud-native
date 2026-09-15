@@ -104,6 +104,20 @@ frontend/
 
 ---
 
+## Configuración de Azure AD (Microsoft Entra ID) & BFF
+
+El frontend está configurado para autenticarse contra el registro de aplicación corporativo en Microsoft Entra ID y consumir las APIs a través del microservicio BFF (`ms-rutaexpress-bff`):
+
+| Variable de Entorno | Valor Configurado | Descripción |
+|---|---|---|
+| `VITE_AZURE_CLIENT_ID` | `f3136620-804c-4b15-b22d-b6fad957937e` | Client ID de la App Registration en Azure AD |
+| `VITE_AZURE_TENANT_ID` | `bc307149-9a0a-45b8-9f7d-2dfc104f9a09` | Tenant ID del directorio institucional |
+| `VITE_AZURE_SCOPE` | `api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user` | Scope OAuth2 para acceso a la API |
+| `VITE_AZURE_REDIRECT_URI` | `http://localhost:5173` | URI de redirección local en Vite |
+| `VITE_BFF_API_BASE_URL` | `http://localhost:8080` | URL base del Backend For Frontend |
+
+---
+
 ## Puesta en Marcha (Instrucciones)
 
 ```bash
@@ -111,9 +125,14 @@ frontend/
 npm install
 
 # 2. Iniciar consola unificada en modo desarrollo
+
+# 2. Copiar archivo de variables de entorno
+cp .env.example .env
+
+# 3. Iniciar servidor de desarrollo local
 npm run dev
 
-# 3. Construir para producción
+# 4. Construir para producción
 npm run build
 ```
 
