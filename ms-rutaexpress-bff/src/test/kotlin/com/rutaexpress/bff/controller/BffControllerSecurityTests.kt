@@ -72,12 +72,19 @@ class BffControllerSecurityTests {
 
     @Test
     fun `AudienceValidator acepta audience correcto y rechaza audience incorrecto`() {
-        val expected = "api://rutaexpress-api"
+        val expected = "api://f3136620-804c-4b15-b22d-b6fad957937e"
         val validator = AudienceValidator(expected)
 
-        val validJwt = Jwt.withTokenValue("mock-valid")
+        val validJwtWithPrefix = Jwt.withTokenValue("mock-valid-prefix")
             .header("alg", "RS256")
-            .claim("aud", listOf(expected))
+            .claim("aud", listOf("api://f3136620-804c-4b15-b22d-b6fad957937e"))
+            .issuedAt(Instant.now())
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .build()
+
+        val validJwtClientOnly = Jwt.withTokenValue("mock-valid-client")
+            .header("alg", "RS256")
+            .claim("aud", listOf("f3136620-804c-4b15-b22d-b6fad957937e"))
             .issuedAt(Instant.now())
             .expiresAt(Instant.now().plusSeconds(3600))
             .build()
@@ -89,7 +96,8 @@ class BffControllerSecurityTests {
             .expiresAt(Instant.now().plusSeconds(3600))
             .build()
 
-        assertFalse(validator.validate(validJwt).hasErrors(), "El token válido debe pasar sin errores")
+        assertFalse(validator.validate(validJwtWithPrefix).hasErrors(), "El token válido con api:// debe pasar sin errores")
+        assertFalse(validator.validate(validJwtClientOnly).hasErrors(), "El token válido sin api:// debe pasar sin errores")
         assertTrue(validator.validate(invalidJwt).hasErrors(), "El token con audience incorrecto debe fallar")
     }
 

@@ -9,7 +9,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:https://login.microsoftonline.com/common/v2.0}
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
 
   cache:
     type: caffeine
@@ -21,9 +21,10 @@ spring:
 
 rutaexpress:
   security:
-    azure-tenant-id: ${AZURE_TENANT_ID:common}
-    azure-client-id: ${AZURE_CLIENT_ID:api://rutaexpress-api}
-    audience: ${AZURE_AUDIENCE:api://rutaexpress-api}
+    azure-tenant-id: ${AZURE_TENANT_ID:bc307149-9a0a-45b8-9f7d-2dfc104f9a09}
+    azure-client-id: ${AZURE_CLIENT_ID:f3136620-804c-4b15-b22d-b6fad957937e}
+    audience: ${AZURE_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
+    scope: ${AZURE_SCOPE:api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
   services:
     catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
     notify-url: ${NOTIFY_SERVICE_URL:http://localhost:8082}

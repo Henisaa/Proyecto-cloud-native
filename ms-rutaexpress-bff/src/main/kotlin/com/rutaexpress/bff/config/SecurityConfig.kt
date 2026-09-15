@@ -33,9 +33,9 @@ import java.time.Instant
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
-    @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://login.microsoftonline.com/common/v2.0}")
+    @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}")
     private val issuerUri: String,
-    @Value("\${rutaexpress.security.audience:api://rutaexpress-api}")
+    @Value("\${rutaexpress.security.audience:api://f3136620-804c-4b15-b22d-b6fad957937e}")
     private val expectedAudience: String,
     @Value("\${app.security.enabled:true}")
     private val securityEnabled: Boolean,
@@ -107,7 +107,13 @@ class SecurityConfig(
             try {
                 JwtDecoders.fromIssuerLocation(issuerUri) as NimbusJwtDecoder
             } catch (e: Exception) {
-                NimbusJwtDecoder.withJwkSetUri("https://login.microsoftonline.com/common/discovery/v2.0/keys").build()
+                val tenantCandidate = issuerUri.substringAfter("microsoftonline.com/").substringBefore("/v2.0").trim('/')
+                val jwkUri = if (tenantCandidate.isNotBlank() && tenantCandidate != issuerUri) {
+                    "https://login.microsoftonline.com/$tenantCandidate/discovery/v2.0/keys"
+                } else {
+                    "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+                }
+                NimbusJwtDecoder.withJwkSetUri(jwkUri).build()
             }
         }
         val audienceValidator = AudienceValidator(expectedAudience)
@@ -151,12 +157,20 @@ class SecurityConfig(
 }
 
 /**
- * Validador de claim 'aud' para tokens de Azure AD
+ * Validador de claim 'aud' para tokens de Azure AD.
+ * Admite tanto el Application ID URI (api://<CLIENT_ID>) como el Client ID directo (<CLIENT_ID>).
  */
 class AudienceValidator(private val expectedAudience: String) : OAuth2TokenValidator<Jwt> {
     override fun validate(jwt: Jwt): OAuth2TokenValidatorResult {
+        if (expectedAudience.isBlank()) {
+            return OAuth2TokenValidatorResult.success()
+        }
         val audiences = jwt.audience ?: emptyList()
-        return if (audiences.contains(expectedAudience) || expectedAudience.isBlank()) {
+        val validAudiences = setOf(
+            expectedAudience,
+            if (expectedAudience.startsWith("api://")) expectedAudience.removePrefix("api://") else "api://$expectedAudience"
+        )
+        return if (audiences.any { it in validAudiences }) {
             OAuth2TokenValidatorResult.success()
         } else {
             val error = OAuth2Error(

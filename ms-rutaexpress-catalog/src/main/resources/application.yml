@@ -46,7 +46,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/${AZURE_AD_TENANT_ID:common}/v2.0}
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/${AZURE_AD_TENANT_ID:bc307149-9a0a-45b8-9f7d-2dfc104f9a09}/v2.0}
 
   # Kafka Event Streaming
   kafka:
@@ -65,7 +65,7 @@ app:
   security:
     enabled: ${SECURITY_ENABLED:true}
     azure:
-      audience: ${AZURE_AD_AUDIENCE:api://rutaexpress-catalog}
+      audience: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
   kafka:
     topics:
       catalog-events: ${KAFKA_TOPIC_CATALOG_EVENTS:catalog.events}

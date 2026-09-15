@@ -16,13 +16,16 @@ Encargado de actuar como fachada segura detrás del **AWS API Gateway**, validan
 
 ---
 
-## 2. Variables de Entorno
+## 2. Variables de Entorno y Configuración de Azure AD
 
-| Variable | Descripción | Valor por Defecto |
+| Variable | Descripción | Valor por Defecto / Configurado |
 |---|---|---|
 | `SERVER_PORT` | Puerto del servicio BFF | `8080` |
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | Issuer de Azure AD / Entra ID | `https://login.microsoftonline.com/common/v2.0` |
-| `RUTAEXPRESS_SECURITY_AUDIENCE` | Application ID URI de Azure AD | `api://rutaexpress-api` |
+| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | Issuer de Azure AD / Entra ID | `https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0` |
+| `AZURE_TENANT_ID` | Tenant ID (Directorio corporativo) | `bc307149-9a0a-45b8-9f7d-2dfc104f9a09` |
+| `AZURE_CLIENT_ID` | Client ID / Application ID | `f3136620-804c-4b15-b22d-b6fad957937e` |
+| `RUTAEXPRESS_SECURITY_AUDIENCE` | Audience de validación JWT | `api://f3136620-804c-4b15-b22d-b6fad957937e` |
+| `AZURE_SCOPE` | Scope expuesto para usuarios | `api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user` |
 | `CATALOG_SERVICE_URL` | URL de `ms-rutaexpress-catalog` | `http://localhost:8081` |
 | `NOTIFY_SERVICE_URL` | URL de `ms-rutaexpress-notify` | `http://localhost:8082` |
 | `AUDIT_SERVICE_URL` | URL de `ms-rutaexpress-audit` | `http://localhost:8083` |
