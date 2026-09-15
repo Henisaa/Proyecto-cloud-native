@@ -278,65 +278,73 @@ export function ReportsDashboard({
           {/* Fila de Tarjetas de Métricas Clave */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             {/* Total Envíos */}
-            <div className="card" style={{ borderLeft: '4px solid var(--yellow-500)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '11px', color: 'var(--gray-400)', textTransform: 'uppercase', fontWeight: '700' }}>
-                  Total Envíos Procesados
-                </span>
-                <IconPackage width={18} height={18} style={{ color: 'var(--yellow-400)' }} />
+            <div className="metric-card">
+              <div className="metric-card-header">
+                <div>
+                  <span className="metric-card-title">Total Envíos Procesados</span>
+                  <div className="metric-value" style={{ fontSize: '28px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
+                    {activeKpis.totalShipments.toLocaleString('es-CL')}
+                  </div>
+                </div>
+                <div className="metric-icon-badge metric-icon-badge-yellow">
+                  <IconPackage width={18} height={18} />
+                </div>
               </div>
-              <div className="metric-value" style={{ fontSize: '30px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
-                {activeKpis.totalShipments.toLocaleString('es-CL')}
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '4px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '12px' }}>
                 Ventana temporal: <strong style={{ color: 'var(--yellow-300)' }}>{selectedRange}</strong>
               </div>
             </div>
 
             {/* Envíos por Hora */}
-            <div className="card" style={{ borderLeft: '4px solid var(--color-info)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '11px', color: 'var(--gray-400)', textTransform: 'uppercase', fontWeight: '700' }}>
-                  Throughput Horario
-                </span>
-                <IconClock width={18} height={18} style={{ color: 'var(--color-info)' }} />
+            <div className="metric-card">
+              <div className="metric-card-header">
+                <div>
+                  <span className="metric-card-title">Throughput Horario</span>
+                  <div className="metric-value" style={{ fontSize: '28px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
+                    {activeKpis.shipmentsPerHour} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--gray-400)' }}>env/h</span>
+                  </div>
+                </div>
+                <div className="metric-icon-badge metric-icon-badge-info">
+                  <IconClock width={18} height={18} />
+                </div>
               </div>
-              <div className="metric-value" style={{ fontSize: '30px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
-                {activeKpis.shipmentsPerHour} <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-400)' }}>env/h</span>
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '4px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '12px' }}>
                 Cálculo: <code className="code-cell">total / horas</code>
               </div>
             </div>
 
             {/* Lead Time Promedio */}
-            <div className="card" style={{ borderLeft: '4px solid var(--yellow-400)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '11px', color: 'var(--gray-400)', textTransform: 'uppercase', fontWeight: '700' }}>
-                  Lead Time Promedio
-                </span>
-                <IconClock width={18} height={18} style={{ color: 'var(--yellow-400)' }} />
+            <div className="metric-card">
+              <div className="metric-card-header">
+                <div>
+                  <span className="metric-card-title">Lead Time Promedio</span>
+                  <div className="metric-value" style={{ fontSize: '28px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
+                    {activeKpis.avgLeadTimeMinutes} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--gray-400)' }}>min</span>
+                  </div>
+                </div>
+                <div className="metric-icon-badge metric-icon-badge-yellow">
+                  <IconClock width={18} height={18} />
+                </div>
               </div>
-              <div className="metric-value" style={{ fontSize: '30px', fontWeight: '800', color: 'var(--gray-50)', marginTop: '8px' }}>
-                {activeKpis.avgLeadTimeMinutes} <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-400)' }}>min</span>
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '4px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '12px' }}>
                 Equivalente a: <strong style={{ color: 'var(--gray-200)' }}>{(activeKpis.avgLeadTimeMinutes / 60).toFixed(1)} hrs</strong> ciclo total
               </div>
             </div>
 
             {/* SLA Cumplimiento */}
-            <div className="card" style={{ borderLeft: '4px solid var(--color-success)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '11px', color: 'var(--gray-400)', textTransform: 'uppercase', fontWeight: '700' }}>
-                  Cumplimiento SLA de Red
-                </span>
-                <IconCheckCircle width={18} height={18} style={{ color: 'var(--color-success)' }} />
+            <div className="metric-card">
+              <div className="metric-card-header">
+                <div>
+                  <span className="metric-card-title">Cumplimiento SLA de Red</span>
+                  <div className="metric-value" style={{ fontSize: '28px', fontWeight: '800', color: 'var(--color-success)', marginTop: '8px' }}>
+                    {activeKpis.slaComplianceRate || 98.4}%
+                  </div>
+                </div>
+                <div className="metric-icon-badge metric-icon-badge-success">
+                  <IconCheckCircle width={18} height={18} />
+                </div>
               </div>
-              <div className="metric-value" style={{ fontSize: '30px', fontWeight: '800', color: 'var(--color-success)', marginTop: '8px' }}>
-                {activeKpis.slaComplianceRate || 98.4}%
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '4px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--gray-400)', marginTop: '12px' }}>
                 20 Couriers PyME monitoreados
               </div>
             </div>
@@ -478,11 +486,13 @@ export function ReportsDashboard({
                   marginTop: '6px'
                 }}>
                   <div style={{
-                    width: `${srv.percentage}%`,
+                    width: '100%',
                     height: '100%',
                     background: idx === 0 ? 'var(--yellow-400)' : idx === 1 ? 'var(--yellow-500)' : 'var(--gray-600)',
                     borderRadius: '4px',
-                    transition: 'width 0.4s ease'
+                    transform: `scaleX(${srv.percentage / 100})`,
+                    transformOrigin: 'left',
+                    transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                   }} />
                 </div>
               </div>

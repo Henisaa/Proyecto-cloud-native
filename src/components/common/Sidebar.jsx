@@ -1,10 +1,10 @@
 import React from 'react';
-import { 
-  IconLayers, 
-  IconTruck, 
-  IconCalculator, 
-  IconBell, 
-  IconFileText, 
+import {
+  IconLayers,
+  IconTruck,
+  IconCalculator,
+  IconBell,
+  IconFileText,
   IconSend,
   IconClock,
   IconChartBar,
@@ -27,15 +27,15 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
 
       <div className="sidebar-nav">
         {/* DOMINIO 1: CATÁLOGO */}
-        <div style={{ marginBottom: '14px' }}>
-          <div 
+        <div className="sidebar-domain-group">
+          <div
             onClick={() => { onSelectDomain('catalog'); onSelectView('services'); }}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer' }}
           >
-            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'catalog' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'catalog' ? 'var(--yellow-400)' : 'var(--gray-300)' }}>
               Catálogo & Tarifas
             </div>
-            <span className={`badge ${activeDomain === 'catalog' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+            <span className={`badge ${activeDomain === 'catalog' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
               ms-catalog
             </span>
           </div>
@@ -64,15 +64,15 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
         </div>
 
         {/* DOMINIO 2: NOTIFICACIONES */}
-        <div style={{ marginBottom: '14px' }}>
-          <div 
+        <div className="sidebar-domain-group">
+          <div
             onClick={() => { onSelectDomain('notify'); onSelectView('queues'); }}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer' }}
           >
-            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'notify' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'notify' ? 'var(--yellow-400)' : 'var(--gray-300)' }}>
               Notificaciones & Colas
             </div>
-            <span className={`badge ${activeDomain === 'notify' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+            <span className={`badge ${activeDomain === 'notify' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
               ms-notify
             </span>
           </div>
@@ -101,16 +101,16 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
         </div>
 
         {/* DOMINIO 3: AUDITORÍA */}
-        <div style={{ marginBottom: '14px' }}>
-          <div 
+        <div className="sidebar-domain-group">
+          <div
             onClick={() => { onSelectDomain('audit'); onSelectView('timeline'); }}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer' }}
           >
-            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'audit' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'audit' ? 'var(--yellow-400)' : 'var(--gray-300)' }}>
               Auditoría & Trazabilidad
             </div>
-            <span className={`badge ${activeDomain === 'audit' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
-              ms-audit :8083
+            <span className={`badge ${activeDomain === 'audit' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
+              ms-audit
             </span>
           </div>
 
@@ -138,16 +138,16 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
         </div>
 
         {/* DOMINIO 4: REPORTES & KPIS */}
-        <div style={{ marginBottom: '14px' }}>
-          <div 
+        <div className="sidebar-domain-group">
+          <div
             onClick={() => { onSelectDomain('report'); onSelectView('kpis'); }}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', cursor: 'pointer' }}
           >
-            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'report' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'report' ? 'var(--yellow-400)' : 'var(--gray-300)' }}>
               Reportes & Analítica
             </div>
-            <span className={`badge ${activeDomain === 'report' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
-              ms-report :8084
+            <span className={`badge ${activeDomain === 'report' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
+              ms-report
             </span>
           </div>
 
@@ -175,8 +175,8 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
         </div>
 
         {/* SLOTS EN DESARROLLO */}
-        <div style={{ marginTop: '16px' }}>
-          <div className="sidebar-domain-label" style={{ marginBottom: '6px' }}>
+        <div className="sidebar-domain-group">
+          <div className="sidebar-domain-label" style={{ marginBottom: '8px', color: 'var(--gray-400)' }}>
             Slots en Desarrollo
           </div>
           <button
