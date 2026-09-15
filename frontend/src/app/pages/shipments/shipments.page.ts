@@ -345,7 +345,11 @@ export class ShipmentsPage implements OnInit {
 
   private mensajeDeError(err: unknown): string {
     const e = err as { error?: { message?: string }; message?: string; status?: number };
-    if (e?.status === 401) return 'No autorizado: falta token válido de Azure AD (401).';
+    if (e?.status === 401) {
+      return this.auth.hasSession()
+        ? 'No autorizado (401): tu token fue rechazado por el backend. Revisa el valor "aud" que aparece en el Dashboard.'
+        : 'No autorizado (401): no hay token adjunto. Vuelve a iniciar sesión.';
+    }
     if (e?.status === 403) return 'Tu usuario no tiene el rol necesario para esta acción (403).';
     if (e?.status === 404) return 'La ruta de envíos no está disponible en el BFF (404).';
     if (e?.status === 409) return e?.error?.message ?? 'Conflicto: sin capacidad disponible o transición inválida (409).';

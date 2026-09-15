@@ -1,4 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
+import { AuthService } from '../../core/auth.service';
 import { BffService } from '../../core/bff.service';
 import { FadeInDirective } from '../../shared/fade-in.directive';
 import { pillServicio } from '../../shared/estado-ui';
@@ -110,6 +111,7 @@ import { pillServicio } from '../../shared/estado-ui';
 })
 export class CatalogPage implements OnInit {
   private readonly bff = inject(BffService);
+  private readonly auth = inject(AuthService);
 
   servicios: Record<string, any>[] = [];
   cargando = true;
@@ -139,8 +141,13 @@ export class CatalogPage implements OnInit {
 
   private mensajeDeError(err: unknown): string {
     const e = err as { status?: number; error?: { message?: string } };
-    if (e?.status === 401 || e?.status === 403) {
-      return 'Necesitas token con rol Admin/Despachador para ver el catálogo.';
+    if (e?.status === 401) {
+      return this.auth.hasSession()
+        ? 'No autorizado (401): token rechazado por el backend. Revisa el valor "aud" en el Dashboard.'
+        : 'No autorizado (401): no hay token adjunto. Vuelve a iniciar sesión.';
+    }
+    if (e?.status === 403) {
+      return 'Tu usuario no tiene el rol Admin/Despachador para ver el catálogo (403).';
     }
     return e?.error?.message ?? 'No se pudo cargar el catálogo.';
   }

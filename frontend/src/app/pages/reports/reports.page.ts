@@ -1,5 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../core/auth.service';
 import { BffService } from '../../core/bff.service';
 import { FadeInDirective } from '../../shared/fade-in.directive';
 
@@ -173,6 +174,7 @@ const PILL_ESTADO: Record<string, string> = {
 })
 export class ReportsPage implements OnInit {
   private readonly bff = inject(BffService);
+  private readonly auth = inject(AuthService);
 
   rango = 'last24h';
   kpis: Record<string, any> | null = null;
@@ -188,10 +190,13 @@ export class ReportsPage implements OnInit {
       next: (kpis) => (this.kpis = kpis),
       error: (err) => {
         const e = err as { status?: number };
-        this.error =
-          e?.status === 401 || e?.status === 403
-            ? 'El reporte requiere token con rol Admin.'
-            : 'No se pudieron cargar los KPIs.';
+        if (e?.status === 401) {
+          this.error = this.auth.hasSession()
+            ? 'No autorizado (401): token rechazado por el backend. Revisa el valor "aud" en el Dashboard.'
+            : 'No autorizado (401): no hay token adjunto. Vuelve a iniciar sesión.';
+          return;
+        }
+        this.error = e?.status === 403 ? 'El reporte requiere rol Admin (403).' : 'No se pudieron cargar los KPIs.';
       },
     });
   }

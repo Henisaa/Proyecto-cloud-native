@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { MsalBroadcastService, MsalService } from '@azure/msal-angular';
 import { AccountInfo, EventMessage, EventType, InteractionStatus } from '@azure/msal-browser';
-import { filter } from 'rxjs';
+import { filter, firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { loginRequest } from './msal.config';
 
@@ -13,6 +13,8 @@ export class AuthService {
   readonly account = signal<AccountInfo | null>(null);
   readonly error = signal<string | null>(null);
   readonly enProceso = signal<boolean>(false);
+  readonly tokenAud = signal<string | null>(null);
+  readonly tokenIss = signal<string | null>(null);
 
   init(): void {
     if (environment.demo) {
@@ -68,8 +70,27 @@ export class AuthService {
     const account = active ?? this.msal.instance.getAllAccounts()[0] ?? null;
     if (account) {
       this.msal.instance.setActiveAccount(account);
+      void this.inspeccionarToken(account);
     }
     this.account.set(account);
+  }
+
+  /** Decodifica el access token para mostrar aud/iss (diagnóstico de 401 en el backend). */
+  private async inspeccionarToken(account: AccountInfo): Promise<void> {
+    try {
+      const resultado = await firstValueFrom(
+        this.msal.acquireTokenSilent({
+          scopes: ['openid', 'profile', 'email', environment.msal.scope],
+          account,
+        })
+      );
+      const base64 = resultado.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64)) as Record<string, unknown>;
+      this.tokenAud.set(String(payload['aud'] ?? '—'));
+      this.tokenIss.set(String(payload['iss'] ?? '—'));
+    } catch (err) {
+      console.warn('No se pudo inspeccionar el access token', err);
+    }
   }
 
   /** Describe el error de MSAL de forma accionable (para mostrarlo en pantalla). */

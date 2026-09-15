@@ -112,9 +112,9 @@ import { pillEstado, puntoEstado } from '../../shared/estado-ui';
             </div>
           </div>
 
-          <div class="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3 text-[11px] text-zinc-400">
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3 text-[11px] text-zinc-400">
             <span>Cluster: Docker Internal (EC2)</span>
-            <span class="font-mono">Azure AD: {{ status?.['azureIdaasConfigured'] ? 'OK' : '—' }}</span>
+            <span class="font-mono">aud: {{ auth.tokenAud() ?? '—' }}</span>
           </div>
         </div>
 
