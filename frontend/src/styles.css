@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #1d4ed8;
+  --color-brand-400: #3b82f6;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1e40af;
+  --color-brand-700: #1e3a8a;
+  --color-brand-800: #172554;
+  --color-brand-900: #0f1b3d;
+}
+
+html,
+body {
+  background-color: #fafafa;
+  color: #18181b;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: rgba(37, 99, 235, 0.22);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 #fafafa;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs;
+  }
+
+  .btn-primary {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-zinc-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 shadow-2xs transition-all hover:border-zinc-900 hover:bg-zinc-900 hover:text-white active:scale-95;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 transition placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none;
+  }
+
+  .label {
+    @apply mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold;
+  }
+}

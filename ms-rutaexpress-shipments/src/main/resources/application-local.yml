@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:shipments_local;MODE=Oracle;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9092
+
+app:
+  security:
+    enabled: false
+  kafka:
+    enabled: false
+  rabbit:
+    enabled: false
+  catalogo:
+    enabled: false
