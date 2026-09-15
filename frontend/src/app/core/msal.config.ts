@@ -9,7 +9,7 @@ export const msalConfig: Configuration = {
     postLogoutRedirectUri: environment.msal.postLogoutRedirectUri,
   },
   cache: {
-    cacheLocation: 'sessionStorage',
+    cacheLocation: 'localStorage',
   },
 };
 

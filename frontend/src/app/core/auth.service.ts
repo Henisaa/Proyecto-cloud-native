@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { MsalBroadcastService, MsalService } from '@azure/msal-angular';
 import { AccountInfo, EventMessage, EventType, InteractionStatus } from '@azure/msal-browser';
 import { filter } from 'rxjs';
+import { environment } from '../../environments/environment';
 import { loginRequest } from './msal.config';
 
 @Injectable({ providedIn: 'root' })
@@ -10,27 +11,56 @@ export class AuthService {
   private readonly broadcast = inject(MsalBroadcastService);
 
   readonly account = signal<AccountInfo | null>(null);
+  readonly error = signal<string | null>(null);
+  readonly enProceso = signal<boolean>(false);
 
   init(): void {
-    this.msal.handleRedirectObservable().subscribe({
-      next: () => this.refresh(),
-      error: (err) => console.error('MSAL redirect error', err),
-    });
+    if (environment.demo) {
+      return;
+    }
 
-    this.broadcast.msalSubject$
-      .pipe(
-        filter(
-          (event: EventMessage) =>
-            event.eventType === EventType.LOGIN_SUCCESS ||
-            event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS ||
-            event.eventType === EventType.LOGOUT_SUCCESS
-        )
-      )
-      .subscribe(() => this.refresh());
+    this.msal
+      .handleRedirectObservable()
+      .subscribe({
+        next: (resultado) => {
+          if (resultado?.account) {
+            this.msal.instance.setActiveAccount(resultado.account);
+          }
+          this.refresh();
+        },
+        error: (err) => {
+          console.error('MSAL redirect error', err);
+          this.error.set(this.describirError(err));
+          this.enProceso.set(false);
+        },
+      });
+
+    this.broadcast.msalSubject$.subscribe((event: EventMessage) => {
+      switch (event.eventType) {
+        case EventType.LOGIN_SUCCESS:
+        case EventType.ACQUIRE_TOKEN_SUCCESS:
+        case EventType.LOGOUT_SUCCESS:
+          this.error.set(null);
+          this.refresh();
+          break;
+        case EventType.ACQUIRE_TOKEN_FAILURE:
+          this.error.set(this.describirError(event.payload));
+          break;
+        default:
+          break;
+      }
+    });
 
     this.broadcast.inProgress$
       .pipe(filter((status: InteractionStatus) => status === InteractionStatus.None))
-      .subscribe(() => this.refresh());
+      .subscribe(() => {
+        this.enProceso.set(false);
+        this.refresh();
+      });
+
+    this.broadcast.inProgress$
+      .pipe(filter((status: InteractionStatus) => status !== InteractionStatus.None))
+      .subscribe(() => this.enProceso.set(true));
   }
 
   private refresh(): void {
@@ -42,11 +72,38 @@ export class AuthService {
     this.account.set(account);
   }
 
+  /** Describe el error de MSAL de forma accionable (para mostrarlo en pantalla). */
+  private describirError(err: unknown): string {
+    const e = err as { errorCode?: string; errorMessage?: string; message?: string; subError?: string };
+    const codigo = e?.errorCode ?? '';
+    const mensaje = e?.errorMessage ?? e?.message ?? 'Error desconocido al autenticar';
+    const texto = String(mensaje);
+
+    if (texto.toLowerCase().includes('cors')) {
+      return 'Error de CORS en el endpoint de tokens: el redirect URI debe estar registrado en Azure como plataforma "Single-page application (SPA)".';
+    }
+    if (codigo === 'interaction_required' || texto.toLowerCase().includes('consent')) {
+      return 'Microsoft pide consentimiento: revisa que los scopes/roles estén consentidos para tu usuario.';
+    }
+    if (codigo === 'user_cancelled') {
+      return 'Inicio de sesión cancelado por el usuario.';
+    }
+    return codigo ? `${codigo}: ${texto}` : texto;
+  }
+
   login(): void {
+    if (environment.demo) {
+      return;
+    }
+    this.error.set(null);
     this.msal.loginRedirect(loginRequest);
   }
 
   logout(): void {
+    if (environment.demo) {
+      this.account.set(null);
+      return;
+    }
     const account = this.account() ?? undefined;
     this.msal.logoutRedirect({ account, postLogoutRedirectUri: window.location.origin });
   }
@@ -57,6 +114,9 @@ export class AuthService {
 
   /** Lectura sincrónica del caché de MSAL (útil en guards antes de que el signal se hidrate). */
   hasSession(): boolean {
+    if (environment.demo) {
+      return true;
+    }
     return this.msal.instance.getAllAccounts().length > 0;
   }
 

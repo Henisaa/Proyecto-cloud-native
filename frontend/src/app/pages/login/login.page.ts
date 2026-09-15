@@ -114,6 +114,18 @@ import { AuthService } from '../../core/auth.service';
               </div>
             </button>
           </div>
+
+          @if (auth.enProceso()) {
+            <p class="mt-6 text-xs font-medium text-zinc-400">Procesando inicio de sesión con Microsoft…</p>
+          }
+
+          @if (auth.error()) {
+            <div class="mt-6 max-w-sm rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left">
+              <p class="text-xs font-semibold text-red-700">No se pudo completar el inicio de sesión</p>
+              <p class="mt-1 break-words text-[11px] text-red-600">{{ auth.error() }}</p>
+              <p class="mt-2 text-[11px] text-red-400">Más detalle en F12 → Console.</p>
+            </div>
+          }
         </div>
       </div>
     </div>
