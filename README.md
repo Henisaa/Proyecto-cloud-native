@@ -10,6 +10,7 @@ Cada microservicio se encuentra aislado en su respectiva carpeta, con su propio 
 
 ```text
 Proyecto-cloud-native/
+├── ms-rutaexpress-bff/         # Backend For Frontend & Gateway Seguro (Azure AD JWT)
 ├── ms-rutaexpress-audit/       # Microservicio de Auditoría y Timeline
 ├── ms-rutaexpress-catalog/     # Microservicio de Catálogo y Capacidad de Flota
 ├── ms-rutaexpress-notify/      # Microservicio de Notificaciones y Tickets
@@ -23,6 +24,7 @@ Proyecto-cloud-native/
 
 | Microservicio | Carpeta | Dominio & Responsabilidad | Persistencia / Broker | Tecnologías Principales |
 |---|---|---|---|---|
+| **BFF Gateway** | [`ms-rutaexpress-bff`](./ms-rutaexpress-bff) | Puerta de enlace segura backend (BFF), validación JWT Azure AD, RBAC y agregación (`/api/bff/*`). | Sin DB / Clientes HTTP downstream | Spring Boot, Spring Security OAuth2, Caffeine, Swagger |
 | **Audit** | [`ms-rutaexpress-audit`](./ms-rutaexpress-audit) | Ingesta y registro inmutable de eventos logísticos en línea de tiempo (`/api/audit/*`). | Oracle Database / Kafka Consumer | Spring Boot, Spring Data JPA, Flyway, Kafka |
 | **Catalog** | [`ms-rutaexpress-catalog`](./ms-rutaexpress-catalog) | Gestión de servicios, tarifas zonales y reserva/liberación de capacidad de flota (`/api/catalog/*`). | Oracle Database / Kafka Producer | Spring Boot, Spring Data JPA, Caffeine Cache, Kafka, Flyway |
 | **Notify** | [`ms-rutaexpress-notify`](./ms-rutaexpress-notify) | Consumo de comandos AMQP, envío de correos, generación de etiquetas/tickets PDF e idempotencia. | Redis / RabbitMQ Consumer | Spring Boot, Spring AMQP, Redis, Mailpit, OpenPDF |
@@ -49,8 +51,11 @@ Cada microservicio puede compilarse y ejecutarse de forma independiente desde su
 
 ### Ejecutar Pruebas Automatizadas
 ```bash
+# BFF Gateway
+cd ms-rutaexpress-bff && ./gradlew test
+
 # Auditoría
-cd ms-rutaexpress-audit && ./gradlew test
+cd ../ms-rutaexpress-audit && ./gradlew test
 
 # Catálogo
 cd ../ms-rutaexpress-catalog && ./gradlew test
