@@ -6,6 +6,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: false
+    open: false,
+    proxy: {
+      '/api/audit': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/report': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 });

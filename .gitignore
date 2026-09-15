@@ -4,6 +4,7 @@ dist/
 dist-ssr/
 *.local
 .vite/
+.agents
 
 # Logs
 npm-debug.log*
@@ -19,5 +20,10 @@ pnpm-debug.log*
 Thumbs.db
 *.sw?
 
+
 # Project docs
 Caso 3 - RutaExpress.docx
+
+# evitamos que suba los proyectos de microservicios
+# ms-rutaexpress-report
+# ms-rutaexpress-audit

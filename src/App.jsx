@@ -8,6 +8,8 @@ import { TariffMatrixView } from './components/catalog/TariffMatrixView';
 import { NotificationMonitorView } from './components/notifications/NotificationMonitorView';
 import { DocumentViewer } from './components/notifications/DocumentViewer';
 import { DispatcherSimulatorView } from './components/notifications/DispatcherSimulatorView';
+import { AuditTimelineView } from './components/audit/AuditTimelineView';
+import { ReportsDashboard } from './components/report/ReportsDashboard';
 import { 
   initialServices, 
   initialCapacities, 
@@ -15,6 +17,11 @@ import {
   initialQueuesTelemetry, 
   initialNotificationLogs 
 } from './data/mockData';
+import {
+  initialAuditEvents,
+  reportKpisByRange,
+  reportTopServicesByRange
+} from './data/auditReportData';
 
 export function App() {
   // Dominio activo seleccionado en la Navbar ('catalog' | 'notify' | 'shipments' | 'audit' | 'report' | 'bff' | 'messaging')
@@ -32,6 +39,9 @@ export function App() {
   const [queues, setQueues] = useState(initialQueuesTelemetry);
   const [logs, setLogs] = useState(initialNotificationLogs);
 
+  // Estado del Dominio de Auditoría (ms-rutaexpress-audit)
+  const [auditEvents, setAuditEvents] = useState(initialAuditEvents);
+
   // Cambio de dominio desde la Navbar o Sidebar
   const handleSelectDomain = (domainId) => {
     setActiveDomain(domainId);
@@ -39,6 +49,10 @@ export function App() {
       setCurrentView('services');
     } else if (domainId === 'notify') {
       setCurrentView('queues');
+    } else if (domainId === 'audit') {
+      setCurrentView('timeline');
+    } else if (domainId === 'report') {
+      setCurrentView('kpis');
     }
   };
 
@@ -114,6 +128,7 @@ export function App() {
     setTariffs(initialTariffs);
     setQueues(initialQueuesTelemetry);
     setLogs(initialNotificationLogs);
+    setAuditEvents(initialAuditEvents);
   };
 
   // Métricas calculadas para barra superior
@@ -186,8 +201,27 @@ export function App() {
             />
           )}
 
+          {/* VISTAS DE AUDITORÍA (ms-rutaexpress-audit) */}
+          {activeDomain === 'audit' && (
+            <AuditTimelineView
+              events={auditEvents}
+              currentSubView={currentView}
+              onSelectSubView={setCurrentView}
+            />
+          )}
+
+          {/* VISTAS DE REPORTES & KPIS (ms-rutaexpress-report) */}
+          {activeDomain === 'report' && (
+            <ReportsDashboard
+              kpisDataByRange={reportKpisByRange}
+              topServicesByRange={reportTopServicesByRange}
+              currentSubView={currentView}
+              onSelectSubView={setCurrentView}
+            />
+          )}
+
           {/* ESPACIO RESERVADO PARA LOS OTROS MICROSERVICIOS */}
-          {!['catalog', 'notify'].includes(activeDomain) && (
+          {!['catalog', 'notify', 'audit', 'report'].includes(activeDomain) && (
             <MicroservicePlaceholder
               microserviceId={activeDomain}
               onSwitchToDemoDomain={handleSelectDomain}

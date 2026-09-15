@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Frontend de gestión para microservicios de Catálogo y Notificaciones de RutaExpress",
+  "description": "Frontend unificado de gestión para microservicios de RutaExpress (Catálogo, Notificaciones, Auditoría y Reportes)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.rutaexpress.report.controlador.ReporteControladorTests" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-13T22:44:08.023Z" hostname="DESKTOP-SUTL6B5" time="3.714">
+  <properties/>
+  <testcase name="obtenerKpis retorna metricas calculadas correctamente()" classname="com.rutaexpress.report.controlador.ReporteControladorTests" time="0.286"/>
+  <testcase name="obtenerTopServicios calcula distribucion y porcentajes()" classname="com.rutaexpress.report.controlador.ReporteControladorTests" time="0.015"/>
+  <testcase name="peticion sin autenticar es rechazada()" classname="com.rutaexpress.report.controlador.ReporteControladorTests" time="0.007"/>
+  <system-out><![CDATA[19:44:08.102 [Test worker] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.rutaexpress.report.controlador.ReporteControladorTests]: ReporteControladorTests does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+19:44:08.269 [Test worker] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.rutaexpress.report.MsRutaexpressReportApplication for test class com.rutaexpress.report.controlador.ReporteControladorTests
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.4.3)
+
+2026-09-13T19:44:08.773-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] c.r.r.c.ReporteControladorTests          : Starting ReporteControladorTests using Java 22.0.2 with PID 26052 (started by Ariel in N:\a --- Google antigravity\Proyectos\Proyecto-cloud-native\ms-rutaexpress-report)
+2026-09-13T19:44:08.774-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] c.r.r.c.ReporteControladorTests          : No active profile set, falling back to 1 default profile: "default"
+2026-09-13T19:44:11.385-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-09-13T19:44:11.385-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-09-13T19:44:11.387-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 2 ms
+2026-09-13T19:44:11.420-03:00  INFO 26052 --- [ms-rutaexpress-report] [    Test worker] c.r.r.c.ReporteControladorTests          : Started ReporteControladorTests in 3.076 seconds (process running for 4.371)
+]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build what is described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (C:\Users\pc gamer\.gradle\caches\modules-2\files-2.1\net.bytebuddy\byte-buddy-agent\1.15.11\a38b16385e867f59a641330f0362ebe742788ed8\byte-buddy-agent-1.15.11.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>

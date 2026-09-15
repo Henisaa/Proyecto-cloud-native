@@ -20,9 +20,9 @@ export function Navbar({
   const microservices = [
     { id: 'catalog', label: 'Catálogo', icon: <IconLayers width={15} height={15} />, isLive: true, tooltip: 'ms-rutaexpress-catalog (Activo)' },
     { id: 'notify', label: 'Notificaciones', icon: <IconBell width={15} height={15} />, isLive: true, tooltip: 'ms-rutaexpress-notify (Activo)' },
+    { id: 'audit', label: 'Auditoría', icon: <IconClock width={15} height={15} />, isLive: true, tooltip: 'ms-rutaexpress-audit (Activo)' },
+    { id: 'report', label: 'Reportes & KPIs', icon: <IconChartBar width={15} height={15} />, isLive: true, tooltip: 'ms-rutaexpress-report (Activo)' },
     { id: 'shipments', label: 'Envíos', icon: <IconTruck width={15} height={15} />, isLive: false, tooltip: 'ms-rutaexpress-shipments (En desarrollo)' },
-    { id: 'audit', label: 'Auditoría', icon: <IconClock width={15} height={15} />, isLive: false, tooltip: 'ms-rutaexpress-audit (En desarrollo)' },
-    { id: 'report', label: 'Reportes & KPIs', icon: <IconChartBar width={15} height={15} />, isLive: false, tooltip: 'ms-rutaexpress-report (En desarrollo)' },
     { id: 'bff', label: 'BFF Gateway', icon: <IconServer width={15} height={15} />, isLive: false, tooltip: 'ms-rutaexpress-bff (En desarrollo)' },
     { id: 'messaging', label: 'Admin Brokers', icon: <IconServer width={15} height={15} />, isLive: false, tooltip: 'ms-rutaexpress-mq/kafka-admin (En desarrollo)' },
   ];

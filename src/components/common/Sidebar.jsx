@@ -26,141 +26,181 @@ export function Sidebar({ activeDomain, currentView, onSelectView, onSelectDomai
       </div>
 
       <div className="sidebar-nav">
-        {/* SECCIÓN CATÁLOGO */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <div className="sidebar-domain-label" style={{ marginBottom: 0 }}>
-            ms-catalog
+        {/* DOMINIO 1: CATÁLOGO */}
+        <div style={{ marginBottom: '14px' }}>
+          <div 
+            onClick={() => { onSelectDomain('catalog'); onSelectView('services'); }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+          >
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'catalog' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+              Catálogo & Tarifas
+            </div>
+            <span className={`badge ${activeDomain === 'catalog' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+              ms-catalog
+            </span>
           </div>
-          <span className="badge badge-success" style={{ fontSize: '9px', padding: '1px 5px' }}>
-            Activo
-          </span>
+
+          <button
+            className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'services' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('catalog'); onSelectView('services'); }}
+          >
+            <IconLayers width={16} height={16} />
+            <span>Servicios y Categorías</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'capacity' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('catalog'); onSelectView('capacity'); }}
+          >
+            <IconTruck width={16} height={16} />
+            <span>Capacidad de Flota</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'tariffs' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('catalog'); onSelectView('tariffs'); }}
+          >
+            <IconCalculator width={16} height={16} />
+            <span>Matriz de Tarifas</span>
+          </button>
         </div>
 
-        <button
-          className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'services' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('catalog');
-            onSelectView('services');
-          }}
-        >
-          <IconLayers width={18} height={18} />
-          <span>Servicios y Categorías</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'capacity' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('catalog');
-            onSelectView('capacity');
-          }}
-        >
-          <IconTruck width={18} height={18} />
-          <span>Capacidad de Flota</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'catalog' && currentView === 'tariffs' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('catalog');
-            onSelectView('tariffs');
-          }}
-        >
-          <IconCalculator width={18} height={18} />
-          <span>Matriz de Tarifas</span>
-        </button>
-
-        {/* SECCIÓN NOTIFICACIONES */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', marginBottom: '8px' }}>
-          <div className="sidebar-domain-label" style={{ marginBottom: 0 }}>
-            ms-notify
+        {/* DOMINIO 2: NOTIFICACIONES */}
+        <div style={{ marginBottom: '14px' }}>
+          <div 
+            onClick={() => { onSelectDomain('notify'); onSelectView('queues'); }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+          >
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'notify' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+              Notificaciones & Colas
+            </div>
+            <span className={`badge ${activeDomain === 'notify' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+              ms-notify
+            </span>
           </div>
-          <span className="badge badge-success" style={{ fontSize: '9px', padding: '1px 5px' }}>
-            Activo
-          </span>
+
+          <button
+            className={`sidebar-link ${activeDomain === 'notify' && currentView === 'queues' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('notify'); onSelectView('queues'); }}
+          >
+            <IconBell width={16} height={16} />
+            <span>Monitor Colas & DLQ</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'notify' && currentView === 'documents' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('notify'); onSelectView('documents'); }}
+          >
+            <IconFileText width={16} height={16} />
+            <span>Etiquetas & Tickets</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'notify' && currentView === 'dispatch' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('notify'); onSelectView('dispatch'); }}
+          >
+            <IconSend width={16} height={16} />
+            <span>Simulador AMQP</span>
+          </button>
         </div>
 
-        <button
-          className={`sidebar-link ${activeDomain === 'notify' && currentView === 'queues' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('notify');
-            onSelectView('queues');
-          }}
-        >
-          <IconBell width={18} height={18} />
-          <span>Monitor de Colas & DLQ</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'notify' && currentView === 'documents' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('notify');
-            onSelectView('documents');
-          }}
-        >
-          <IconFileText width={18} height={18} />
-          <span>Etiquetas & Comprobantes</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'notify' && currentView === 'dispatch' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectDomain('notify');
-            onSelectView('dispatch');
-          }}
-        >
-          <IconSend width={18} height={18} />
-          <span>Simulador de Despacho</span>
-        </button>
-
-        {/* SECCIÓN OTROS MICROSERVICIOS (EN CONSTRUCCIÓN) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '8px' }}>
-          <div className="sidebar-domain-label" style={{ marginBottom: 0 }}>
-            Otros Microservicios
+        {/* DOMINIO 3: AUDITORÍA */}
+        <div style={{ marginBottom: '14px' }}>
+          <div 
+            onClick={() => { onSelectDomain('audit'); onSelectView('timeline'); }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+          >
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'audit' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+              Auditoría & Trazabilidad
+            </div>
+            <span className={`badge ${activeDomain === 'audit' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+              ms-audit :8083
+            </span>
           </div>
-          <span className="badge badge-gray" style={{ fontSize: '9px', padding: '1px 5px' }}>
-            Slots
-          </span>
+
+          <button
+            className={`sidebar-link ${activeDomain === 'audit' && currentView === 'timeline' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('audit'); onSelectView('timeline'); }}
+          >
+            <IconClock width={16} height={16} />
+            <span>Timeline por Entidad</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'audit' && currentView === 'all-events' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('audit'); onSelectView('all-events'); }}
+          >
+            <IconFileText width={16} height={16} />
+            <span>Registro General Eventos</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'audit' && currentView === 'types' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('audit'); onSelectView('types'); }}
+          >
+            <IconLayers width={16} height={16} />
+            <span>Filtro por Tipo Entidad</span>
+          </button>
         </div>
 
-        <button
-          className={`sidebar-link ${activeDomain === 'shipments' ? 'active' : ''}`}
-          onClick={() => onSelectDomain('shipments')}
-        >
-          <IconTruck width={18} height={18} />
-          <span>Envíos (ms-shipments)</span>
-        </button>
+        {/* DOMINIO 4: REPORTES & KPIS */}
+        <div style={{ marginBottom: '14px' }}>
+          <div 
+            onClick={() => { onSelectDomain('report'); onSelectView('kpis'); }}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', cursor: 'pointer' }}
+          >
+            <div className="sidebar-domain-label" style={{ marginBottom: 0, color: activeDomain === 'report' ? 'var(--yellow-400)' : 'var(--gray-400)' }}>
+              Reportes & Analítica
+            </div>
+            <span className={`badge ${activeDomain === 'report' ? 'badge-yellow' : 'badge-gray'}`} style={{ fontSize: '9px', padding: '1px 5px' }}>
+              ms-report :8084
+            </span>
+          </div>
 
-        <button
-          className={`sidebar-link ${activeDomain === 'audit' ? 'active' : ''}`}
-          onClick={() => onSelectDomain('audit')}
-        >
-          <IconClock width={18} height={18} />
-          <span>Auditoría (ms-audit)</span>
-        </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'report' && currentView === 'kpis' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('report'); onSelectView('kpis'); }}
+          >
+            <IconChartBar width={16} height={16} />
+            <span>Panel de KPIs</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'report' && currentView === 'top-services' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('report'); onSelectView('top-services'); }}
+          >
+            <IconLayers width={16} height={16} />
+            <span>Top Servicios Demandados</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'report' && currentView === 'pipeline' ? 'active' : ''}`}
+            onClick={() => { onSelectDomain('report'); onSelectView('pipeline'); }}
+          >
+            <IconTruck width={16} height={16} />
+            <span>Embudo & Estados</span>
+          </button>
+        </div>
 
-        <button
-          className={`sidebar-link ${activeDomain === 'report' ? 'active' : ''}`}
-          onClick={() => onSelectDomain('report')}
-        >
-          <IconChartBar width={18} height={18} />
-          <span>Reportes (ms-report)</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'bff' ? 'active' : ''}`}
-          onClick={() => onSelectDomain('bff')}
-        >
-          <IconServer width={18} height={18} />
-          <span>BFF & Gateway</span>
-        </button>
-
-        <button
-          className={`sidebar-link ${activeDomain === 'messaging' ? 'active' : ''}`}
-          onClick={() => onSelectDomain('messaging')}
-        >
-          <IconServer width={18} height={18} />
-          <span>Admin Brokers</span>
-        </button>
+        {/* SLOTS EN DESARROLLO */}
+        <div style={{ marginTop: '16px' }}>
+          <div className="sidebar-domain-label" style={{ marginBottom: '6px' }}>
+            Slots en Desarrollo
+          </div>
+          <button
+            className={`sidebar-link ${activeDomain === 'shipments' ? 'active' : ''}`}
+            onClick={() => onSelectDomain('shipments')}
+          >
+            <IconTruck width={16} height={16} />
+            <span>Envíos (ms-shipments)</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'bff' ? 'active' : ''}`}
+            onClick={() => onSelectDomain('bff')}
+          >
+            <IconServer width={16} height={16} />
+            <span>BFF & Gateway</span>
+          </button>
+          <button
+            className={`sidebar-link ${activeDomain === 'messaging' ? 'active' : ''}`}
+            onClick={() => onSelectDomain('messaging')}
+          >
+            <IconServer width={16} height={16} />
+            <span>Admin Brokers</span>
+          </button>
+        </div>
       </div>
 
       <div className="sidebar-footer">
