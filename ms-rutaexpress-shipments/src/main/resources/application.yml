@@ -1,0 +1,101 @@
+server:
+  port: ${PORT:8085}
+
+spring:
+  application:
+    name: ms-rutaexpress-shipments
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_NAME:FREEPDB1}}
+    username: ${SPRING_DATASOURCE_USERNAME:ruta_shipments}
+    password: ${SPRING_DATASOURCE_PASSWORD:Ruta1234}
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.OracleDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/common/v2.0}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        spring.json.add.type.headers: false
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+app:
+  security:
+    enabled: ${SECURITY_ENABLED:true}
+    azure:
+      audience: ${AZURE_AD_AUDIENCE:api://rutaexpress-shipments}
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    topics:
+      shipments-events: ${KAFKA_TOPIC_SHIPMENTS_EVENTS:shipments.events}
+      envios-events: ${KAFKA_TOPIC_ENVIOS_EVENTS:envios-events}
+  rabbit:
+    enabled: ${RABBIT_ENABLED:true}
+    exchange: ${RABBIT_EXCHANGE:cmd.direct}
+  catalogo:
+    enabled: ${CATALOGO_ENABLED:true}
+    url: ${CATALOG_SERVICE_URL:http://localhost:8081}
+  notify:
+    warehouse-email: ${NOTIFY_WAREHOUSE_EMAIL:bodega@rutaexpress.local}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.rutaexpress.shipments: INFO
