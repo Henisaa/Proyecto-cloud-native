@@ -7,6 +7,7 @@ import com.rutaexpress.bff.service.BffGatewayService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -62,6 +63,52 @@ class BffController(
         @AuthenticationPrincipal jwt: Jwt?
     ): ResponseEntity<Any> {
         val response = bffService.fetchTimeline(idEntidad, jwt?.tokenValue ?: "")
+        return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/shipments")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @Operation(summary = "Listar envíos con filtro opcional de estado (retransmite a ms-rutaexpress-shipments)")
+    fun getShipments(
+        @RequestParam(required = false) status: String?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> {
+        val response = bffService.fetchShipments(status, jwt?.tokenValue ?: "")
+        return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/shipments/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @Operation(summary = "Obtener un envío por id (retransmite a ms-rutaexpress-shipments)")
+    fun getShipment(
+        @PathVariable id: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> {
+        val response = bffService.fetchShipment(id, jwt?.tokenValue ?: "")
+        return ResponseEntity.ok(response)
+    }
+
+    @PostMapping("/shipments")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @Operation(summary = "Crear envío validando capacidad en catálogo (retransmite a ms-rutaexpress-shipments)")
+    fun createShipment(
+        @RequestBody body: Map<String, Any?>,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> {
+        val response = bffService.createShipment(body, jwt?.tokenValue ?: "")
+        return ResponseEntity.status(HttpStatus.CREATED).body(response)
+    }
+
+    @PutMapping("/shipments/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
+    @Operation(summary = "Cambiar estado del envío: reserva/libera capacidad y dispara eventos (retransmite a ms-rutaexpress-shipments)")
+    fun changeShipmentStatus(
+        @PathVariable id: String,
+        @RequestBody body: Map<String, Any?>,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> {
+        val status = body["status"]?.toString() ?: ""
+        val response = bffService.changeShipmentStatus(id, status, jwt?.tokenValue ?: "")
         return ResponseEntity.ok(response)
     }
 

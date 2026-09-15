@@ -6,9 +6,13 @@ import com.rutaexpress.bff.model.dto.UserProfileDto
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
+import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
+import org.springframework.web.server.ResponseStatusException
 
 interface BffGatewayService {
     fun getUserProfile(jwt: Jwt?): UserProfileDto
@@ -16,6 +20,10 @@ interface BffGatewayService {
     fun fetchCatalogServices(token: String): Any
     fun fetchKpis(range: String, token: String): Any
     fun fetchTimeline(idEntidad: String, token: String): Any
+    fun fetchShipments(status: String?, token: String): Any
+    fun fetchShipment(id: String, token: String): Any
+    fun createShipment(body: Map<String, Any?>, token: String): Any
+    fun changeShipmentStatus(id: String, status: String, token: String): Any
     fun getStatus(): GatewayHealthDto
 }
 
@@ -24,10 +32,12 @@ class DefaultBffGatewayService(
     @Qualifier("catalogRestClient") private val catalogClient: RestClient,
     @Qualifier("reportRestClient") private val reportClient: RestClient,
     @Qualifier("auditRestClient") private val auditClient: RestClient,
+    @Qualifier("shipmentsRestClient") private val shipmentsClient: RestClient,
     @Value("\${rutaexpress.services.catalog-url}") private val catalogUrl: String,
     @Value("\${rutaexpress.services.notify-url}") private val notifyUrl: String,
     @Value("\${rutaexpress.services.audit-url}") private val auditUrl: String,
-    @Value("\${rutaexpress.services.report-url}") private val reportUrl: String
+    @Value("\${rutaexpress.services.report-url}") private val reportUrl: String,
+    @Value("\${rutaexpress.services.shipments-url:http://localhost:8085}") private val shipmentsUrl: String
 ) : BffGatewayService {
     private val logger = LoggerFactory.getLogger(DefaultBffGatewayService::class.java)
 
@@ -158,6 +168,77 @@ class DefaultBffGatewayService(
         }
     }
 
+    override fun fetchShipments(status: String?, token: String): Any {
+        return try {
+            val peticion = if (status.isNullOrBlank()) {
+                shipmentsClient.get().uri("/api/shipments")
+            } else {
+                shipmentsClient.get().uri("/api/shipments?status={status}", status)
+            }
+            peticion
+                .header("Authorization", "Bearer $token")
+                .retrieve()
+                .body(Any::class.java) ?: emptyList<Any>()
+        } catch (e: Exception) {
+            falloDownstream("ms-rutaexpress-shipments", e)
+        }
+    }
+
+    override fun fetchShipment(id: String, token: String): Any {
+        return try {
+            shipmentsClient.get()
+                .uri("/api/shipments/{id}", id)
+                .header("Authorization", "Bearer $token")
+                .retrieve()
+                .body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            falloDownstream("ms-rutaexpress-shipments", e)
+        }
+    }
+
+    override fun createShipment(body: Map<String, Any?>, token: String): Any {
+        return try {
+            shipmentsClient.post()
+                .uri("/api/shipments")
+                .header("Authorization", "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            falloDownstream("ms-rutaexpress-shipments", e)
+        }
+    }
+
+    override fun changeShipmentStatus(id: String, status: String, token: String): Any {
+        return try {
+            shipmentsClient.put()
+                .uri("/api/shipments/{id}/status", id)
+                .header("Authorization", "Bearer $token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(mapOf("status" to status))
+                .retrieve()
+                .body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            falloDownstream("ms-rutaexpress-shipments", e)
+        }
+    }
+
+    /**
+     * Propaga el código de error real del microservicio (409 sin capacidad, 404, 403, etc.)
+     * en lugar de devolver 200 con un aviso.
+     */
+    private fun falloDownstream(servicio: String, e: Exception): Nothing {
+        logger.warn("$servicio respondió con error: ${e.message}")
+        if (e is HttpClientErrorException) {
+            throw ResponseStatusException(e.statusCode, e.responseBodyAsString, e)
+        }
+        if (e is org.springframework.web.client.HttpServerErrorException) {
+            throw ResponseStatusException(e.statusCode, e.responseBodyAsString, e)
+        }
+        throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "$servicio no disponible", e)
+    }
+
     override fun getStatus(): GatewayHealthDto {
         return GatewayHealthDto(
             azureIdaasConfigured = true,
@@ -165,7 +246,8 @@ class DefaultBffGatewayService(
                 "catalog" to catalogUrl,
                 "notify" to notifyUrl,
                 "audit" to auditUrl,
-                "report" to reportUrl
+                "report" to reportUrl,
+                "shipments" to shipmentsUrl
             )
         )
     }
