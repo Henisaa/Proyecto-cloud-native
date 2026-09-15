@@ -4,15 +4,15 @@ plugins {
 	kotlin("plugin.jpa") version "2.1.10"
 	id("org.springframework.boot") version "3.4.3"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("eclipse")
 }
 
 group = "com.rutaexpress"
 version = "0.0.1-SNAPSHOT"
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(22)
-	}
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
 }
 
 repositories {
@@ -56,8 +56,13 @@ dependencies {
 
 kotlin {
 	compilerOptions {
+		jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
 		freeCompilerArgs.addAll("-Xjsr305=strict")
 	}
+}
+
+tasks.withType<JavaCompile> {
+	options.release.set(21)
 }
 
 tasks.withType<Test> {
