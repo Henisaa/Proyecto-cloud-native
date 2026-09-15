@@ -18,6 +18,7 @@ export const loginRequest: PopupRequest = {
 };
 
 export const protectedResourceMap = new Map<string, string[]>([
-  [`${window.location.origin}/api/bff`, [environment.msal.scope]],
-  ['/api/bff', [environment.msal.scope]],
+  [`${window.location.origin}/api/bff*`, [environment.msal.scope]],
+  ['/api/bff*', [environment.msal.scope]],
+  ['*/api/bff*', [environment.msal.scope]],
 ]);
