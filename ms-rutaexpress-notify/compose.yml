@@ -9,7 +9,7 @@ services:
       SECURITY_ENABLED: "false"
       NOTIFY_FROM: no-reply@rutaexpress.local
     ports:
-      - "8080:8080"
+      - "8082:8082"
     depends_on:
       rabbitmq:
         condition: service_healthy

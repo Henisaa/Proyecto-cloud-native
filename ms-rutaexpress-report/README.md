@@ -1,144 +1,37 @@
-# ms-rutaexpress-report
+ms-rutaexpress-report
+Reportería y métricas de envíos
 
-Microservicio de reportería, KPIs y analítica operacional para la plataforma **RutaExpress**, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4** siguiendo una arquitectura minimalista.
+Funcionamiento
+Consume shipments.events con el grupo ms-rutaexpress-report-group y mantiene una proyección Oracle por shipmentId. Calcula envíos por hora, lead time desde creación hasta entrega, estados y servicios más usados. Los eventos anteriores al último timestamp no regresan el estado de la proyección. Usa Caffeine para lecturas. Permite acceso a Admin. Un error de procesamiento se reintenta tres veces en total y luego se publica en shipments.events.report.DLT; no se confirma como éxito silenciosamente.
 
-Ingesta eventos del ciclo de vida de envíos vía **Kafka**, consolida métricas agregadas en **Oracle** y expone consultas analíticas optimizadas de solo lectura bajo `/api/report/*` aceleradas con caché en memoria **Caffeine**.
+Requisitos
+JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
 
----
+Verificación y limpieza
+.\gradlew.bat test bootJar
+.\gradlew.bat clean
+.\gradlew.bat --stop
+Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
+No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
 
-## 1. Requisitos Previos
+Ejecución local desde la raíz del repositorio
+Antes de arrancar, levante la infraestructura según infra/README.md. El perfil local usa H2 en memoria y no conserva datos tras reiniciar. Kafka debe estar disponible y los tópicos creados. KAFKA_LISTENERS_ENABLED=false permite arrancar solo HTTP sin consumir eventos.
 
-- **Java:** JDK 21 o 22 (probado con Java 22).
-- **Base de Datos:** Oracle Database (ej. `gvenzl/oracle-free:23-slim`).
-- **Broker Kafka:** Apache Kafka (puerto por defecto `localhost:9092`).
-
----
-
-## 2. Variables de Entorno y Configuración
-
-El servicio utiliza las siguientes variables de entorno (con valores por defecto para desarrollo local definidos en `application.yml`):
-
-| Variable | Descripción | Valor por defecto |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | URL JDBC de conexión Oracle | `jdbc:oracle:thin:@localhost:1521/FREEPDB1` |
-| `SPRING_DATASOURCE_USERNAME` | Usuario de base de datos | `SYSTEM` |
-| `SPRING_DATASOURCE_PASSWORD` | Contraseña de base de datos | `password` |
-| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Servidores bootstrap del clúster Kafka | `localhost:9092` |
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | Issuer URI del proveedor JWT (Azure AD / Keycloak) | `http://localhost:8080/realms/rutaexpress` |
-
----
-
-## 3. Comandos de Ejecución
-
-Todos los comandos se ejecutan desde el directorio `ms-rutaexpress-report/`:
-
-### Compilar el proyecto
-```bash
-# Windows
-.\gradlew.bat build -x test
-
-# Linux / macOS
-./gradlew build -x test
-```
-
-### Ejecutar la suite de pruebas unitarias
-```bash
-# Windows
-.\gradlew.bat test
-
-# Linux / macOS
-./gradlew test
-```
-
-### Iniciar el microservicio en local
-```bash
-# Windows
+cd ms-rutaexpress-report
+$env:SECURITY_ENABLED="false"
+$env:SPRING_PROFILES_ACTIVE="local"
 .\gradlew.bat bootRun
 
-# Linux / macOS
-./gradlew bootRun
-```
-El servicio inicia en el puerto **`8084`**.
+La aplicación escucha en http://localhost:8084. Salud: /actuator/health. Swagger: /swagger-ui/index.html. Métricas: /actuator/prometheus.
 
----
+Endpoints
+GET /api/report/kpis?range=last24h
+GET /api/report/top-services?range=last7d
+Rangos: last1h, last24h, last7d y last30d.
 
-## 4. Endpoints Expuestos
+Oracle
+Para Oracle defina SPRING_PROFILES_ACTIVE=prod, SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME y SPRING_DATASOURCE_PASSWORD antes de bootRun. Use un esquema separado por servicio con permisos de tablas y secuencias. Flyway ejecuta src/main/resources/db/migration. El perfil local H2 es solo para desarrollo.
 
-### Endpoints Analíticos (Protegidos con JWT Bearer Token)
-
-Requiere token JWT válido con rol `ADMIN` o autenticado.
-
-#### 1. Resumen de KPIs operacionales
-- **Método:** `GET`
-- **Ruta:** `/api/report/kpis`
-- **Query Params:** `range` (opcional: `last1h`, `last24h`, `last7d`, `last30d`. Por defecto: `last24h`).
-- **Respuesta de ejemplo:**
-```json
-{
-  "range": "last24h",
-  "totalShipments": 120,
-  "shipmentsPerHour": 5.0,
-  "avgLeadTimeMinutes": 45.5,
-  "activeShipmentsByStatus": {
-    "CREADO": 10,
-    "ACEPTADO": 15,
-    "EN_BODEGA": 25,
-    "EN_RUTA": 30,
-    "ENTREGADO": 40
-  }
-}
-```
-
-#### 2. Servicios más demandados
-- **Método:** `GET`
-- **Ruta:** `/api/report/top-services`
-- **Query Params:** `range` (opcional: `last7d`, `last30d`. Por defecto: `last7d`).
-- **Respuesta de ejemplo:**
-```json
-[
-  {
-    "serviceType": "EXPRESS",
-    "totalShipments": 60,
-    "percentage": 60.0
-  },
-  {
-    "serviceType": "ESTANDAR",
-    "totalShipments": 40,
-    "percentage": 40.0
-  }
-]
-```
-
-### Endpoints Públicos (Documentación y Observabilidad)
-
-- **Swagger UI:** `http://localhost:8084/swagger-ui.html`
-- **OpenAPI v3 JSON:** `http://localhost:8084/v3/api-docs`
-- **Health Check:** `http://localhost:8084/actuator/health`
-- **Métricas Prometheus:** `http://localhost:8084/actuator/prometheus`
-
----
-
-## 5. Integración con Kafka
-
-El servicio escucha eventos del ciclo logístico en el tópico:
-
-- **Tópico:** `shipments.events`
-- **Consumer Group:** `ms-rutaexpress-report-group`
-- **Formato esperado del mensaje:**
-```json
-{
-  "eventId": "evt-1001",
-  "shipmentId": "envio-9988",
-  "serviceType": "EXPRESS",
-  "status": "ENTREGADO",
-  "timestamp": "2026-09-13T20:30:00Z"
-}
-```
-*Estados reconocidos:* `CREADO`, `ACEPTADO`, `EN_BODEGA`, `EN_RUTA`, `ENTREGADO`, `CANCELADO`. Al recibir `ENTREGADO`, el consumidor calcula automáticamente el `lead_time_minutes` contra la fecha de creación.
-
----
-
-## 6. Base de Datos y Caché
-
-- **Migraciones Flyway:** El esquema se crea automáticamente mediante `src/main/resources/db/migration/V1__crear_tablas_reportes.sql` en la tabla `TB_REPORT_SHIPMENTS`.
-- **Caché en Memoria:** Las consultas analíticas se almacenan en caché local **Caffeine** con expiración de 60 segundos para evitar saturación de base de datos bajo tráfico concurrente.
+Seguridad
+En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
+La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.

@@ -1,59 +1,31 @@
-# FrontendRutaexpress
+Frontend RutaExpress
+Angular 19, TypeScript, MSAL Angular/Browser, Tailwind CSS y GSAP.
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.2.27.
+Función
+Login corporativo Azure AD, dashboard, envíos, catálogo, reportería y auditoría. El dashboard agrega una sección Mensajería visible solo para Admin: colas RabbitMQ, pendientes, consumidores, alertas DLQ y tópicos Kafka. Las consultas muestran errores independientes y permiten actualizar manualmente; no inventan conectividad ni datos.
+authGuard exige sesión; roleGuard limita módulos. El interceptor solicita access token y adjunta Bearer para /api/bff. El BFF aplica la autorización real; los guards no sustituyen la validación backend. Los alias Operador del dominio y Cliente del dominio se normalizan para navegación.
 
-## Development server
+Requisitos
+Node compatible con Angular 19, npm y BFF en puerto 8080. Configuración Azure en src/environments/environment.ts: clientId, authority, scope y redirectUri. Registre el origen local como Single-page application en Azure y asigne los roles de la API al usuario. No agregue secretos de cliente a Angular.
 
-To start a local development server, run:
+Levantar localmente desde la raíz
+cd frontend
+npm ci
+npm start -- --proxy-config proxy.conf.json
+Abra http://localhost:4200. El proxy envía /api al destino definido en proxy.conf.json. El destino local por defecto es http://localhost:8080; cambie proxy.conf.json para trabajar con otro BFF. El archivo environment usa apiBaseUrl vacío para mismo origen. Para monitoreo arranque mq-admin y kafka-admin y cree las topologías según sus README.
 
-```bash
-ng serve
-```
+Validar
+npm run build
+npm test -- --watch=false --browsers=ChromeHeadless
+Las pruebas de navegador requieren Chrome o Chromium instalado. Puede usar Edge configurando CHROME_BIN con la ruta real de msedge.exe antes de ejecutar npm test. El build comprueba TypeScript y plantillas Angular.
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Producción
+npm run build
+Dockerfile compila Angular y nginx sirve dist con fallback de rutas SPA y proxy /api hacia bff:8080. Configure MSAL redirectUri y los orígenes registrados para el dominio real. El servicio bff debe ser resoluble desde el contenedor nginx.
 
-## Code scaffolding
+Limpiar después de validación
+Remove-Item -LiteralPath node_modules,dist,.angular -Recurse -Force -ErrorAction SilentlyContinue
+package-lock.json es versionado para que npm ci reproduzca las dependencias. No lo borre al limpiar.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Dependencias heredadas
+La validación npm audit de este cambio detectó vulnerabilidades en la línea Angular 19 y dependencias de tooling. Su corrección completa requiere una migración mayor de Angular y revisar MSAL y los builders. Este cambio conserva la versión de frontend existente; build y pruebas exitosas no certifican que esas dependencias estén libres de vulnerabilidades.

@@ -37,7 +37,9 @@ class DefaultBffGatewayService(
     @Value("\${rutaexpress.services.notify-url}") private val notifyUrl: String,
     @Value("\${rutaexpress.services.audit-url}") private val auditUrl: String,
     @Value("\${rutaexpress.services.report-url}") private val reportUrl: String,
-    @Value("\${rutaexpress.services.shipments-url:http://localhost:8085}") private val shipmentsUrl: String
+    @Value("\${rutaexpress.services.shipments-url:http://localhost:8085}") private val shipmentsUrl: String,
+    @Value("\${rutaexpress.services.mq-admin-url:http://localhost:8086}") private val mqAdminUrl: String,
+    @Value("\${rutaexpress.services.kafka-admin-url:http://localhost:8087}") private val kafkaAdminUrl: String
 ) : BffGatewayService {
     private val logger = LoggerFactory.getLogger(DefaultBffGatewayService::class.java)
 
@@ -87,7 +89,14 @@ class DefaultBffGatewayService(
 
     override fun buildDashboard(jwt: Jwt?): DashboardSummaryDto {
         val profile = getUserProfile(jwt)
-        val primaryRole = profile.roles.firstOrNull()?.uppercase() ?: "CLIENTE"
+        val normalizedRoles = profile.roles.map {
+            when(val role = it.trim().removePrefix("ROLE_").uppercase()) {
+                "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
+                "CLIENTE DEL DOMINIO" -> "CLIENTE"
+                else -> role
+            }
+        }
+        val primaryRole = listOf("ADMIN", "DESPACHADOR", "AUDITOR", "CLIENTE").firstOrNull { it in normalizedRoles } ?: "CLIENTE"
         val token = jwt?.tokenValue ?: ""
 
         var catalogData: Any? = null
@@ -119,14 +128,15 @@ class DefaultBffGatewayService(
 
     override fun fetchCatalogServices(token: String): Any {
         return try {
-            catalogClient.get()
+            val result = catalogClient.get()
                 .uri("/api/catalog/services")
                 .header("Authorization", "Bearer $token")
                 .retrieve()
                 .body(Any::class.java) ?: emptyList<Any>()
+            if (result is Map<*, *>) result["data"] ?: emptyList<Any>() else result
         } catch (e: Exception) {
             logger.warn("ms-rutaexpress-catalog no disponible: ${e.message}")
-            mapOf("aviso" to "ms-rutaexpress-catalog no disponible localmente", "detalle" to e.message)
+            falloDownstream("ms-rutaexpress-catalog", e)
         }
     }
 
@@ -139,7 +149,7 @@ class DefaultBffGatewayService(
                 .body(Any::class.java) ?: emptyMap<String, Any>()
         } catch (e: Exception) {
             logger.warn("ms-rutaexpress-report no disponible: ${e.message}")
-            mapOf("aviso" to "ms-rutaexpress-report no disponible localmente", "detalle" to e.message)
+            falloDownstream("ms-rutaexpress-report", e)
         }
     }
 
@@ -152,7 +162,7 @@ class DefaultBffGatewayService(
                 .body(Any::class.java) ?: emptyList<Any>()
         } catch (e: Exception) {
             logger.warn("ms-rutaexpress-audit no disponible: ${e.message}")
-            mapOf("aviso" to "ms-rutaexpress-audit no disponible localmente", "detalle" to e.message)
+            falloDownstream("ms-rutaexpress-audit", e)
         }
     }
 
@@ -247,7 +257,9 @@ class DefaultBffGatewayService(
                 "notify" to notifyUrl,
                 "audit" to auditUrl,
                 "report" to reportUrl,
-                "shipments" to shipmentsUrl
+                "shipments" to shipmentsUrl,
+                "mq-admin" to mqAdminUrl,
+                "kafka-admin" to kafkaAdminUrl
             )
         )
     }

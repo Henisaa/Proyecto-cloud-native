@@ -1,96 +1,36 @@
-# ms-rutaexpress-notify
+ms-rutaexpress-notify
+Notificaciones email, push y PDF
 
-Microservicio de notificaciones y generación de comprobantes para la plataforma **RutaExpress**, desarrollado en **Kotlin 2.3.21** y **Spring Boot 4.1.1** (JVM 21).
+Funcionamiento
+No tiene base relacional ni API pública de negocio. Consume q.cmd.email, q.cmd.warehouse y q.cmd.label desde cmd.direct o cmd.topic. Los mensajes incluyen type, eventId, timestamp, traceId, correlationId y payload. Redis reclama eventId antes de ejecutar la acción, lo libera ante error y conserva eventos completados durante siete días. Email usa SMTP; tickets y etiquetas se generan en memoria con OpenPDF y se adjuntan por email. Push Firebase es opcional mediante FIREBASE_CREDENTIALS_PATH. No persiste PDFs temporales.
+ACK manual tras éxito; tres intentos con backoff exponencial; NACK sin reencolar al agotar intentos, hacia cmd.dead.dlx y la DLQ correspondiente. rutaexpress.notify.dlq.messages cuenta mensajes fallidos. La idempotencia evita repetir eventos completados, pero una caída después del envío SMTP y antes de marcar Redis puede repetir un email.
 
-Es un servicio sin base de datos relacional que consume comandos asíncronos desde **RabbitMQ**, gestiona idempotencia en **Redis**, genera comprobantes PDF y emite notificaciones por correo (SMTP / Mailpit) y push.
+Requisitos
+JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
 
----
+Verificación y limpieza
+.\gradlew.bat test bootJar
+.\gradlew.bat clean
+.\gradlew.bat --stop
+Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
+No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
 
-## Características Principales
+Ejecución local desde la raíz del repositorio
+Antes de arrancar, levante la infraestructura según infra/README.md. Necesita RabbitMQ, Redis en 6379 y SMTP en 1025. Puede levantarlos con docker compose up -d rabbitmq redis mailpit desde esta carpeta; ese compose es una alternativa de nodo único para desarrollo, usa guest/guest, y no debe ejecutarse junto con el stack infra que usa los mismos puertos. Use RABBITMQ_USERNAME=guest y RABBITMQ_PASSWORD=guest para esa alternativa.
 
-- **Consumo Asíncrono AMQP:** Escucha en colas dedicadas con confirmación manual (`AcknowledgeMode.MANUAL`):
-  - `q.cmd.email`: Envío de correos de confirmación y estado de envíos.
-  - `q.cmd.warehouse`: Generación de tickets para operarios de bodega.
-  - `q.cmd.label`: Generación y despacho de etiquetas de envío.
-  - DLQs asociadas: `q.cmd.email.dlq`, `q.cmd.warehouse.dlq`, `q.cmd.label.dlq` con reintentos y política de backoff.
-- **Idempotencia con Redis:** Almacén de control de duplicados (`processing` con bloqueo temporal → `completed` con TTL configurable).
-- **Generación de Documentos:** Creación de etiquetas y comprobantes PDF mediante OpenPDF.
-- **Seguridad OAuth2:** Resource Server con soporte JWT (Azure AD / IDaaS) para endpoints de Actuator y métricas Prometheus.
-- **Entorno Contenerizado:** Incluye `Dockerfile` multistage y `compose.yml` local con RabbitMQ (Management), Redis y Mailpit.
+cd ms-rutaexpress-notify
+$env:SECURITY_ENABLED="false"
+$env:RABBITMQ_USERNAME="rutaexpress"
+$env:RABBITMQ_PASSWORD="rutaexpress-local"
+.\gradlew.bat bootRun
 
----
+La aplicación escucha en http://localhost:8082. Salud: /actuator/health. Métricas: /actuator/prometheus.
 
-## Requisitos Previos
+Endpoints
+GET /actuator/health
+GET /actuator/prometheus con rol Admin en modo seguro
+Mailpit: http://localhost:8025 para revisar correos y sus adjuntos.
 
-- **Java:** JDK 21 instalado (Gradle toolchain configurado).
-- **RabbitMQ:** Broker AMQP (puertos `5672` y `15672`).
-- **Redis:** Servidor Redis (puerto `6379`).
-- **Mail Server:** Servidor SMTP (ej. Mailpit en puertos `1025` SMTP y `8025` Web UI).
-- *(Opcional)* **Docker & Docker Compose** para levantar la infraestructura de soporte.
-
----
-
-## Variables de Entorno y Configuración
-
-El servicio se configura a través de `src/main/resources/application.properties` y soporta las siguientes variables de entorno:
-
-| Variable | Descripción | Valor por defecto |
-|---|---|---|
-| `SERVER_PORT` | Puerto HTTP del servicio | `8080` |
-| `RABBITMQ_HOST` | Host del broker RabbitMQ | `localhost` |
-| `RABBITMQ_PORT` | Puerto de conexión AMQP | `5672` |
-| `RABBITMQ_USERNAME` | Usuario de RabbitMQ | `guest` |
-| `RABBITMQ_PASSWORD` | Contraseña de RabbitMQ | `guest` |
-| `REDIS_HOST` | Host de Redis | `localhost` |
-| `REDIS_PORT` | Puerto de Redis | `6379` |
-| `MAIL_HOST` | Host de servidor SMTP | `localhost` |
-| `MAIL_PORT` | Puerto de servidor SMTP | `1025` |
-| `SECURITY_ENABLED` | Activa validación OAuth2/JWT | `false` (dev) / `true` (prod) |
-| `NOTIFY_FROM` | Dirección de remitente para correos | `no-reply@rutaexpress.local` |
-
----
-
-## Puesta en Marcha con Docker Compose
-
-El directorio incluye un `compose.yml` preconfigurado con RabbitMQ, Redis y Mailpit con sus respectivos healthchecks:
-
-```bash
-# Iniciar dependencias locales
-docker compose up -d rabbitmq redis mailpit
-
-# O iniciar todo el stack incluyendo el microservicio
-docker compose up -d --build
-```
-
-- **RabbitMQ Management:** http://localhost:15672 (guest / guest)
-- **Mailpit Web UI:** http://localhost:8025
-- **Métricas Actuator / Prometheus:** http://localhost:8080/actuator/prometheus
-
----
-
-## Ejecución con Gradle
-
-### 1. Ejecutar Pruebas Automatizadas
-```bash
-./gradlew test
-```
-> Para ejecutar pruebas de integración que requieren broker real en Docker:
-> ```bash
-> RUN_DOCKER_TESTS=true ./gradlew test
-> ```
-
-### 2. Iniciar el Microservicio
-```bash
-./gradlew bootRun
-```
-
-### 3. Construir JAR Ejecutable
-```bash
-./gradlew bootJar
-```
-
----
-
-## Documentación Detallada
-
-Para consultar detalles de arquitectura interna, topología de colas, converter de mensajes, manejo de fallos y diseño de idempotencia, revise el archivo [`AGENTS.md`](./AGENTS.md).
+Seguridad
+En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
+La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.

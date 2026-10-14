@@ -1,6 +1,6 @@
 package com.rutaexpress.catalog.view.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import com.rutaexpress.catalog.model.entity.CatalogService
 import com.rutaexpress.catalog.model.entity.FleetCapacity
 import com.rutaexpress.catalog.model.enums.ServiceCategory
@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers.print
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 
-private val testMapper = ObjectMapper().findAndRegisterModules()
+private val testMapper = tools.jackson.databind.json.JsonMapper.builder().findAndAddModules().build()
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -74,7 +74,7 @@ class CatalogViewControllerTests {
     }
 
     @Test
-    @WithMockUser(roles = ["OPERADOR"])
+    @WithMockUser(roles = ["ADMIN"])
     fun `GET services should return 200 and list of services`() {
         mockMvc.perform(get("/api/catalog/services"))
             .andDo(print())
@@ -94,7 +94,7 @@ class CatalogViewControllerTests {
     }
 
     @Test
-    @WithMockUser(roles = ["OPERADOR"])
+    @WithMockUser(roles = ["ADMIN"])
     fun `GET service by unknown id should return 404`() {
         mockMvc.perform(get("/api/catalog/services/99999"))
             .andExpect(status().isNotFound)
@@ -145,7 +145,7 @@ class CatalogViewControllerTests {
     }
 
     @Test
-    @WithMockUser(roles = ["OPERADOR"])
+    @WithMockUser(roles = ["ADMIN"])
     fun `POST service with invalid blank fields should return 400 Bad Request`() {
         val invalidRequest = CreateServiceViewModel(
             code = "",
@@ -165,7 +165,7 @@ class CatalogViewControllerTests {
     }
 
     @Test
-    @WithMockUser(roles = ["OPERADOR"])
+    @WithMockUser(roles = ["ADMIN"])
     fun `PATCH service status should update operative status`() {
         val statusUpdate = UpdateStatusViewModel(
             status = ServiceStatus.SUSPENDED
@@ -181,7 +181,7 @@ class CatalogViewControllerTests {
     }
 
     @Test
-    @WithMockUser(roles = ["OPERADOR"])
+    @WithMockUser(roles = ["DESPACHADOR"])
     fun `POST capacity check should respond with availability calculation`() {
         val checkRequest = CapacityCheckRequestViewModel(
             zone = ZoneType.URBAN_CENTER,

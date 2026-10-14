@@ -12,11 +12,13 @@ spring:
   flyway:
     enabled: false
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 app:
+  method-security:
+    enabled: ${SECURITY_ENABLED:false}
   security:
-    enabled: false
+    enabled: ${SECURITY_ENABLED:false}
   kafka:
     enabled: false
   rabbit:

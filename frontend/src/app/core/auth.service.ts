@@ -170,7 +170,11 @@ export class AuthService {
   }
 
   hasRole(...roles: string[]): boolean {
-    const own = this.roles.map((r) => r.toLowerCase());
-    return roles.some((r) => own.includes(r.toLowerCase()));
+    const normalize = (role: string): string => {
+      const value = role.trim().replace(/^ROLE_/i, '').toLowerCase();
+      return value === 'operador del dominio' || value === 'operador' ? 'despachador' : value === 'cliente del dominio' ? 'cliente' : value;
+    };
+    const own = this.roles.map(normalize);
+    return roles.some((r) => own.includes(normalize(r)));
   }
 }

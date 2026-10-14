@@ -30,5 +30,8 @@ class EventoAuditoria(
     val usuarioResponsable: String? = null,
 
     @Column(name = "fecha_evento", nullable = false)
-    val fechaEvento: Instant = Instant.now()
+    val fechaEvento: Instant = Instant.now(),
+
+    @Column(name = "event_id", unique = true, length = 100)
+    val eventId: String? = null
 )

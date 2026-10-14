@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.core.ProducerFactory
-import org.springframework.kafka.support.serializer.JsonSerializer
+import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 
 @Configuration
 @ConditionalOnProperty(name = ["app.kafka.enabled"], havingValue = "true", matchIfMissing = true)
@@ -23,10 +23,11 @@ class KafkaProducerConfig(
         val configProps = mutableMapOf<String, Any>()
         configProps[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = bootstrapServers
         configProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java
-        configProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = JsonSerializer::class.java
+        configProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = JacksonJsonSerializer::class.java
         configProps[ProducerConfig.ACKS_CONFIG] = "all"
+        configProps[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG] = true
         configProps[ProducerConfig.RETRIES_CONFIG] = 3
-        configProps[JsonSerializer.ADD_TYPE_INFO_HEADERS] = false
+        configProps[JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS] = false
         return DefaultKafkaProducerFactory(configProps)
     }
 

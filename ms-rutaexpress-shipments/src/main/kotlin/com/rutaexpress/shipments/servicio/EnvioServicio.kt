@@ -68,7 +68,7 @@ class EnvioServicio(
         )
 
         val guardado = repositorio.save(envio)
-        eventPublisher.publicarCambioEstado(guardado)
+        eventPublisher.publicarCambioEstado(guardado, org.springframework.security.core.context.SecurityContextHolder.getContext().authentication?.name ?: "LOCAL")
         logger.info("Envío {} creado (tracking {})", guardado.id, guardado.trackingCode)
         return EnvioResponse.desde(guardado)
     }
@@ -123,7 +123,7 @@ class EnvioServicio(
         envio.updatedAt = Instant.now()
         val guardado = repositorio.save(envio)
 
-        eventPublisher.publicarCambioEstado(guardado)
+        eventPublisher.publicarCambioEstado(guardado, org.springframework.security.core.context.SecurityContextHolder.getContext().authentication?.name ?: "LOCAL")
         notificarSegunEstado(guardado)
 
         return EnvioResponse.desde(guardado)

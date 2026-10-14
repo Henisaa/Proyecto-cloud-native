@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin, of, catchError } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
-import { BffService, Envio } from '../../core/bff.service';
+import { BffService, BrokerQueue, Envio } from '../../core/bff.service';
 import { FadeInDirective } from '../../shared/fade-in.directive';
 import { pillEstado, puntoEstado } from '../../shared/estado-ui';
 
@@ -76,7 +76,7 @@ import { pillEstado, puntoEstado } from '../../shared/estado-ui';
       </section>
 
       <!-- PANELES -->
-      <div class="grid gap-6 lg:grid-cols-2">
+      <div class="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         <!-- BFF -->
         <div class="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs sm:p-6">
           <div>
@@ -117,6 +117,34 @@ import { pillEstado, puntoEstado } from '../../shared/estado-ui';
             <span class="font-mono">aud: {{ auth.tokenAud() ?? '—' }}</span>
           </div>
         </div>
+
+        @if (auth.hasRole('Admin')) {
+          <section class="min-w-0 rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6" aria-labelledby="broker-heading" [attr.aria-busy]="brokerLoading">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="broker-heading" class="text-base font-semibold text-zinc-900">Mensajería</h2>
+              <button type="button" class="btn-secondary" (click)="loadBrokers()" [disabled]="brokerLoading">{{ brokerLoading ? 'Consultando…' : 'Actualizar mensajería' }}</button>
+            </div>
+            <p class="mt-2 text-sm text-zinc-600">Colas pendientes, consumidores activos y tópicos de eventos.</p>
+            @if (mqError) { <p class="mt-3 text-sm text-red-700" role="alert">{{ mqError }}</p> }
+            @if (!brokerLoading && !mqError && queues.length === 0) { <p class="mt-3 text-sm text-zinc-600">No hay colas declaradas. Configure la topología desde el administrador.</p> }
+            @if (queues.length > 0) {
+              <div class="mt-4 overflow-x-auto">
+                <table class="w-full text-left text-sm tabular-nums">
+                  <caption class="sr-only">Estado de las colas de notificaciones</caption>
+                  <thead class="border-b border-zinc-200 text-zinc-700"><tr><th scope="col" class="py-2 pr-4">Cola</th><th scope="col" class="pr-4">Mensajes</th><th scope="col" class="pr-4">Consumidores</th><th scope="col">Estado</th></tr></thead>
+                  <tbody>@for (queue of queues; track queue.name) {
+                    <tr class="border-b border-zinc-100"><th scope="row" class="py-2 pr-4 font-normal text-zinc-800">{{ queue.name }}</th><td class="pr-4">{{ queue.messages }}</td><td class="pr-4">{{ queue.consumers }}</td><td [class]="queue.alert ? 'text-red-700' : 'text-zinc-700'">{{ queue.alert ? 'Revisar mensajes fallidos' : 'Sin alerta DLQ' }}</td></tr>
+                  }</tbody>
+                </table>
+              </div>
+            }
+            <h3 class="mt-5 font-semibold text-zinc-900">Tópicos de eventos</h3>
+            @if (kafkaError) { <p class="mt-2 text-sm text-red-700" role="alert">{{ kafkaError }}</p> }
+            @if (!brokerLoading && !kafkaError && topics.length === 0) { <p class="mt-2 text-sm text-zinc-600">No hay tópicos declarados. Configure la topología desde el administrador.</p> }
+            <ul class="mt-2 space-y-1 break-words text-sm text-zinc-700">@for (topic of topics; track topic) { <li>{{ topic }}</li> }</ul>
+            @if (brokerUpdated) { <p class="mt-4 text-xs text-zinc-600" aria-live="polite">Última consulta: {{ brokerUpdated }}</p> }
+          </section>
+        }
 
         <!-- ÚLTIMOS ENVÍOS -->
         <div class="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs sm:p-6">
@@ -166,10 +194,34 @@ export class DashboardPage implements OnInit {
   kpis: Record<string, any> | null = null;
   envios: Envio[] = [];
 
+  queues: BrokerQueue[] = [];
+  topics: string[] = [];
+  brokerLoading = false;
+  mqError = '';
+  kafkaError = '';
+  brokerUpdated = '';
+
+  loadBrokers(): void {
+    if (!this.auth.hasRole('Admin') || this.brokerLoading) return;
+    this.brokerLoading = true;
+    this.mqError = '';
+    this.kafkaError = '';
+    forkJoin({
+      queues: this.bff.mqQueues().pipe(catchError(() => { this.mqError = 'No se pudo consultar RabbitMQ. Compruebe el servicio y vuelva a actualizar.'; return of([] as BrokerQueue[]); })),
+      topics: this.bff.kafkaTopics().pipe(catchError(() => { this.kafkaError = 'No se pudo consultar Kafka. Compruebe el servicio y vuelva a actualizar.'; return of([] as string[]); })),
+    }).subscribe(({ queues, topics }) => {
+      this.queues = queues;
+      this.topics = topics;
+      this.brokerLoading = false;
+      this.brokerUpdated = new Date().toLocaleTimeString();
+    });
+  }
+
   ngOnInit(): void {
+    this.loadBrokers();
     forkJoin({
       status: this.bff.status().pipe(catchError(() => of(null))),
-      kpis: this.bff.reportKpis().pipe(catchError(() => of(null))),
+      kpis: this.auth.hasRole('Admin') ? this.bff.reportKpis().pipe(catchError(() => of(null))) : of(null),
       envios: this.bff.listarEnvios().pipe(catchError(() => of([] as Envio[]))),
     }).subscribe(({ status, kpis, envios }) => {
       this.status = status as Record<string, any> | null;

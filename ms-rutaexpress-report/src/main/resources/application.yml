@@ -24,12 +24,19 @@ spring:
     baseline-on-migrate: true
 
   kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
+      enable-auto-commit: false
       group-id: ms-rutaexpress-report-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
 
   cache:
     type: caffeine
@@ -43,7 +50,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+          audiences: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e},${AZURE_AD_CLIENT_ID:f3136620-804c-4b15-b22d-b6fad957937e}
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
 
 management:
   endpoints:
@@ -59,3 +67,7 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+app:
+  security:
+    enabled: ${SECURITY_ENABLED:true}

@@ -66,7 +66,7 @@ class SecurityAudienceAndRolesTests {
 
         val authorities = authToken!!.authorities
         assertTrue(authorities.contains(SimpleGrantedAuthority("ROLE_ADMIN")))
-        assertTrue(authorities.contains(SimpleGrantedAuthority("ROLE_OPERADOR")))
+        assertTrue(authorities.contains(SimpleGrantedAuthority("ROLE_DESPACHADOR")))
         assertTrue(authorities.contains(SimpleGrantedAuthority("SCOPE_Catalog.Read")))
         assertTrue(authorities.contains(SimpleGrantedAuthority("SCOPE_Catalog.Write")))
         assertEquals("courier-admin-01", authToken.name)

@@ -22,7 +22,7 @@ import org.springframework.security.web.SecurityFilterChain
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@org.springframework.context.annotation.Import(MethodSecurityConfig::class)
 class SecurityConfig(
     @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://login.microsoftonline.com/common/v2.0}")
     private val issuerUri: String,
@@ -107,7 +107,7 @@ class SecurityConfig(
 class AudienceValidator(private val expectedAudience: String) : OAuth2TokenValidator<Jwt> {
     override fun validate(jwt: Jwt): OAuth2TokenValidatorResult {
         val audiences = jwt.audience
-        return if (audiences != null && (audiences.contains(expectedAudience) || expectedAudience.isBlank())) {
+        return if (audiences != null && (audiences.any { it == expectedAudience || it == expectedAudience.removePrefix("api://") || "api://$it" == expectedAudience } || expectedAudience.isBlank())) {
             OAuth2TokenValidatorResult.success()
         } else {
             val error = OAuth2Error(
@@ -133,7 +133,7 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
         if (rolesClaim is List<*>) {
             rolesClaim.forEach { role ->
                 if (role is String && role.isNotBlank()) {
-                    val roleName = if (role.startsWith("ROLE_")) role else "ROLE_${role.uppercase()}"
+                    val roleName = "ROLE_${normalizeRole(role)}"
                     authorities.add(SimpleGrantedAuthority(roleName))
                 }
             }
@@ -157,3 +157,9 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
     }
 }
 
+
+private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+    "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
+    "CLIENTE DEL DOMINIO" -> "CLIENTE"
+    else -> value
+}

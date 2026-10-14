@@ -3,6 +3,13 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface BrokerQueue {
+  name: string;
+  messages: number;
+  consumers: number;
+  alert: boolean;
+}
+
 export interface Envio {
   id: string;
   trackingCode: string;
@@ -41,6 +48,14 @@ export interface CrearEnvio {
 export class BffService {
   private readonly http = inject(HttpClient);
   private readonly base = environment.apiBaseUrl;
+
+  mqQueues(): Observable<BrokerQueue[]> {
+    return this.http.get<BrokerQueue[]>(`${this.base}/api/bff/admin/mq/queues`);
+  }
+
+  kafkaTopics(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.base}/api/bff/admin/kafka/topics`);
+  }
 
   me(): Observable<Record<string, unknown>> {
     return this.http.get<Record<string, unknown>>(`${this.base}/api/bff/auth/me`);

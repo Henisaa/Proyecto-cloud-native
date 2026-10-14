@@ -1,64 +1,46 @@
-# ms-rutaexpress-bff
+ms-rutaexpress-bff
+Backend para frontend y acceso seguro
 
-Microservicio **Backend For Frontend (BFF)** y API Gateway interno para la plataforma **RutaExpress**, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4**.
+Funcionamiento
+No persiste datos. Recibe el access token de Angular/MSAL después de AWS API Gateway, valida JWT y permisos, y reenvía Bearer a los servicios del dominio. Devuelve códigos de error de los downstream, o 503 si no están disponibles. Expone perfil, dashboard, catálogo, KPIs, timeline y envíos. La sección administrativa permite consultas de RabbitMQ y Kafka exclusivamente para Admin; no hace proxy arbitrario de URLs ni expone operaciones destructivas.
 
-Encargado de actuar como fachada segura detrás del **AWS API Gateway**, validando los tokens JWT corporativos emitidos por **Azure AD (Microsoft Entra ID)**, aplicando autorización estricta por roles de negocio (`ADMIN`, `DESPACHADOR`, `CLIENTE`, `AUDITOR`) y agregando o retransmitiendo peticiones hacia los microservicios de dominio.
+Requisitos
+JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
 
----
+Verificación y limpieza
+.\gradlew.bat test bootJar
+.\gradlew.bat clean
+.\gradlew.bat --stop
+Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
+No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
 
-## 1. Responsabilidades del Microservicio
+Ejecución local desde la raíz del repositorio
+Antes de arrancar, levante la infraestructura según infra/README.md. Arranque los demás servicios en los puertos 8081 a 8087. Las URLs pueden cambiarse con CATALOG_SERVICE_URL, NOTIFY_SERVICE_URL, AUDIT_SERVICE_URL, REPORT_SERVICE_URL, SHIPMENTS_SERVICE_URL, MQ_ADMIN_SERVICE_URL y KAFKA_ADMIN_SERVICE_URL.
 
-- **Validación Criptográfica de JWT:** Verifica firma digital, periodo de vigencia (expiración/not before), `issuer` (`https://login.microsoftonline.com/<TENANT_ID>/v2.0`) y `audience` (`api://<CLIENT_ID>`).
-- **Mapeo de Roles de Azure AD:** Convierte el claim `roles` (`["Admin", "Despachador", "Cliente", "Auditor"]`) en `GrantedAuthority` de Spring Security con prefijo `ROLE_` (`ROLE_ADMIN`, `ROLE_DESPACHADOR`, `ROLE_CLIENTE`, `ROLE_AUDITOR`).
-- **Control de Acceso Basado en Roles (RBAC):** Protege endpoints mediante anotaciones `@PreAuthorize` y reglas HTTP, retornando errores `401 Unauthorized` y `403 Forbidden` estructurados en formato JSON.
-- **Agregación de Dashboard:** Expone `/api/bff/dashboard` consolidando respuestas de catálogo, KPIs y auditoría según el rol del usuario autenticado.
-- **Fachada para el Frontend:** Evita que el frontend deba lidiar con múltiples URLs internas de microservicios.
+cd ms-rutaexpress-bff
+$env:SECURITY_ENABLED="false"
+.\gradlew.bat bootRun
 
----
+La aplicación escucha en http://localhost:8080. Salud: /actuator/health. Swagger: /swagger-ui/index.html. Métricas: /actuator/prometheus.
 
-## 2. Variables de Entorno y Configuración de Azure AD
+Endpoints
+GET /api/bff/auth/me
+GET /api/bff/dashboard
+GET /api/bff/status
+GET /api/bff/catalog/services
+GET /api/bff/report/kpis
+GET /api/bff/audit/timeline/{idEntidad}
+GET, POST /api/bff/shipments
+GET /api/bff/shipments/{id}
+PUT /api/bff/shipments/{id}/status
+GET /api/bff/admin/mq/cluster
+GET /api/bff/admin/mq/queues
+GET /api/bff/admin/mq/alerts
+GET /api/bff/admin/kafka/cluster
+GET /api/bff/admin/kafka/topics
+GET /api/bff/admin/kafka/topics/{name}
+GET /api/bff/admin/kafka/groups/{group}/lag
 
-| Variable | Descripción | Valor por Defecto / Configurado |
-|---|---|---|
-| `SERVER_PORT` | Puerto del servicio BFF | `8080` |
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | Issuer de Azure AD / Entra ID | `https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0` |
-| `AZURE_TENANT_ID` | Tenant ID (Directorio corporativo) | `bc307149-9a0a-45b8-9f7d-2dfc104f9a09` |
-| `AZURE_CLIENT_ID` | Client ID / Application ID | `f3136620-804c-4b15-b22d-b6fad957937e` |
-| `RUTAEXPRESS_SECURITY_AUDIENCE` | Audience de validación JWT | `api://f3136620-804c-4b15-b22d-b6fad957937e` |
-| `AZURE_SCOPE` | Scope expuesto para usuarios | `api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user` |
-| `CATALOG_SERVICE_URL` | URL de `ms-rutaexpress-catalog` | `http://localhost:8081` |
-| `NOTIFY_SERVICE_URL` | URL de `ms-rutaexpress-notify` | `http://localhost:8082` |
-| `AUDIT_SERVICE_URL` | URL de `ms-rutaexpress-audit` | `http://localhost:8083` |
-| `REPORT_SERVICE_URL` | URL de `ms-rutaexpress-report` | `http://localhost:8084` |
-
----
-
-## 3. Endpoints Expuestos
-
-### Públicos (Diagnóstico y Swagger)
-- `GET /swagger-ui.html` — Interfaz interactiva de Swagger UI.
-- `GET /v3/api-docs` — Definición OpenAPI en formato JSON.
-- `GET /actuator/health` — Health check para balanceadores de carga / API Gateway.
-- `GET /actuator/prometheus` — Métricas para Prometheus / Grafana.
-
-### Protegidos por JWT y Roles
-| Método | Endpoint | Roles Permitidos | Descripción |
-|---|---|---|---|
-| `GET` | `/api/bff/auth/me` | Autenticado | Devuelve perfil, email, tenant y roles del usuario extraídos del JWT. |
-| `GET` | `/api/bff/status` | Autenticado | Estado de conexión del BFF y URLs de downstream. |
-| `GET` | `/api/bff/dashboard` | Autenticado | Panel consolidado (KPIs si Admin, Flota si Despachador, Tarifas si Cliente). |
-| `GET` | `/api/bff/catalog/services` | `ADMIN`, `DESPACHADOR`, `CLIENTE` | Catálogo de servicios de despacho activos. |
-| `GET` | `/api/bff/report/kpis` | `ADMIN` | Reporte consolidado de KPIs y tiempos de entrega. |
-| `GET` | `/api/bff/audit/timeline/{id}` | `ADMIN`, `AUDITOR` | Línea de tiempo y trazabilidad de eventos por envío. |
-
----
-
-## 4. Compilación y Pruebas Automatizadas
-
-```bash
-# Ejecutar suite de pruebas unitarias y de seguridad
-./gradlew test
-
-# Iniciar localmente
-./gradlew bootRun
-```
+Seguridad
+En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
+La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.
