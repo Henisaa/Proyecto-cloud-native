@@ -27,3 +27,12 @@ Thumbs.db
 # Project-specific ignored docs
 Caso 3 - RutaExpress.docx
 .agents/
+# Local documentation and generated artifacts
+docs/
+work/
+**/node_modules/
+**/dist/
+**/.angular/
+.env
+.env.*
+!.env.example

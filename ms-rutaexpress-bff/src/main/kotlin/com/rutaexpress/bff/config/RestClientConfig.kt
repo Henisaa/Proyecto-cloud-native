@@ -10,7 +10,8 @@ class RestClientConfig(
     @Value("\${rutaexpress.services.catalog-url}") private val catalogUrl: String,
     @Value("\${rutaexpress.services.notify-url}") private val notifyUrl: String,
     @Value("\${rutaexpress.services.audit-url}") private val auditUrl: String,
-    @Value("\${rutaexpress.services.report-url}") private val reportUrl: String
+    @Value("\${rutaexpress.services.report-url}") private val reportUrl: String,
+    @Value("\${rutaexpress.services.shipments-url:http://localhost:8085}") private val shipmentsUrl: String
 ) {
 
     @Bean
@@ -24,4 +25,7 @@ class RestClientConfig(
 
     @Bean
     fun reportRestClient(): RestClient = RestClient.builder().baseUrl(reportUrl).build()
+
+    @Bean
+    fun shipmentsRestClient(): RestClient = RestClient.builder().baseUrl(shipmentsUrl).build()
 }
