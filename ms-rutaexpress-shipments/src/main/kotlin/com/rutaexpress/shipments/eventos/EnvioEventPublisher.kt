@@ -16,25 +16,26 @@ class EnvioEventPublisher(
     private val kafkaTemplate: KafkaTemplate<String, Any>?,
     @Value("\${app.kafka.topics.shipments-events:shipments.events}")
     private val topicShipmentsEvents: String = "shipments.events",
-    @Value("\${app.kafka.topics.envios-events:envios-events}")
-    private val topicEnviosEvents: String = "envios-events",
+    @Value("\${app.kafka.topics.audit.timeline:audit.timeline}")
+    private val topicEnviosEvents: String = "audit.timeline",
     @Value("\${app.kafka.enabled:true}")
     private val kafkaEnabled: Boolean = true
 ) {
     private val logger = LoggerFactory.getLogger(EnvioEventPublisher::class.java)
 
-    fun publicarCambioEstado(envio: Envio) {
+    fun publicarCambioEstado(envio: Envio, actor: String = "SISTEMA") {
         val evento = EventoEnvioKafka(
             eventId = UUID.randomUUID().toString(),
             shipmentId = envio.id,
             serviceType = envio.serviceType ?: envio.serviceCode,
             status = envio.status.name,
             timestamp = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
-            trackingCode = envio.trackingCode
+            trackingCode = envio.trackingCode,
+            actor = actor
         )
 
         enviar(topicShipmentsEvents, envio.id, evento)
-        enviar(topicEnviosEvents, envio.id, evento)
+        enviar(topicEnviosEvents, evento.eventId, evento)
     }
 
     private fun enviar(topic: String, key: String, evento: EventoEnvioKafka) {

@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
@@ -9,7 +9,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
 
   cache:
     type: caffeine
@@ -23,13 +23,15 @@ rutaexpress:
   security:
     azure-tenant-id: ${AZURE_TENANT_ID:bc307149-9a0a-45b8-9f7d-2dfc104f9a09}
     azure-client-id: ${AZURE_CLIENT_ID:f3136620-804c-4b15-b22d-b6fad957937e}
-    audience: ${AZURE_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
+    audience: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
     scope: ${AZURE_SCOPE:api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
   services:
     catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
     notify-url: ${NOTIFY_SERVICE_URL:http://localhost:8082}
     audit-url: ${AUDIT_SERVICE_URL:http://localhost:8083}
     report-url: ${REPORT_SERVICE_URL:http://localhost:8084}
+    mq-admin-url: ${MQ_ADMIN_SERVICE_URL:http://localhost:8086}
+    kafka-admin-url: ${KAFKA_ADMIN_SERVICE_URL:http://localhost:8087}
     shipments-url: ${SHIPMENTS_SERVICE_URL:http://localhost:8085}
 
 management:
@@ -46,3 +48,9 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+app:
+  method-security:
+    enabled: ${SECURITY_ENABLED:true}
+  security:
+    enabled: ${SECURITY_ENABLED:true}

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import java.time.Instant
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -22,6 +22,9 @@ class AuditoriaControladorTests {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @MockitoBean
+    private lateinit var jwtDecoder: org.springframework.security.oauth2.jwt.JwtDecoder
 
     @MockitoBean
     private lateinit var auditoriaRepositorio: AuditoriaRepositorio

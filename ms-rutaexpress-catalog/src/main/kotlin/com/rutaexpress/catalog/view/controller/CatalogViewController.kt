@@ -35,7 +35,7 @@ class CatalogViewController(
         ApiResponse(responseCode = "401", description = "No autenticado"),
         ApiResponse(responseCode = "403", description = "Acceso denegado")
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun listServices(
         @RequestParam(required = false) category: ServiceCategory?,
         @RequestParam(required = false) status: ServiceStatus?,
@@ -56,7 +56,7 @@ class CatalogViewController(
         ApiResponse(responseCode = "200", description = "Servicio encontrado"),
         ApiResponse(responseCode = "404", description = "Servicio no encontrado")
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun getServiceById(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
         val service = viewModelService.getServiceById(id)
         return ResponseEntity.ok(
@@ -69,7 +69,7 @@ class CatalogViewController(
 
     @GetMapping("/services/code/{code}")
     @Operation(summary = "Obtener servicio por código", description = "Búsqueda de servicio por código único de negocio (ej. SRV-EXP-01).")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun getServiceByCode(@PathVariable code: String): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
         val service = viewModelService.getServiceByCode(code)
         return ResponseEntity.ok(
@@ -87,7 +87,7 @@ class CatalogViewController(
         ApiResponse(responseCode = "400", description = "Datos de entrada inválidos"),
         ApiResponse(responseCode = "409", description = "Código de servicio ya existente")
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun createService(
         @Valid @RequestBody request: CreateServiceViewModel
     ): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
@@ -106,7 +106,7 @@ class CatalogViewController(
         ApiResponse(responseCode = "200", description = "Servicio actualizado exitosamente"),
         ApiResponse(responseCode = "404", description = "Servicio no encontrado")
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun updateService(
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateServiceViewModel
@@ -122,7 +122,7 @@ class CatalogViewController(
 
     @PatchMapping("/services/{id}/status")
     @Operation(summary = "Cambiar estado del servicio", description = "Actualiza el estado operativo (ACTIVO, INACTIVO, SUSPENDIDO).")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun updateStatus(
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateStatusViewModel
@@ -155,7 +155,7 @@ class CatalogViewController(
 
     @GetMapping("/services/{id}/capacities")
     @Operation(summary = "Listar capacidades de flota para un servicio")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun getCapacities(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<List<CapacityDetailViewModel>>> {
         val capacities = viewModelService.getCapacities(id)
         return ResponseEntity.ok(
@@ -168,7 +168,7 @@ class CatalogViewController(
 
     @PostMapping("/services/{id}/capacities")
     @Operation(summary = "Agregar capacidad de flota a un servicio")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun addCapacity(
         @PathVariable id: Long,
         @Valid @RequestBody request: CreateCapacityViewModel
@@ -184,7 +184,7 @@ class CatalogViewController(
 
     @PutMapping("/services/{id}/capacities/{capacityId}")
     @Operation(summary = "Actualizar capacidad de flota")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun updateCapacity(
         @PathVariable id: Long,
         @PathVariable capacityId: Long,
@@ -208,7 +208,7 @@ class CatalogViewController(
         summary = "Verificar disponibilidad de capacidad (para ms-rutaexpress-shipments)",
         description = "Consulta si existe flota disponible para transportar paquetes con peso y volumen determinados en la zona."
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun checkCapacity(
         @PathVariable id: Long,
         @Valid @RequestBody request: CapacityCheckRequestViewModel
@@ -227,7 +227,7 @@ class CatalogViewController(
         summary = "Reservar cupo de capacidad para un envío",
         description = "Bloquea o incrementa la capacidad ocupada al crear un envío en ms-rutaexpress-shipments."
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
     fun reserveCapacity(
         @PathVariable id: Long,
         @Valid @RequestBody request: CapacityReservationViewModel
@@ -246,7 +246,7 @@ class CatalogViewController(
         summary = "Liberar cupo de capacidad de un envío cancelado",
         description = "Disminuye la capacidad ocupada cuando un envío es cancelado."
     )
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
     fun releaseCapacity(
         @PathVariable id: Long,
         @Valid @RequestBody request: CapacityReleaseViewModel
@@ -266,7 +266,7 @@ class CatalogViewController(
 
     @GetMapping("/services/{id}/tariffs")
     @Operation(summary = "Listar tarifas de un servicio")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     fun getTariffs(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<List<TariffDetailViewModel>>> {
         val tariffs = viewModelService.getTariffs(id)
         return ResponseEntity.ok(
@@ -279,7 +279,7 @@ class CatalogViewController(
 
     @PostMapping("/services/{id}/tariffs")
     @Operation(summary = "Configurar nueva tarifa zonal para un servicio")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun addTariff(
         @PathVariable id: Long,
         @Valid @RequestBody request: CreateTariffViewModel
@@ -295,7 +295,7 @@ class CatalogViewController(
 
     @PutMapping("/services/{id}/tariffs/{tariffId}")
     @Operation(summary = "Actualizar valores de una tarifa")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasRole(\'ADMIN\')")
     fun updateTariff(
         @PathVariable id: Long,
         @PathVariable tariffId: Long,

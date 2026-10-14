@@ -1,6 +1,6 @@
 package com.rutaexpress.bff.config
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
@@ -31,7 +31,7 @@ import java.time.Instant
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@org.springframework.context.annotation.Import(MethodSecurityConfig::class)
 class SecurityConfig(
     @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}")
     private val issuerUri: String,
@@ -68,6 +68,7 @@ class SecurityConfig(
                 if (securityEnabled) {
                     // Autorización granular por roles de negocio de Azure AD
                     auth
+                        .requestMatchers("/api/bff/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/report/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/audit/**").hasAnyRole("ADMIN", "AUDITOR")
                         .requestMatchers("/api/bff/catalog/manage/**").hasRole("ADMIN")
@@ -195,7 +196,7 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
         if (rolesClaim is List<*>) {
             rolesClaim.filterIsInstance<String>().forEach { role ->
                 if (role.isNotBlank()) {
-                    val roleName = if (role.startsWith("ROLE_")) role else "ROLE_${role.trim().uppercase()}"
+                    val roleName = "ROLE_${normalizeRole(role)}"
                     authorities.add(SimpleGrantedAuthority(roleName))
                 }
             }
@@ -221,4 +222,10 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
 
         return JwtAuthenticationToken(jwt, authorities, principalName)
     }
+}
+
+private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+    "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
+    "CLIENTE DEL DOMINIO" -> "CLIENTE"
+    else -> value
 }

@@ -39,19 +39,22 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/common/v2.0}
+          issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       acks: all
       retries: 3
       properties:
         spring.json.add.type.headers: false
 
   rabbitmq:
+    addresses: ${RABBITMQ_ADDRESSES:${RABBITMQ_HOST:localhost}:${RABBITMQ_PORT:5672}}
+    publisher-confirm-type: correlated
+    publisher-returns: true
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
@@ -61,12 +64,12 @@ app:
   security:
     enabled: ${SECURITY_ENABLED:true}
     azure:
-      audience: ${AZURE_AD_AUDIENCE:api://rutaexpress-shipments}
+      audience: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
   kafka:
     enabled: ${KAFKA_ENABLED:true}
     topics:
       shipments-events: ${KAFKA_TOPIC_SHIPMENTS_EVENTS:shipments.events}
-      envios-events: ${KAFKA_TOPIC_ENVIOS_EVENTS:envios-events}
+      envios-events: ${KAFKA_TOPIC_AUDIT_TIMELINE:audit.timeline}
   rabbit:
     enabled: ${RABBIT_ENABLED:true}
     exchange: ${RABBIT_EXCHANGE:cmd.direct}

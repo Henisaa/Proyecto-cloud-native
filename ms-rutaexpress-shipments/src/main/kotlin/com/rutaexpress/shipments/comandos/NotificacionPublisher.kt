@@ -91,10 +91,14 @@ class NotificacionPublisher(
         }
 
         try {
-            rabbitTemplate.convertAndSend(exchange, routingKey, envelope)
+            val correlation = org.springframework.amqp.rabbit.connection.CorrelationData(envelope.eventId)
+            rabbitTemplate.convertAndSend(exchange, routingKey, envelope, correlation)
+            val confirm = correlation.future.get(10, java.util.concurrent.TimeUnit.SECONDS)
+            check(confirm.isAck && correlation.returned == null) { "Comando rechazado o sin cola de destino" }
             logger.info("Comando {} publicado en {} con routing key {}", envelope.type, exchange, routingKey)
         } catch (ex: Exception) {
             logger.warn("Error publicando comando en RabbitMQ ({}): {}", routingKey, ex.message)
+            throw IllegalStateException("No se pudo confirmar el comando de notificación", ex)
         }
     }
 }

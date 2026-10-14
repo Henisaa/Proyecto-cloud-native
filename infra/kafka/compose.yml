@@ -1,0 +1,231 @@
+{
+  "services": {
+    "zookeeper-1": {
+      "image": "zookeeper:3.9",
+      "hostname": "zookeeper-1",
+      "environment": {
+        "ZOO_MY_ID": "1",
+        "ZOO_SERVERS": "server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181",
+        "ZOO_4LW_COMMANDS_WHITELIST": "ruok"
+      },
+      "volumes": [
+        "zookeeper-1:/data",
+        "zookeeper-1-log:/datalog"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "zkServer.sh status >/dev/null 2>&1"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      }
+    },
+    "zookeeper-2": {
+      "image": "zookeeper:3.9",
+      "hostname": "zookeeper-2",
+      "environment": {
+        "ZOO_MY_ID": "2",
+        "ZOO_SERVERS": "server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181",
+        "ZOO_4LW_COMMANDS_WHITELIST": "ruok"
+      },
+      "volumes": [
+        "zookeeper-2:/data",
+        "zookeeper-2-log:/datalog"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "zkServer.sh status >/dev/null 2>&1"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      }
+    },
+    "zookeeper-3": {
+      "image": "zookeeper:3.9",
+      "hostname": "zookeeper-3",
+      "environment": {
+        "ZOO_MY_ID": "3",
+        "ZOO_SERVERS": "server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181",
+        "ZOO_4LW_COMMANDS_WHITELIST": "ruok"
+      },
+      "volumes": [
+        "zookeeper-3:/data",
+        "zookeeper-3-log:/datalog"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "zkServer.sh status >/dev/null 2>&1"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      }
+    },
+    "kafka-1": {
+      "image": "apache/kafka:3.9.2",
+      "hostname": "kafka-1",
+      "ports": [
+        "127.0.0.1:9092:9092"
+      ],
+      "environment": {
+        "KAFKA_BROKER_ID": "1",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181",
+        "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092",
+        "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka-1:29092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:9092",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT",
+        "KAFKA_INTER_BROKER_LISTENER_NAME": "INTERNAL"
+      },
+      "volumes": [
+        "kafka-1:/var/lib/kafka/data",
+        "./start-zookeeper-mode.sh:/opt/rutaexpress/start-zookeeper-mode.sh:ro"
+      ],
+      "depends_on": {
+        "zookeeper-1": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-3": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"
+        ],
+        "interval": "15s",
+        "timeout": "10s",
+        "retries": 25
+      },
+      "command": [
+        "bash",
+        "/opt/rutaexpress/start-zookeeper-mode.sh"
+      ]
+    },
+    "kafka-2": {
+      "image": "apache/kafka:3.9.2",
+      "hostname": "kafka-2",
+      "ports": [
+        "127.0.0.1:9093:9093"
+      ],
+      "environment": {
+        "KAFKA_BROKER_ID": "2",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181",
+        "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9093",
+        "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka-2:29092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:9093",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT",
+        "KAFKA_INTER_BROKER_LISTENER_NAME": "INTERNAL"
+      },
+      "volumes": [
+        "kafka-2:/var/lib/kafka/data",
+        "./start-zookeeper-mode.sh:/opt/rutaexpress/start-zookeeper-mode.sh:ro"
+      ],
+      "depends_on": {
+        "zookeeper-1": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-3": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"
+        ],
+        "interval": "15s",
+        "timeout": "10s",
+        "retries": 25
+      },
+      "command": [
+        "bash",
+        "/opt/rutaexpress/start-zookeeper-mode.sh"
+      ]
+    },
+    "kafka-3": {
+      "image": "apache/kafka:3.9.2",
+      "hostname": "kafka-3",
+      "ports": [
+        "127.0.0.1:9094:9094"
+      ],
+      "environment": {
+        "KAFKA_BROKER_ID": "3",
+        "KAFKA_ZOOKEEPER_CONNECT": "zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181",
+        "KAFKA_LISTENERS": "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9094",
+        "KAFKA_ADVERTISED_LISTENERS": "INTERNAL://kafka-3:29092,EXTERNAL://${KAFKA_EXTERNAL_HOST:-localhost}:9094",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT",
+        "KAFKA_INTER_BROKER_LISTENER_NAME": "INTERNAL"
+      },
+      "volumes": [
+        "kafka-3:/var/lib/kafka/data",
+        "./start-zookeeper-mode.sh:/opt/rutaexpress/start-zookeeper-mode.sh:ro"
+      ],
+      "depends_on": {
+        "zookeeper-1": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-2": {
+          "condition": "service_healthy"
+        },
+        "zookeeper-3": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"
+        ],
+        "interval": "15s",
+        "timeout": "10s",
+        "retries": 25
+      },
+      "command": [
+        "bash",
+        "/opt/rutaexpress/start-zookeeper-mode.sh"
+      ]
+    },
+    "kafka-ui": {
+      "image": "provectuslabs/kafka-ui:v0.7.2",
+      "ports": [
+        "127.0.0.1:8090:8080"
+      ],
+      "environment": {
+        "KAFKA_CLUSTERS_0_NAME": "rutaexpress",
+        "KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092"
+      },
+      "depends_on": [
+        "kafka-1",
+        "kafka-2",
+        "kafka-3"
+      ]
+    }
+  },
+  "volumes": {
+    "zookeeper-1": null,
+    "zookeeper-1-log": null,
+    "zookeeper-2": null,
+    "zookeeper-2-log": null,
+    "zookeeper-3": null,
+    "zookeeper-3-log": null,
+    "kafka-1": null,
+    "kafka-2": null,
+    "kafka-3": null
+  },
+  "networks": {
+    "default": {
+      "external": true,
+      "name": "rutaexpress"
+    }
+  }
+}
