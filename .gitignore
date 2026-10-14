@@ -1,23 +1,38 @@
-# Node & Vite
-node_modules/
-dist/
-dist-ssr/
-*.local
-.vite/
+# Gradle
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Kotlin
+.kotlin/
 
-# IDEs & OS
-.vscode/*
-!.vscode/extensions.json
+# IDEs
 .idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs and temps
+*.log
+*.tmp
+
+# OS
 .DS_Store
 Thumbs.db
-*.sw?
 
-# Project docs
+# Project-specific ignored docs
 Caso 3 - RutaExpress.docx
+.agents/
+# Local documentation and generated artifacts
+docs/
+work/
+**/node_modules/
+**/dist/
+**/.angular/
+.env
+.env.*
+!.env.example
