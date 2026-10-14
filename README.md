@@ -18,6 +18,11 @@ Kotlin 2.3.21 sobre JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, 
 
 Arranque local
 Instale JDK 21 o superior, Node compatible con Angular 19 y Docker con Compose v2.
+Si Docker Desktop está instalado por usuario en Windows y docker no aparece en PATH, agregue su carpeta de herramientas a la sesión de PowerShell:
+$env:PATH="$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin;$env:PATH"
+docker version
+docker compose version
+Que docker no aparezca en PATH no significa que Docker Desktop no esté instalado; compruebe también la conexión con el motor.
 Desde la raíz siga infra/README.md para crear la red y levantar brokers. Arranque primero mq-admin y kafka-admin y ejecute POST topology en ambos. Después arranque catalog, notify, audit, report, shipments y bff usando los comandos de sus README. Por último siga frontend/README.md.
 El perfil local de los servicios con base usa H2 en memoria. Para persistencia Oracle use el perfil prod y los esquemas configurados. Las pruebas unitarias y HTTP no necesitan Docker; los tests de integración de notify se activan explícitamente con RUN_DOCKER_TESTS=true.
 
@@ -29,6 +34,7 @@ RabbitMQ: cmd.direct, cmd.topic y cmd.dead.dlx; tres colas de comandos y tres DL
 Kafka: shipments.events y catalog.events con delete y siete días; audit.timeline con compact,delete y treinta días. Los consumidores fallidos van a DLT independiente después de tres intentos. Los tópicos se crean con tres particiones y tres réplicas. Auditoría deduplica eventId y conserva identidad y timestamp originales.
 
 Validación y limpieza
+Validación realizada el 14 de octubre de 2026: 83 pruebas backend y 3 frontend aprobadas. Incluye las dos pruebas RabbitMQ ejecutadas contra un contenedor real con Docker Desktop. Los tres Compose también pasaron docker compose config --quiet; esa comprobación valida la configuración, no el arranque completo de los clústeres.
 En cada servicio ejecute .\gradlew.bat test bootJar. En frontend ejecute npm ci y npm run build. Para pruebas Docker de notify: $env:RUN_DOCKER_TESTS="true"; .\gradlew.bat test.
 Al terminar, use gradlew clean, detenga los daemons y elimine solamente build, .gradle, .kotlin, node_modules, dist y .angular creados durante la validación. La limpieza de contenedores, volúmenes e imágenes se explica en infra/README.md. No use docker system prune sobre recursos ajenos.
 
