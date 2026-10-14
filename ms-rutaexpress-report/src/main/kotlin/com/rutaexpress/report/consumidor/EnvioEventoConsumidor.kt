@@ -1,6 +1,6 @@
 package com.rutaexpress.report.consumidor
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import com.rutaexpress.report.dominio.EnvioEventoKafka
 import com.rutaexpress.report.dominio.SnapshotEnvio
 import com.rutaexpress.report.repositorio.ReporteEnvioRepositorio
@@ -35,6 +35,7 @@ class EnvioEventoConsumidor(
                 )
             }
 
+            if (ahora.isBefore(snapshot.updatedAt)) return
             snapshot.currentStatus = evento.status
             if (evento.serviceType != null) {
                 snapshot.serviceType = evento.serviceType
@@ -51,6 +52,7 @@ class EnvioEventoConsumidor(
             logger.info("Snapshot actualizado para envio {}: estado {}", evento.shipmentId, evento.status)
         } catch (e: Exception) {
             logger.error("Error al procesar evento de envio Kafka: {}", e.message, e)
+            throw e
         }
     }
 }
