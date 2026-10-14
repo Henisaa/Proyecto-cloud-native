@@ -1,68 +1,37 @@
-# ms-rutaexpress-audit
+RutaExpress
+Plataforma de envíos de última milla del Caso 3.
 
-Microservicio de auditoría y línea de tiempo (*timeline*) para la plataforma RutaExpress, desarrollado en **Kotlin 2.1** y **Spring Boot 3.4**.  
-Encargado de ingestar eventos desde Kafka, persistirlos en Oracle y exponer endpoints de solo lectura (`/api/audit/*`).
+Estructura y función
+frontend: Angular 19 con MSAL; login Azure AD, envíos, catálogo, reportes, auditoría y monitoreo de mensajería para Admin.
+ms-rutaexpress-bff: entrada segura y agregación, puerto 8080.
+ms-rutaexpress-catalog: servicios, tarifas y capacidad de flota, puerto 8081.
+ms-rutaexpress-notify: email, push y PDF por RabbitMQ, puerto 8082.
+ms-rutaexpress-audit: timeline inmutable e idempotente desde Kafka, puerto 8083.
+ms-rutaexpress-report: proyecciones de envíos y KPIs desde Kafka, puerto 8084.
+ms-rutaexpress-shipments: envíos, estados y coordinación del despacho, puerto 8085.
+ms-rutaexpress-mq-admin: topología, retención, DLQ y estado RabbitMQ, puerto 8086.
+ms-rutaexpress-kafka-admin: tópicos, particiones, retención y lag Kafka, puerto 8087.
+infra/apps, infra/mq e infra/kafka: tres stacks Docker Compose del caso.
 
----
+Tecnologías
+Kotlin 2.3.21 sobre JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, Oracle/JPA/Flyway, RabbitMQ 4, Kafka 3.9.2 con ZooKeeper 3.9, Redis, SMTP/Mailpit, OpenPDF y Firebase opcional. Se conserva Kotlin, que es el lenguaje del repositorio; la pauta general menciona Java. Frontend Angular con TypeScript y MSAL.
 
-## Requisitos Previos
+Arranque local
+Instale JDK 21 o superior, Node compatible con Angular 19 y Docker con Compose v2.
+Desde la raíz siga infra/README.md para crear la red y levantar brokers. Arranque primero mq-admin y kafka-admin y ejecute POST topology en ambos. Después arranque catalog, notify, audit, report, shipments y bff usando los comandos de sus README. Por último siga frontend/README.md.
+El perfil local de los servicios con base usa H2 en memoria. Para persistencia Oracle use el perfil prod y los esquemas configurados. Las pruebas unitarias y HTTP no necesitan Docker; los tests de integración de notify se activan explícitamente con RUN_DOCKER_TESTS=true.
 
-- **Java:** JDK 21 o 22 instalado.
-- **Base de Datos:** Oracle Database (ej. `gvenzl/oracle-free:23-slim`).
-- **Broker Kafka:** Apache Kafka (puerto por defecto `localhost:9092`).
+Seguridad
+Flujo: access token Azure AD -> AWS API Gateway -> BFF -> servicios internos. Cada servicio REST verifica JWT y roles; el BFF conserva Bearer. Admin administra y ve KPIs; Despachador opera envíos; Cliente crea y consulta; Auditor lee timeline. Las APIs administrativas son exclusivas de Admin. SECURITY_ENABLED=false es solo para desarrollo. No abra directamente las APIs internas en Internet.
 
----
+Mensajería
+RabbitMQ: cmd.direct, cmd.topic y cmd.dead.dlx; tres colas de comandos y tres DLQ. ACK/NACK manual en notify, idempotencia Redis, reintentos y mensajes persistentes con publisher confirms en shipments. Las políticas de TTL y límite se administran desde mq-admin.
+Kafka: shipments.events y catalog.events con delete y siete días; audit.timeline con compact,delete y treinta días. Los consumidores fallidos van a DLT independiente después de tres intentos. Los tópicos se crean con tres particiones y tres réplicas. Auditoría deduplica eventId y conserva identidad y timestamp originales.
 
-## Variables de Entorno y Configuración
+Validación y limpieza
+En cada servicio ejecute .\gradlew.bat test bootJar. En frontend ejecute npm ci y npm run build. Para pruebas Docker de notify: $env:RUN_DOCKER_TESTS="true"; .\gradlew.bat test.
+Al terminar, use gradlew clean, detenga los daemons y elimine solamente build, .gradle, .kotlin, node_modules, dist y .angular creados durante la validación. La limpieza de contenedores, volúmenes e imágenes se explica en infra/README.md. No use docker system prune sobre recursos ajenos.
 
-El servicio utiliza las siguientes variables (con valores por defecto para desarrollo local en `application.yml`):
-
-| Variable | Descripción | Valor por defecto |
-|---|---|---|
-| `SPRING_DATASOURCE_URL` | URL JDBC de Oracle | `jdbc:oracle:thin:@localhost:1521/FREEPDB1` |
-| `SPRING_DATASOURCE_USERNAME` | Usuario de base de datos | `SYSTEM` |
-| `SPRING_DATASOURCE_PASSWORD` | Contraseña de base de datos | `password` |
-| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Servidores bootstrap de Kafka | `localhost:9092` |
-| `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` | Issuer JWT (Keycloak / Azure AD) | `http://localhost:8080/realms/rutaexpress` |
-
----
-
-## Ejecución
-
-### 1. Compilar y ejecutar pruebas
-```bash
-./gradlew test
-```
-
-### 2. Iniciar el servicio localmente
-```bash
-./gradlew bootRun
-```
-El servicio iniciará en el puerto **8083**.
-
----
-
-## Endpoints Principales
-
-### Endpoints de Negocio (Protegidos con JWT)
-- `GET /api/audit`: Lista todos los eventos registrados.
-- `GET /api/audit/entidad/{idEntidad}`: Historial y línea de tiempo por identificador de entidad (ej: ID de envío).
-- `GET /api/audit/tipo/{tipoEntidad}`: Eventos filtrados por tipo de entidad.
-
-### Endpoints Públicos (Documentación y Salud)
-- **Swagger UI:** `http://localhost:8083/swagger-ui.html`
-- **OpenAPI JSON:** `http://localhost:8083/v3/api-docs`
-- **Health Check:** `http://localhost:8083/actuator/health`
-- **Métricas Prometheus:** `http://localhost:8083/actuator/prometheus`
-
----
-
-## Tópicos Kafka Consumidos
-
-- `envios-events`: Ingesta cambios de estado y acciones sobre los envíos.
-- `auditoria-topic`: Tópico genérico para eventos directos de auditoría.
-- **Consumer Group:** `ms-rutaexpress-audit-group`
-
-## La anterior carpeta (demo) fue renombrada
-
-ahora la carpeta base de el proyecto es ms-rutaexpress-audit y tiene la estructura correcta de un proyecto Kotlin Spring Boot.
+Ramas y documentación
+main integra el proyecto completo. Ramas de servicios: ms_catalog, ms_notify, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-mq-admin y ms-rutaexpress-kafka-admin. frontend corresponde al frontend Angular actual.
+docs contiene material de referencia local y está excluido de nuevos commits. Los archivos ya versionados de docs no se eliminan ni se actualizan en este trabajo. Cada servicio y frontend tienen README en texto plano con responsabilidades, configuración, comandos y limitaciones.
