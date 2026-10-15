@@ -70,9 +70,37 @@ app:
     topics:
       shipments-events: ${KAFKA_TOPIC_SHIPMENTS_EVENTS:shipments.events}
       envios-events: ${KAFKA_TOPIC_AUDIT_TIMELINE:audit.timeline}
+  # Topología RabbitMQ compartida por todos los microservicios (nombres centralizados)
   rabbit:
     enabled: ${RABBIT_ENABLED:true}
-    exchange: ${RABBIT_EXCHANGE:cmd.direct}
+    exchanges:
+      command: ${RABBIT_EXCHANGE_COMMAND:ex.rutaexpress.cmd}
+      events: ${RABBIT_EXCHANGE_EVENTS:ex.rutaexpress.events}
+      dead-letter: ${RABBIT_EXCHANGE_DLX:ex.rutaexpress.dlx}
+    queues:
+      audit:
+        name: q.rutaexpress.audit
+        dlq: q.rutaexpress.audit.dlq
+        dead-letter-key: audit
+        bindings:
+          - "shipment.#"
+          - "catalog.#"
+    routing:
+      capacity-reserve: capacity.reserve
+      capacity-release: capacity.release
+      capacity-reserved: catalog.capacity.reserved
+      capacity-rejected: catalog.capacity.rejected
+      capacity-released: catalog.capacity.released
+      shipment-status-prefix: "shipment.status."
+      notification-email: notification.email.send
+      notification-ticket: notification.warehouse.ticket
+      notification-label: notification.label.generate
+    consumer:
+      prefetch: ${RABBIT_PREFETCH:10}
+      max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
+      initial-interval-ms: ${RABBIT_RETRY_INITIAL_MS:500}
+    dlq:
+      auto-startup: ${RABBIT_DLQ_CONSUMER_ENABLED:true}
   catalogo:
     enabled: ${CATALOGO_ENABLED:true}
     url: ${CATALOG_SERVICE_URL:http://localhost:8081}

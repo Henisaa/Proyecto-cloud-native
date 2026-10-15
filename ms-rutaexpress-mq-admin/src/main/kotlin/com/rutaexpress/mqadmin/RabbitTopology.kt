@@ -1,31 +1,75 @@
 package com.rutaexpress.mqadmin
 
-import org.springframework.amqp.core.*
+import org.springframework.amqp.core.Binding
+import org.springframework.amqp.core.BindingBuilder
+import org.springframework.amqp.core.Declarable
+import org.springframework.amqp.core.Declarables
+import org.springframework.amqp.core.DirectExchange
+import org.springframework.amqp.core.Exchange
+import org.springframework.amqp.core.QueueBuilder
+import org.springframework.amqp.core.TopicExchange
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
+/**
+ * Topología fija del clúster: tres exchanges, tres colas funcionales y una DLQ por cola.
+ *  - exchange de comandos (direct): comandos punto a punto; la cola de capacidad la consume catalog.
+ *  - exchange de eventos (topic): eventos y solicitudes de notificación enrutadas por patrones.
+ *  - dead-letter exchange (direct): recibe los rechazos de cada cola y los entrega a su DLQ.
+ */
 @Configuration
-class RabbitTopology {
+@EnableConfigurationProperties(RabbitNombres::class)
+class RabbitTopology(private val nombres: RabbitNombres) {
+
+    private val comandos = DirectExchange(nombres.exchanges.command, true, false)
+    private val eventos = TopicExchange(nombres.exchanges.events, true, false)
+    private val deadLetter = DirectExchange(nombres.exchanges.deadLetter, true, false)
+
     @Bean
-    fun topology(): Declarables {
-        val direct = DirectExchange("cmd.direct", true, false)
-        val topic = TopicExchange("cmd.topic", true, false)
-        val dead = DirectExchange("cmd.dead.dlx", true, false)
-        val declarations = mutableListOf<Declarable>(direct, topic, dead)
-        for ((name, key, pattern) in flows) {
-            val queue = QueueBuilder.durable(name).deadLetterExchange(dead.name).deadLetterRoutingKey(key).build()
-            val dlq = QueueBuilder.durable("$name.dlq").build()
-            declarations.addAll(listOf(queue, dlq,
-                BindingBuilder.bind(queue).to(direct).with(key),
-                BindingBuilder.bind(queue).to(topic).with(pattern),
-                BindingBuilder.bind(dlq).to(dead).with(key)))
+    fun exchangeComandos(): DirectExchange = comandos
+
+    @Bean
+    fun exchangeEventos(): TopicExchange = eventos
+
+    @Bean
+    fun exchangeDeadLetter(): DirectExchange = deadLetter
+
+    @Bean
+    fun declaracionesNucleo(): Declarables = Declarables(declaraciones())
+
+    /** Declaraciones idempotentes de la topología fija; RabbitAdmin las aplica al conectar y en POST /topology. */
+    fun declaraciones(): List<Declarable> = buildList<Declarable> {
+        add(comandos)
+        add(eventos)
+        add(deadLetter)
+        for (cola in nombres.queues.todas()) {
+            val origen: Exchange = if (cola.name == nombres.queues.command.name) comandos else eventos
+            val principal = QueueBuilder.durable(cola.name)
+                .deadLetterExchange(deadLetter.name)
+                .deadLetterRoutingKey(cola.deadLetterKey)
+                .build()
+            val dlq = QueueBuilder.durable(cola.dlq).build()
+            add(principal)
+            add(dlq)
+            cola.bindings.forEach { clave -> add(BindingBuilder.bind(principal).to(origen).with(clave).noargs()) }
+            add(BindingBuilder.bind(dlq).to(deadLetter).with(cola.deadLetterKey))
         }
-        return Declarables(declarations)
     }
-    companion object {
-        val flows = listOf(Triple("q.cmd.email", "email.send", "email.*"),
-            Triple("q.cmd.warehouse", "warehouse.ticket", "warehouse.#"),
-            Triple("q.cmd.label", "label.gen", "label.*"))
-        val queues = flows.flatMap { listOf(it.first, it.first + ".dlq") }.toSet()
-    }
+
+    fun nombresExchangesProtegidos(): Set<String> =
+        setOf(nombres.exchanges.command, nombres.exchanges.events, nombres.exchanges.deadLetter)
+
+    fun nombresColasProtegidas(): Set<String> =
+        nombres.queues.todas().flatMap { listOf(it.name, it.dlq) }.toSet()
+
+    fun colasDeMonitoreo(): List<String> = nombresColasProtegidas().sorted()
+
+    fun colasDeTrabajo(): List<String> = nombres.queues.todas().map { it.name }
+
+    fun dlqs(): List<String> = nombres.queues.todas().map { it.dlq }
+
+    /** Un enlace es parte del núcleo si une un exchange fijo con una cola fija. */
+    fun esEnlaceNucleo(origen: String, destino: String): Boolean =
+        origen in nombresExchangesProtegidos() && destino in nombresColasProtegidas()
 }

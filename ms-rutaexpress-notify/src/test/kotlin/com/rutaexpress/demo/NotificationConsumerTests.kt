@@ -2,13 +2,11 @@ package com.rutaexpress.demo
 
 import com.rabbitmq.client.Channel
 import com.rutaexpress.demo.config.NotificationProperties
-import com.rutaexpress.demo.model.EmailNotification
-import com.rutaexpress.demo.model.EventEnvelope
+import com.rutaexpress.demo.config.RabbitNombres
 import com.rutaexpress.demo.viewmodel.EmailNotificationViewModel
 import com.rutaexpress.demo.viewmodel.NotificationConsumerViewModel
 import com.rutaexpress.demo.viewmodel.WarehouseNotificationViewModel
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import org.assertj.core.api.Assertions.assertThat
+import jakarta.validation.ConstraintViolationException
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doThrow
@@ -16,73 +14,142 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.springframework.amqp.core.Message
 import org.springframework.amqp.core.MessageProperties
-import java.time.Instant
+import tools.jackson.databind.json.JsonMapper
 
 class NotificationConsumerTests {
-	private val emailViewModel = mock<EmailNotificationViewModel>()
-	private val warehouseViewModel = mock<WarehouseNotificationViewModel>()
-	private val channel = mock<Channel>()
-	private val registry = SimpleMeterRegistry()
+    private val email: EmailNotificationViewModel = mock()
+    private val almacen: WarehouseNotificationViewModel = mock()
+    private val canal: Channel = mock()
+    private val mapper: JsonMapper = JsonMapper.builder().findAndAddModules().build()
 
-	@Test
-	fun `confirma con ACK el mensaje procesado`() {
-		val consumer = consumer(maxAttempts = 3)
+    @Test
+    fun `confirma con ACK un correo procesado correctamente`() {
+        consumidor(maxAttempts = 3).onNotification(mensaje(42, "notification.email.send", correo()), canal)
 
-		consumer.consumeEmail(event("event-1"), message(42), channel)
+        verify(email).notifyRecipient(any())
+        verify(canal).basicAck(42, false)
+        verify(canal, never()).basicNack(any(), any(), any())
+    }
 
-		verify(channel).basicAck(42, false)
-		verify(channel, never()).basicNack(any(), any(), any())
-		assertThat(dlqCount()).isZero()
-	}
+    @Test
+    fun `enruta cada routing key al manejador de su tipo`() {
+        consumidor(maxAttempts = 1).onNotification(mensaje(7, "notification.warehouse.ticket", ticket()), canal)
+        consumidor(maxAttempts = 1).onNotification(mensaje(8, "notification.label.generate", etiqueta()), canal)
 
-	@Test
-	fun `reintenta antes de descartar el mensaje`() {
-		doThrow(IllegalStateException("SMTP caído")).`when`(emailViewModel).notifyRecipient(any())
-		val consumer = consumer(maxAttempts = 3)
+        verify(almacen).sendTicket(any())
+        verify(almacen).sendLabel(any())
+        verify(canal).basicAck(7, false)
+        verify(canal).basicAck(8, false)
+    }
 
-		consumer.consumeEmail(event("event-2"), message(43), channel)
+    @Test
+    fun `un JSON invalido se rechaza sin reencolar y sin reintentar`() {
+        consumidor(maxAttempts = 3).onNotification(mensaje(43, "notification.email.send", "{no es json".toByteArray()), canal)
 
-		verify(emailViewModel, times(3)).notifyRecipient(any())
-		verify(channel).basicNack(43, false, false)
-		verify(channel, never()).basicAck(any(), any())
-	}
+        verifyNoInteractions(email)
+        verify(canal).basicNack(43, false, false)
+        verify(canal, never()).basicAck(any(), any())
+    }
 
-	@Test
-	fun `envia a la DLQ y suma la metrica cuando se agotan los intentos`() {
-		doThrow(IllegalStateException("SMTP caído")).`when`(emailViewModel).notifyRecipient(any())
-		val consumer = consumer(maxAttempts = 1)
+    @Test
+    fun `una routing key desconocida se rechaza sin reencolar`() {
+        consumidor(maxAttempts = 3).onNotification(mensaje(44, "notification.desconocido", correo()), canal)
 
-		consumer.consumeEmail(event("event-3"), message(44), channel)
+        verify(canal).basicNack(44, false, false)
+        verifyNoInteractions(email, almacen)
+    }
 
-		verify(channel).basicNack(44, false, false)
-		assertThat(dlqCount()).isEqualTo(1.0)
-	}
+    @Test
+    fun `datos que no cumplen la validacion no se reintentan`() {
+        doThrow(ConstraintViolationException("destinatario vacío", emptySet())).`when`(email).notifyRecipient(any())
 
-	private fun consumer(maxAttempts: Int) = NotificationConsumerViewModel(
-		emailViewModel,
-		warehouseViewModel,
-		NotificationProperties().apply {
-			from = "no-reply@rutaexpress.local"
-			retry.maxAttempts = maxAttempts
-			retry.initialInterval = 0
-			retry.maxInterval = 0
-		},
-		registry,
-	)
+        consumidor(maxAttempts = 3).onNotification(mensaje(45, "notification.email.send", correo()), canal)
 
-	private fun event(id: String) = EventEnvelope(
-		type = "notification.requested",
-		eventId = id,
-		timestamp = Instant.parse("2026-09-10T12:00:00Z"),
-		traceId = "trace-1",
-		correlationId = "correlation-1",
-		payload = EmailNotification("SHP-1", "cliente@example.com", "Ana", "Envío en ruta", "Mensaje"),
-	)
+        verify(email, times(1)).notifyRecipient(any())
+        verify(canal).basicNack(45, false, false)
+    }
 
-	private fun message(deliveryTag: Long) =
-		Message(ByteArray(0), MessageProperties().apply { this.deliveryTag = deliveryTag })
+    @Test
+    fun `un fallo recuperable se reintenta de forma acotada y luego va a la DLQ`() {
+        doThrow(IllegalStateException("SMTP caído")).`when`(email).notifyRecipient(any())
 
-	private fun dlqCount() = registry.find("rutaexpress.notify.dlq.messages").counter()?.count() ?: 0.0
+        consumidor(maxAttempts = 3).onNotification(mensaje(46, "notification.email.send", correo()), canal)
+
+        verify(email, times(3)).notifyRecipient(any())
+        verify(canal).basicNack(46, false, false)
+        verify(canal, never()).basicAck(any(), any())
+    }
+
+    private fun consumidor(maxAttempts: Int) = NotificationConsumerViewModel(
+        email,
+        almacen,
+        NotificationProperties().apply {
+            from = "no-reply@rutaexpress.local"
+            retry.maxAttempts = maxAttempts
+            retry.initialInterval = 0
+            retry.maxInterval = 0
+        },
+        RabbitNombres(),
+        mapper,
+    )
+
+    private fun correo() = sobre(
+        "EmailNotification",
+        mapOf(
+            "shipmentId" to "RX-1",
+            "recipientEmail" to "cliente@example.com",
+            "recipientName" to "Ana",
+            "subject" to "Envío en ruta",
+            "message" to "Mensaje",
+        ),
+    )
+
+    private fun ticket() = sobre(
+        "WarehouseTicket",
+        mapOf(
+            "shipmentId" to "RX-1",
+            "warehouseEmail" to "bodega@example.com",
+            "recipientName" to "Ana",
+            "recipientAddress" to "Calle 1",
+            "serviceName" to "EXPRESS",
+            "packageDescription" to "1 paquete",
+        ),
+    )
+
+    private fun etiqueta() = sobre(
+        "ShippingLabel",
+        mapOf(
+            "shipmentId" to "RX-1",
+            "warehouseEmail" to "bodega@example.com",
+            "recipientName" to "Ana",
+            "recipientAddress" to "Calle 1",
+            "trackingCode" to "RX-ABC12345",
+        ),
+    )
+
+    private fun sobre(tipo: String, payload: Map<String, Any>): String = mapper.writeValueAsString(
+        mapOf(
+            "type" to tipo,
+            "eventId" to "evt-$tipo",
+            "timestamp" to "2026-09-10T12:00:00Z",
+            "traceId" to "trace-1",
+            "correlationId" to "correlation-1",
+            "payload" to payload,
+        )
+    )
+
+    private fun mensaje(etiqueta: Long, clave: String, cuerpo: String): Message = mensaje(etiqueta, clave, cuerpo.toByteArray())
+
+    private fun mensaje(etiqueta: Long, clave: String, cuerpo: ByteArray): Message = Message(
+        cuerpo,
+        MessageProperties().apply {
+            deliveryTag = etiqueta
+            receivedRoutingKey = clave
+            contentType = "application/json"
+            messageId = "msg-$etiqueta"
+        },
+    )
 }

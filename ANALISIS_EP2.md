@@ -1,0 +1,775 @@
+# Análisis EP2 RutaExpress: estado, pendientes y plan de trabajo
+
+> **Para el agente de IA que lea esto.** Este documento resume qué exige la EP2, qué estaba mal antes, qué se arregló, qué sigue faltando y **qué archivos de qué servicio hay que tocar**. Las tareas están en la **sección 7**, ordenadas por prioridad, con archivos, pasos y criterio de aceptación. Antes de programar, lee las secciones 0, 7 y 9.
+>
+> - Fecha del análisis: 2026-10-15
+> - Rama: `main`. **Todos los cambios de la iteración actual están sin commit** (31 archivos modificados, 1 borrado y 33 nuevos sin seguimiento).
+> - Documentos de la evaluación: `C:\Users\pv-alumno\Downloads\EP2_Guia_Evaluacion.docx` y `C:\Users\pv-alumno\Downloads\Explicacion_de_Evaluacion_2.docx`
+> - Script de despliegue (**fuera del repo**): `C:\Users\pv-alumno\Downloads\deploy-aws.bat`
+
+---
+
+## 0. Resumen rápido
+
+**Estado general:** el **código** de la EP2 está casi completo. Cumple IL 2.1, IL 2.2 e IL 2.3 y la topología coincide con el diagrama de la guía. **Lo que falta es sobre todo despliegue y entrega.** Hoy la demo en la nube **no funcionaría** por cuatro motivos:
+
+1. El compose de las apps apunta a `rabbitmq-1`/`rabbitmq-2`, pero los nodos ahora se llaman `rabbit1`/`rabbit2` (tarea T1).
+2. mq-admin lee `RABBITMQ_MANAGEMENT_URLS`, y el compose pasa la variable antigua `RABBITMQ_MANAGEMENT_URL` (tarea T2).
+3. El perfil `local` (H2) se combina con una URL de Oracle y 4 servicios no arrancan (bug B1, tarea T3).
+4. Nada está commiteado, y `deploy-aws.bat` despliega `git archive HEAD` (tarea T8).
+
+**Lo que falta CODIFICAR (código fuente):**
+
+| Prioridad | Servicio | Qué falta | Tarea |
+|---|---|---|---|
+| **P0 obligatorio** | `ms-rutaexpress-bff` | Reenvío (proxy) de POST/DELETE de colas, exchanges y bindings hacia mq-admin, solo para Admin | T4 |
+| P0 (config) | `infra/apps` | Nombres de host, variable de gestión y perfil/BD | T1, T2, T3 |
+| P1 (docs) | todos | READMEs que describen la topología antigua | T6 |
+| P1 (config) | `ms-rutaexpress-kafka-admin` | Falta el `.gitignore` | T7 |
+| P2 (mejora) | `ms-rutaexpress-shipments` + `ms-rutaexpress-catalog` | Lo que queda del bug B4: reserva huérfana o doble | T10 |
+| P2 (mejora) | `ms-rutaexpress-catalog` | Lo que queda del bug B5: el endpoint REST de reserva no usa bloqueo | T11 |
+| P3 (limpieza) | `ms-rutaexpress-shipments` | Texto fijo `"catalog.capacity."` en el listener | T12 |
+| P3 (menores) | bff, shipments, frontend | Dashboard frágil, propiedad de Kafka mal nombrada, prometheus público, Tailwind, nginx | T13 |
+| Opcional | `frontend` | Pantalla de administración de RabbitMQ | T14 |
+
+**Tareas que NO son código** (requieren al usuario o la consola de AWS): T5 (API Gateway), T8 (commit y push), T9 (repos separados) y T15 (preparar la demo).
+
+**Avance:** el checklist de la guía estaba al **≈47 % (8 de 17)** antes y está al **≈79 % (13,5 de 17)** ahora. Del listado de pendientes del análisis anterior se resolvió **≈65 % ponderado** (detalle en la sección 6.8).
+
+---
+
+## 1. Contexto del proyecto
+
+- Es un **monorepo**: cada carpeta `ms-*` es un proyecto Gradle **independiente**. No hay build en la raíz; los comandos se ejecutan dentro de cada carpeta.
+- **Stack:** Kotlin 2.3.21, Spring Boot 4.1.1, Spring AMQP, Jackson 3 (paquete `tools.jackson.*`), Gradle 9.7.1 (wrapper), JDK 21+, Angular 19 + MSAL, Oracle (perfil `prod`) o H2 (perfil `local`), RabbitMQ 4 y Kafka 3.9 (heredado de una evaluación anterior).
+- **Tests:** JUnit 5, `mockito-kotlin 6.2.2`, `spring-security-test` y Testcontainers (solo en notify, activado con `RUN_DOCKER_TESTS=true`).
+
+| Servicio | Carpeta | Puerto | Rol en la EP2 | ¿Cambió en esta iteración? |
+|---|---|---|---|---|
+| Frontend | `frontend/` | 4200 / 80 | Angular + MSAL, login con Entra ID | No |
+| BFF | `ms-rutaexpress-bff/` | 8080 | Valida el JWT, autoriza por rol y reenvía a los servicios internos | No (**falta el proxy admin**) |
+| Catálogo | `ms-rutaexpress-catalog/` | 8081 | Consume comandos de capacidad y publica el resultado | Sí |
+| Notificaciones | `ms-rutaexpress-notify/` | 8082 | Consume solicitudes de notificación (email, ticket, etiqueta) | Sí |
+| Auditoría | `ms-rutaexpress-audit/` | 8083 | Timeline por Kafka (no es parte de RabbitMQ) | No |
+| Reportes | `ms-rutaexpress-report/` | 8084 | KPIs por Kafka | No |
+| **Principal** | `ms-rutaexpress-shipments/` | 8085 | Envíos: publica comandos y eventos, consume la cola de auditoría | Sí |
+| **Admin RabbitMQ** | `ms-rutaexpress-mq-admin/` | 8086 | API REST de administración de la topología | Sí |
+| Admin Kafka | `ms-rutaexpress-kafka-admin/` | 8087 | Tópicos de Kafka | No |
+| Infraestructura | `infra/mq`, `infra/apps`, `infra/kafka` | — | Docker Compose | `infra/mq` sí |
+
+> La guía llama al admin `ms-<caso>-rabbit-admin`. Aquí se llama `ms-rutaexpress-mq-admin`. Es aceptable, pero al separar los repos conviene nombrar el repo `ms-rutaexpress-rabbit-admin`.
+
+---
+
+## 2. Qué exigen los documentos (resumen fiel)
+
+### 2.1 Ponderación
+
+- La EP2 vale **30 % de la asignatura**.
+  - **Encargo:** 40 % de la EP2, en parejas, con código entregado por GitHub.
+  - **Presentación:** 60 % de la EP2, individual, de 5 a 10 minutos, con demostración en vivo en la nube.
+
+| Indicador | Encargo / Presentación | Qué se evalúa |
+|---|---|---|
+| **IL 2.1** Configura colas | 35 % / 30 % | **Encargo:** nombres de colas, exchanges y bindings centralizados; beans `Queue`, `Exchange` y `Binding`; configuración separada de la lógica de negocio. **Presentación:** 2 nodos RabbitMQ en clúster funcionando, desplegados con Docker Compose en la nube |
+| **IL 2.2** Mensajería asíncrona | 35 % / 40 % | **Encargo:** consumidores `@RabbitListener` agrupados por dominio, ACK explícito y manejo de errores. **Presentación:** 3 colas con su DLQ, exchanges direct y topic, microservicios que escriben y leen, y logs de los mensajes que llegan a la DLQ |
+| **IL 2.3** Administración | 30 % / 30 % | **Encargo:** endpoints REST del administrador, `RabbitAdminService` y validación de entrada. **Presentación:** administrador creando y eliminando, explicación de las métricas y de las políticas de retención |
+
+### 2.2 Alcance obligatorio (guía, sección 4)
+
+1. Dos nodos RabbitMQ (`rabbit1` y `rabbit2`) unidos en un clúster.
+2. Clúster en la nube (AWS EC2) levantado con Docker Compose, con los servicios accesibles y documentados.
+3. Tres colas para funcionalidades diferentes, cada una con su DLQ.
+4. Exchanges **direct** y **topic** con routing keys y bindings definidos.
+5. Configuración centralizada (`application.yml` o una clase `@Configuration`), con beans en clases separadas de la lógica de negocio.
+6. Productores y consumidores con `@RabbitListener` agrupados por dominio, **ACK manual** y manejo explícito de errores. Hay que **distinguir los errores recuperables (reintento acotado) de los no recuperables (NACK sin requeue hacia la DLQ)**.
+7. **Consumo de las DLQ**, registrando en logs los mensajes no entregados.
+8. Microservicio administrador con API REST para **crear colas, exchanges y bindings, y eliminar colas y exchanges**, con `RabbitAdminService` y validación de entrada (nombre vacío → 400 con un mensaje claro).
+9. Políticas de retención y limpieza (límites de cola y expiración).
+10. Explicación de las métricas: colas activas, mensajes pendientes, consumidores y mensajes en DLQ.
+11. Repositorios en GitHub con `.gitignore` estricto según la tecnología.
+
+### 2.3 Responsabilidades (guía, sección 5)
+
+- **API Gateway:** valida el JWT y **enruta también `/api/admin/*`**.
+- **BFF:** valida otra vez el JWT y aplica autorización por rol (**la administración es solo para Admin**). No accede a la base de datos.
+- **Principal y catálogo:** ejecutan la lógica de negocio, persisten y **producen y consumen** en RabbitMQ.
+
+### 2.4 Flujo que se debe demostrar (guía, sección 6, en resumen)
+
+1. Login con MSAL y Entra ID.
+2. Llamada a través del API Gateway, que valida el JWT y enruta al BFF.
+3. El BFF valida el JWT y el rol, y llama al principal.
+4. El principal valida la regla, persiste, **publica en el exchange** y responde sin esperar.
+5. RabbitMQ enruta (direct o topic).
+6. **El consumidor del catálogo recibe el comando, descuenta capacidad, hace ACK y publica un evento con el resultado.**
+7. Si falla: NACK sin requeue, el mensaje va a la DLQ y su listener lo registra en logs.
+8. Los consumidores de notificación y auditoría procesan con ACK.
+9. **El Admin crea o elimina una cola, un exchange o un binding con el microservicio administrador, y el cambio se ve en el Management UI.**
+10. Se explican las métricas en el Management UI.
+11. La respuesta JSON vuelve a Angular.
+
+### 2.5 Pruebas mínimas obligatorias (guía, sección 7)
+
+| ID | Prueba | Resultado esperado |
+|---|---|---|
+| R1 | Sin token | Se rechaza |
+| R2 | Token inválido o expirado | Se rechaza |
+| R3 | Token válido con rol autorizado | Se procesa |
+| R4 | Token válido sin permiso (un usuario no Admin crea una cola) | Se rechaza por autorización |
+| R5 | Regla de negocio inválida | No se ejecuta y **no se publica nada** |
+| R6 | Regla de negocio válida | Se completa, se publica el mensaje y se devuelve el JSON |
+| R7 | Estado del clúster | `rabbitmqctl cluster_status` o el Management UI muestran los 2 nodos |
+| R8 | Publicación y consumo en las 3 colas | ACK y la cola queda vacía |
+| R9 | Error no recuperable | NACK sin requeue, el mensaje llega a la DLQ y queda en logs |
+| R10 | Error recuperable | Reintentos acotados y, si persiste, DLQ |
+| R11 | Admin crea una cola, un exchange o un binding válidos | Se crean y se ven en el Management UI |
+| R12 | Admin elimina una cola o un exchange | Desaparecen del Management UI |
+| R13 | Admin con nombre vacío o configuración inválida | 400 con un mensaje claro y no se crea nada |
+| R14 | Política de retención | Al llegar al límite o a la expiración, los mensajes se descartan o pasan a la DLQ |
+
+### 2.6 Entregables del encargo (guía, sección 8)
+
+- **Repositorios separados:** frontend, BFF, microservicio principal, microservicio de catálogo y microservicio administrador de RabbitMQ.
+- Código que compila, con buenas prácticas y pruebas básicas.
+- Conexión a la base de datos **cloud** mediante entidades, repositorios y propiedades.
+- Filtros JWT, frontend con OAuth 2.0 / OIDC y uso del JWT en las llamadas.
+- Nombres centralizados, beans separados, productores y consumidores por dominio, ACK y errores, DLQ y logs, y administrador REST con `RabbitAdminService` y validación.
+- `.gitignore` estricto y **README.md en cada repositorio**.
+- Los enlaces se suben a AVA y se envían por correo al docente.
+
+### 2.7 Conceptos que el docente puede preguntar (Explicación de Evaluación 2)
+
+- La diferencia entre direct y topic, y cuándo conviene cada uno.
+- Por qué existen las DLQ y qué problema resuelven.
+- El papel de ACK y NACK en la confiabilidad.
+- Cómo afecta el **prefetch (QoS)** al rendimiento y qué problemas evita.
+- Por qué conviene separar la lógica de negocio de la lógica de mensajería.
+
+> **Sugerencia del docente**, que este proyecto ya sigue: una cola de comandos con un exchange direct, y colas de notificaciones y auditoría con un exchange topic, cada una con su DLQ.
+
+---
+
+## 3. Topología RabbitMQ actual (referencia; NO cambiar nombres)
+
+Coincide con el diagrama de la guía y está **verificada en vivo** en el clúster local.
+
+| Elemento | Nombre | Tipo / detalle |
+|---|---|---|
+| Exchange de comandos | `ex.rutaexpress.cmd` | direct, durable |
+| Exchange de eventos | `ex.rutaexpress.events` | topic, durable |
+| Dead-letter exchange | `ex.rutaexpress.dlx` | direct, durable |
+| Cola 1 (comandos) | `q.rutaexpress.command` | bindings en `cmd`: `capacity.reserve`, `capacity.release`. DLX key `command` |
+| DLQ 1 | `q.rutaexpress.command.dlq` | binding en `dlx`: `command` |
+| Cola 2 (notificaciones) | `q.rutaexpress.notification` | binding en `events`: `notification.#`. DLX key `notification` |
+| DLQ 2 | `q.rutaexpress.notification.dlq` | binding en `dlx`: `notification` |
+| Cola 3 (auditoría) | `q.rutaexpress.audit` | bindings en `events`: `shipment.#`, `catalog.#`. DLX key `audit` |
+| DLQ 3 | `q.rutaexpress.audit.dlq` | binding en `dlx`: `audit` |
+| Política `rutaexpress.trabajo` | las 3 colas de trabajo | `message-ttl` 86400000 (24 h), `max-length` 10000, `overflow` reject-publish |
+| Política `rutaexpress.dlq` | las 3 DLQ | `message-ttl` 604800000 (7 días), `max-length` 10000, `overflow` drop-head |
+
+**Quién produce y quién consume:**
+
+| Routing key | Exchange | Productor | Cola | Consumidor (clase) |
+|---|---|---|---|---|
+| `capacity.reserve` / `capacity.release` | cmd (direct) | shipments `MensajeriaPublicador` | command | catalog `CapacidadComandoListener` |
+| `catalog.capacity.reserved`, `.rejected` y `.released` | events (topic) | catalog `CapacidadEventoPublicador` | audit | shipments `AuditoriaListener` |
+| `shipment.status.<ESTADO>` | events (topic) | shipments `MensajeriaPublicador` | audit | shipments `AuditoriaListener` |
+| `notification.email.send`, `notification.warehouse.ticket` y `notification.label.generate` | events (topic) | shipments `MensajeriaPublicador` | notification | notify `NotificationConsumerViewModel` |
+| (dead-letter) | dlx | RabbitMQ al hacer NACK o al vencer el TTL | *.dlq | `DeadLetterRegistro` en shipments, catalog y notify |
+
+**Dónde se definen los nombres:** se declaran en 4 lugares, y si se cambia uno **hay que cambiar todos**.
+
+- `ms-rutaexpress-shipments/src/main/resources/application.yml` (sección `app.rabbit`) y `.../configuracion/RabbitNombres.kt`
+- `ms-rutaexpress-catalog/src/main/resources/application.yml` (sección `app.rabbit`) y `.../config/RabbitNombres.kt`
+- `ms-rutaexpress-notify/src/main/resources/application.properties` (`app.rabbit.*`) y `.../config/RabbitNombres.kt`
+- `ms-rutaexpress-mq-admin/src/main/resources/application.properties` (`app.rabbit.*`) y `.../RabbitNombres.kt` (topología completa en `RabbitTopology.kt`)
+
+**Parámetros del consumidor:**
+
+- `app.rabbit.consumer.prefetch=${RABBIT_PREFETCH:10}`
+- `max-attempts=${RABBIT_RETRY_MAX_ATTEMPTS:3}` y `initial-interval-ms=500` (en notify: `rutaexpress.notify.retry.*`)
+- `app.rabbit.dlq.auto-startup=${RABBIT_DLQ_CONSUMER_ENABLED:true}`
+
+**Endpoints de mq-admin (base `/api/mq-admin`, solo `ROLE_ADMIN`):**
+
+| Método | Ruta | Cuerpo / parámetros | Respuesta |
+|---|---|---|---|
+| GET | `/cluster`, `/queues`, `/alerts`, `/metrics`, `/exchanges`, `/bindings` | — | 200 |
+| POST | `/topology` | — | Declara la topología fija y aplica la retención |
+| PUT | `/retention` | `{commandTtlMs, dlqTtlMs, maxLength}` | 200 / 400 |
+| POST | `/queues` | `{name, durable, ttlMs, maxLength, expiresMs, overflow, deadLetterExchange, deadLetterRoutingKey}` | 201 / 400 / 409 |
+| DELETE | `/queues/{name}?force=false` | — | 200 / 404 / 409 (protegida sin `force`) |
+| POST | `/exchanges` | `{name, type: direct, topic, fanout o headers, durable}` | 201 / 400 / 409 |
+| DELETE | `/exchanges/{name}?force=false` | — | 200 / 404 / 409 |
+| POST | `/bindings` | `{source, destination, destinationType: queue o exchange, routingKey}` | 201 / 400 / 404 / 409 |
+| DELETE | `/bindings?source=&destination=&destinationType=queue&routingKey=&force=false` | — | 200 / 404 / 409 |
+| POST | `/exchanges/{name}/messages` | `{routingKey, body}` | Publica un mensaje de prueba (`confirmed`, `routed`) |
+
+Los errores se devuelven como `ProblemDetail` (`AdminErrors.kt`): 400 por validación, 404, 409 y 503 si el broker no responde.
+
+---
+
+## 4. Archivos creados o modificados en la iteración actual (ya hechos; no rehacer)
+
+| Servicio | Archivos | Para qué |
+|---|---|---|
+| infra | `infra/mq/compose.yml` (servicios renombrados a `rabbit1` y `rabbit2`), `infra/mq/rabbitmq.conf` (`autoheal`) | Clúster con los nombres de la guía; arregla B3 |
+| shipments | `configuracion/RabbitNombres.kt`, `configuracion/RabbitMqConfig.kt`, `mensajeria/MensajeriaPublicador.kt`, `mensajeria/AuditoriaListener.kt`, `mensajeria/AuditoriaEnvioService.kt`, `mensajeria/DeadLetterRegistro.kt`, `mensajeria/Errores.kt`, `mensajeria/Mensajes.kt`, `dominio/EstadoCapacidad.kt`, `dominio/RegistroAuditoriaEnvio.kt`, `dominio/RegistroAuditoriaRepositorio.kt`, `Envio.kt` (+`capacityStatus` y `@DynamicUpdate`), `EnvioServicio.kt`, `CatalogoCliente.kt` (sin reserva REST), `ManejadorGlobalExcepciones.kt` (503), `db/migration/V2__capacidad_y_auditoria_rabbit.sql`, `test/.../mensajeria/MensajeriaTests.kt`. **Borrado:** `comandos/NotificacionPublisher.kt` | Productor de comandos, eventos y notificaciones con confirmación del broker; consumidor de auditoría y de su DLQ |
+| catalog | `config/RabbitNombres.kt`, `config/RabbitMqConfig.kt`, `messaging/CapacidadComandoListener.kt`, `messaging/CapacidadComandoProcesador.kt`, `messaging/CapacidadEventoPublicador.kt`, `messaging/DeadLetterRegistro.kt`, `messaging/MensajesCapacidad.kt`, `model/entity/RegistroComandoCapacidad.kt`, `model/repository/RegistroComandoCapacidadRepository.kt`, `FleetCapacityRepository.kt` (`findLocked...` con `PESSIMISTIC_WRITE`), `db/migration/V2__registro_comandos_capacidad.sql`, `V1` (quitado el índice duplicado que daba ORA-01408), `test/.../messaging/CapacidadComandoTests.kt` | Consumidor de comandos idempotente con bloqueo; publica el resultado |
+| notify | `config/RabbitNombres.kt`, `config/RabbitMqConfig.kt`, `viewmodel/NotificationConsumerViewModel.kt`, `viewmodel/DeadLetterRegistro.kt`, `application.properties` y sus tests | Una cola con 3 routing keys; distingue errores; consumidor de la DLQ |
+| mq-admin | `RabbitAdminService.kt`, `ClienteGestion.kt`, `Solicitudes.kt`, `Errores.kt`, `RabbitNombres.kt`, `RabbitTopology.kt`, `MqAdminService.kt`, `MqAdminController.kt`, `AdminErrors.kt`, `application.properties`, `.gitignore` y los tests `MqAdminControllerTests`, `RabbitAdminServiceTests`, `AdminSecurityTests` y `RabbitTopologyTests` | CRUD de la topología, validación, métricas y retención |
+
+---
+
+## 5. Análisis ANTERIOR (línea base, antes de la iteración actual)
+
+> Se transcribe completo para tener la referencia. El estado actual de cada punto está en la sección 6.
+
+**Veredicto de entonces:** el código compilaba y todos los tests pasaban. La parte de RabbitMQ iba bien encaminada (2 nodos, 3 colas con su DLQ, ACK manual, políticas de retención y métricas), pero **no cumplía la EP2**. Faltaba entera la parte que vale el 30 % del encargo: el administrador no creaba ni eliminaba colas, exchanges ni bindings. Además había dos bugs, comprobados ejecutando el código, que harían fallar la demo en la nube.
+
+### 5.1 Compilación y tests (entonces)
+
+| Componente | Compila | Tests |
+|---|---|---|
+| frontend (Angular 19) | ✅ | 3/3 |
+| shipments / catalog / bff / audit | ✅ | 11 / 18 / 12 / 8 |
+| notify / report / mq-admin / kafka-admin | ✅ | 20 (2 omitidos) / 5 / 5 / 4 |
+
+- 83 tests de backend y 0 fallos.
+- Los 2 tests de integración de notify se omitieron porque Docker no estaba corriendo.
+- Maven Central respondió 429 y se usó un mirror de Google sin tocar el proyecto.
+- Había 48 warnings de Kotlin.
+
+### 5.2 Cumplimiento (entonces)
+
+**IL 2.1**
+
+| Requisito | Estado | Detalle |
+|---|---|---|
+| Beans Queue, Exchange y Binding separados | ✅ | `notify/RabbitMqConfig.kt` y `mq-admin/RabbitTopology.kt` |
+| Nombres centralizados | ⚠️ | Routing keys escritas a mano en `NotificacionPublisher.kt:31,47,64`; topología duplicada en dos servicios |
+| 2 nodos con Docker Compose | ✅/⚠️ | Ver B3 |
+
+**IL 2.2**
+
+| Requisito | Estado | Detalle |
+|---|---|---|
+| 3 colas con DLQ | ✅ | `q.cmd.email`, `q.cmd.warehouse`, `q.cmd.label` y sus `.dlq` |
+| Exchanges direct y topic | ⚠️ | Existían, pero nadie publicaba en `cmd.topic` y cada cola estaba enlazada a ambos |
+| `@RabbitListener` por dominio y ACK manual | ✅ | `NotificationConsumerViewModel.kt` |
+| Distinguir errores recuperables y no recuperables | ❌ | Todo se reintentaba 3 veces (`NotificationConsumerViewModel.kt:52-67`) |
+| DLQ consumidas y en logs | ❌ | No había listeners sobre las `.dlq` |
+| Productores y consumidores en principal y catálogo | ⚠️ | Catalog no usaba RabbitMQ; la reserva era REST síncrona |
+
+**IL 2.3**
+
+| Requisito | Estado | Detalle |
+|---|---|---|
+| REST para crear y eliminar colas, exchanges y bindings | ❌ | Solo había GET cluster/queues/alerts, POST topology y PUT retention |
+| `RabbitAdminService` y validación | ⚠️ | Solo se validaba la retención |
+| Rutas admin por BFF/Gateway | ⚠️ | `BrokerAdminController.kt:26` solo reenviaba GET |
+| Métricas | ✅ | `/queues`, gauge de Prometheus y dashboard Angular |
+| Retención | ✅ | TTL de 24 h / 7 días, max-length 10000, reject-publish |
+
+Esto dejaba sin cubrir R11, R12 y R13.
+
+**Entrega**
+
+| Requisito | Estado | Detalle |
+|---|---|---|
+| Repos separados | ❌ | Monorepo |
+| `.gitignore` estricto | ⚠️ | mq-admin y kafka-admin sin `.gitignore`; el de la raíz mezcla Gradle y Node |
+| README, JWT, MSAL e interceptor | ✅ | |
+
+### 5.3 Bugs confirmados (entonces)
+
+- **B1:** `.env.example` y `infra/apps/compose.yml` usan `SPRING_PROFILES_ACTIVE=local` (driver H2) con una URL de Oracle. Resultado: `Driver org.h2.Driver claims to not accept jdbcUrl, jdbc:oracle:thin:@//oracle:1521/FREEPDB1`. Afecta a catalog, audit, report y shipments. `deploy-aws.bat` copia `.env.example` tal cual y no levanta Oracle.
+- **B2:** con el perfil local, shipments no publicaba nada (`app.rabbit.enabled: false`). Los comandos se descartaban en silencio.
+- **B3:** `pause_minority` con 2 nodos. Si cae uno, el otro se pausa y se cae todo el clúster.
+- **B4:** fuga de capacidad. Se reservaba por REST en catalog; si después fallaba la publicación, la base hacía rollback pero la reserva quedaba. Al reintentar se reservaba otra vez.
+- **B5:** sobreventa con concurrencia. `CatalogViewModelService.kt:297-321` lee, suma y guarda sin bloqueo.
+- **Menores:**
+  1. El dashboard del BFF falla completo si catalog o report están caídos (`BffGatewayService.kt:107-116`).
+  2. `app.kafka.topics.audit.timeline` no existe en el yml (`EnvioEventPublisher.kt:19`).
+  3. Broker caído → 500 en vez de 503.
+  4. `/actuator/prometheus` es público en BFF y shipments.
+  5. El build del frontend descarta 11 reglas CSS de Tailwind.
+  6. `nginx.conf` envía `/api` directo al BFF, saltándose el API Gateway.
+
+### 5.4 Prioridades que se propusieron entonces
+
+1. mq-admin: POST/DELETE para colas, exchanges y bindings, con DTOs `@Valid`, `RabbitAdminService` y respuestas 400. Proxy en el BFF solo para Admin.
+2. notify: listeners sobre las 3 DLQ con `x-death`; errores no recuperables a la DLQ sin reintentos; prefetch explícito.
+3. Compose y despliegue: perfil `prod` con Oracle o corregir el perfil local; definir `APP_RABBIT_ENABLED` y `APP_CATALOGO_ENABLED`.
+4. Usar el exchange topic en un flujo real y mover las routing keys a la configuración.
+5. Cambiar `pause_minority` por `autoheal`, separar los repos y agregar los `.gitignore`.
+
+No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizador JWT y CORS), EC2, ni si `bff.atlaa.app` (de `vercel.json`) es el API Gateway o el BFF directo.
+
+---
+
+## 6. Análisis NUEVO (estado actual verificado el 2026-10-15)
+
+### 6.1 Compilación y tests (en una copia aislada del working tree)
+
+| Servicio | Antes | Ahora | Notas |
+|---|---|---|---|
+| shipments | 11 | **19** ✅ | `bootJar` OK |
+| catalog | 18 | **25** ✅ | `bootJar` OK |
+| notify | 20 (2 omitidos) | **23** ✅ | 3 de ellos son de integración y **pasan con Docker** (`RUN_DOCKER_TESTS=true`) |
+| mq-admin | 5 | **26** ✅ | `bootJar` OK |
+| bff / audit / report / kafka-admin / frontend | 12 / 8 / 5 / 4 / 3 | sin cambios | No se volvieron a ejecutar (el código no cambió) |
+
+- **Total de backend: 122 tests y 0 fallos.**
+- Hay 40 warnings de Kotlin (31 en shipments); no bloquean.
+- Los tests de integración de notify contra un RabbitMQ 4 real confirman:
+  - La cola, su DLQ y los bindings se declaran en el broker.
+  - Un email que falla siempre termina en la DLQ tras los reintentos.
+  - Un JSON inválido va a la DLQ **sin** reintentar.
+
+### 6.2 Verificación en vivo (solo lectura, sobre el clúster que el usuario tenía levantado)
+
+- `rabbit@rabbit1` y `rabbit@rabbit2` corriendo, sin particiones, con `cluster_partition_handling = autoheal`. ✅
+- Los 3 exchanges, las 6 colas, los 8 bindings y las 2 políticas coinciden exactamente con la sección 3. ✅
+- `GET /api/mq-admin/metrics`, `/queues`, `/exchanges` y `/bindings` responden 200 con los datos esperados. ✅
+- **Las 6 colas tienen su líder en `rabbit1`.** Son colas classic y no se replican (ver T15).
+- **Resolución DNS dentro de la red `rutaexpress`:** `rabbit1` y `rabbit2` resuelven; **`rabbitmq-1` y `rabbitmq-2` NO resuelven** (confirma N1).
+
+### 6.3 Cumplimiento actual por requisito
+
+| Requisito | Antes | Ahora | Evidencia / detalle |
+|---|---|---|---|
+| **IL 2.1** Nombres centralizados | ⚠️ | ✅ | `RabbitNombres` (`@ConfigurationProperties("app.rabbit")`) en los 4 servicios. Queda **1 texto fijo**: `AuditoriaListener.kt:40` (T12) |
+| Beans separados | ✅ | ✅ | `RabbitMqConfig` en shipments, catalog y notify; `RabbitTopology` en mq-admin |
+| 2 nodos en clúster | ⚠️ | ✅ local / ❌ nube | Nombres de la guía y `autoheal`. El compose de las apps está roto (N1) |
+| **IL 2.2** 3 colas con DLQ | ✅ | ✅ | command, notification y audit, cada una con su `.dlq` |
+| direct y topic | ⚠️ | ✅ | direct para comandos punto a punto; topic para eventos y notificaciones por patrón |
+| `@RabbitListener` por dominio y ACK manual | ✅ | ✅ | `AcknowledgeMode.MANUAL` en 3 servicios |
+| Distinguir errores | ❌ | ✅ | `MensajeNoRecuperableException` → `basicNack(tag,false,false)` inmediato; errores técnicos → 3 reintentos con backoff → DLQ |
+| DLQ consumidas y en logs | ❌ | ✅ | `DeadLetterRegistro` en los 3 servicios: registra `x-death` (motivo, cola y routing key) y suma un contador Micrometer |
+| Principal y catálogo producen y consumen | ⚠️ | ✅ | catalog consume `capacity.*` y publica `catalog.capacity.*`; shipments consume el resultado (paso 6 del flujo) |
+| Prefetch explícito | — | ✅ | `setPrefetchCount(RABBIT_PREFETCH=10)` |
+| **IL 2.3** REST crear y eliminar | ❌ | ✅ | Ver la tabla de endpoints de la sección 3 |
+| `RabbitAdminService` y validación | ⚠️ | ✅ | `@NotBlank`, regex de nombre, prefijo `amq.` reservado, rangos de TTL, tipos válidos, 400/404/409/503, topología núcleo protegida con `force` |
+| Rutas admin por BFF/Gateway | ⚠️ | ❌ | `BrokerAdminController.kt:26-29` sigue reenviando solo los GET `cluster`, `queues` y `alerts` (**T4, T5**) |
+| Métricas | ✅ | ✅ | Además: `/metrics` (activeQueues, messagesReady, messagesUnacknowledged, consumers, dlqQueues, dlqMessages) |
+| Retención | ✅ | ✅ | Aplicada en el broker (verificado) |
+| **Entrega** Repos separados | ❌ | ❌ | **T9** |
+| `.gitignore` | ⚠️ | ⚠️ | mq-admin ✅; kafka-admin todavía no (**T7**) |
+| README | ✅ | ⚠️ | Desactualizados (N4, **T6**) |
+| Cambios en GitHub | — | ❌ | Nada commiteado (N3, **T8**) |
+
+### 6.4 Estado de los bugs anteriores
+
+| Bug | Estado | Detalle |
+|---|---|---|
+| B1 | ❌ **sigue** | `infra/apps/compose.yml:43-44` (catalog), `:102-103` (audit), `:131-132` (report), `:160-161` (shipments) y `infra/apps/.env.example:2`. **T3** |
+| B2 | ✅ | `application-local.yml` de shipments ya no apaga RabbitMQ; el compose define `RABBIT_ENABLED=true` y `CATALOGO_ENABLED=true` |
+| B3 | ✅ | `autoheal` (verificado en vivo) |
+| B4 | ⚠️ casi | **Resuelto:** la reserva por REST se eliminó; ahora es un comando asíncrono idempotente por `commandId`, con compensación si el envío se cancela antes de reservar. **Queda (T10):** ver la tarea |
+| B5 | ⚠️ casi | **Resuelto:** la mensajería usa `findLockedByServiceIdAndZoneAndVehicleType` (`PESSIMISTIC_WRITE`). **Queda (T11):** el endpoint REST `reserveCapacity` y `releaseCapacity` (`CatalogViewModelService.kt:297` y `:346`) sigue sin bloqueo |
+| Menor 1: dashboard del BFF | ❌ | T13a |
+| Menor 2: propiedad de Kafka | ❌ | T13b |
+| Menor 3: 500 vs 503 | ✅ | shipments `MensajeriaNoDisponibleException` → 503; mq-admin → 503 |
+| Menor 4: prometheus público | ❌ | T13c |
+| Menor 5: Tailwind | ❌ (no se volvió a verificar) | T13d |
+| Menor 6: nginx | ❌ | T13e |
+
+### 6.5 Problemas NUEVOS introducidos por la iteración actual
+
+- **N1 (bloqueante): renombrado incompleto del clúster.**
+  - `infra/mq/compose.yml` ahora define `rabbit1` y `rabbit2`, pero estas referencias siguen con los nombres antiguos:
+    - `infra/apps/compose.yml`, en los 8 servicios (líneas 13-14, 39-40, 68-69, 98-99, 127-128, 156-157, 186-187 y 206-207).
+    - `infra/README.md:9` (`exec rabbitmq-1`).
+    - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (`exec -T rabbitmq-1`).
+  - Efecto: en Docker o EC2 ningún servicio conecta a RabbitMQ. shipments respondería 503 a cada creación o cambio de estado y los listeners nunca se conectarían.
+- **N2 (bloqueante para el admin): variable renombrada.**
+  - mq-admin lee `app.mq.management-urls=${RABBITMQ_MANAGEMENT_URLS:...}` (`application.properties:37`), pero el compose pasa `RABBITMQ_MANAGEMENT_URL` (`infra/apps/compose.yml:190`).
+  - En el contenedor usaría `http://localhost:15672`, así que todas las operaciones de administración darían 503. El `POST /topology` del deploy fallaría y solo dejaría un warning (deploy, línea 465).
+- **N3 (bloqueante para la entrega): sin commit.**
+  - `deploy-aws.bat:940` empaqueta con `git archive HEAD`, así que desplegaría el código antiguo. GitHub, que es lo que se entrega, tampoco tiene los cambios.
+- **N4: READMEs desactualizados.**
+  - `README.md:33` (sección Mensajería con `cmd.direct`, `cmd.topic` y `cmd.dead.dlx`).
+  - `README.md` "Validación realizada el 14 de octubre de 2026: 83 pruebas".
+  - `ms-rutaexpress-mq-admin/README.md:5` (topología antigua y "No existe un endpoint para purgar o borrar colas") y la lista de endpoints de las líneas 27-33.
+  - `ms-rutaexpress-notify/README.md:5-6`.
+  - `ms-rutaexpress-shipments/README.md:5` (reserva por REST y las claves `email.send`, `warehouse.ticket` y `label.gen`).
+  - El README de catalog no menciona el consumidor RabbitMQ.
+  - `infra/README.md:9`.
+
+### 6.6 Pruebas mínimas (sección 7 de la guía): estado actual
+
+| ID | En el código | Evidencia | ¿Demostrable en la nube hoy? |
+|---|---|---|---|
+| R1-R3 | ✅ | Filtros JWT existentes; `AdminSecurityTests` (401) | ❌ (depende de T1-T3) |
+| R4 | ✅ | `AdminSecurityTests` "rechaza crear colas sin rol administrador" → 403. Por BFF todavía no hay ruta (T4) | ❌ |
+| R5 | ✅ | `EnvioServicio`: la transición inválida o la falta de capacidad lanzan la excepción antes de guardar y publicar | ❌ |
+| R6 | ✅ | `MensajeriaTests` | ❌ |
+| R7 | ✅ | Verificado en vivo en local | ❌ en la nube |
+| R8 | ✅ | Los 3 consumidores con ACK | ❌ |
+| R9 | ✅ | Tests unitarios y de integración (JSON inválido → DLQ) | ❌ |
+| R10 | ✅ | Test de integración (SMTP caído → reintentos → DLQ) | ❌ |
+| R11-R13 | ✅ | `MqAdminControllerTests`, `RabbitAdminServiceTests` | ❌ (N2) |
+| R14 | ✅ | Políticas verificadas en el broker | ❌ |
+
+### 6.7 Checklist final de la guía (sección 9)
+
+| # | Punto | Antes | Ahora |
+|---|---|---|---|
+| 1 | La EP1 sigue operativa (login, rutas protegidas y roles) | ✅ | ✅ (sin cambios; no verificado en vivo) |
+| 2 | API Gateway rechaza lo no autorizado y enruta todo, incluido `/api/admin/*` | ⚠️ | ⚠️ (T4, T5) |
+| 3 | El BFF valida el JWT y no accede a la base | ✅ | ✅ |
+| 4 | Dos nodos en clúster | ⚠️ | ✅ |
+| 5 | Clúster en la nube con Compose y accesible | ❌ | ❌ (T1-T3, T8) |
+| 6 | Tres colas diferenciadas con DLQ | ✅ | ✅ |
+| 7 | direct y topic con keys y bindings correctos | ⚠️ | ✅ |
+| 8 | Nombres centralizados y separados | ⚠️ | ✅ |
+| 9 | Microservicios producen y consumen con `@RabbitListener` | ⚠️ | ✅ |
+| 10 | ACK y errores explícitos (NACK, reintentos y DLQ) | ⚠️ | ✅ |
+| 11 | DLQ consumidas y en logs | ❌ | ✅ |
+| 12 | El admin crea y elimina por REST con `RabbitAdminService` | ❌ | ✅ |
+| 13 | El admin valida nombres vacíos y configuraciones inválidas | ❌ | ✅ |
+| 14 | Políticas de retención | ✅ | ✅ |
+| 15 | Puedo explicar las métricas | ✅ | ✅ |
+| 16 | Repos en GitHub con `.gitignore` y README, enlaces enviados | ❌ | ❌ (T6-T9) |
+| 17 | Flujo completo de extremo a extremo | ❌ | ❌ (depende de todo lo anterior) |
+| | **Puntaje (✅=1, ⚠️=0,5, ❌=0)** | **8 / 17 ≈ 47 %** | **13,5 / 17 ≈ 79 %** |
+
+### 6.8 Avance sobre el análisis anterior
+
+| Bloque del análisis anterior | Puntos | Resueltos | Parciales | Pendientes |
+|---|---|---|---|---|
+| Requisitos con ⚠️ o ❌ | 10 | 7 | 1 (`.gitignore`) | 2 (proxy BFF, repos) |
+| Bugs B1-B5 | 5 | 2 (B2, B3) | 2 (B4, B5) | 1 (B1) |
+| Bugs menores | 6 | 1 (503) | 0 | 5 |
+| **Total** | **21** | **10** | **3** | **8** |
+
+- Ponderado (críticos ×3, importantes ×2, menores ×1): **27,5 / 42 ≈ 65 %**. Contando los puntos por igual: ≈55 %.
+- Lo de mayor peso en la nota ya está hecho: IL 2.3 completo, DLQ, errores y catálogo por cola.
+- **Lo que falta es despliegue y entrega.** Eso es lo que permite mostrar todo en la presentación, que vale el 60 % de la EP2.
+- Importante: mientras no se haga commit y push, **GitHub sigue mostrando la versión antigua (≈47 %)**.
+
+---
+
+## 7. PLAN DE TRABAJO: tareas pendientes
+
+> Formato: cada tarea indica el servicio, los archivos, el problema, los pasos, el criterio de aceptación y cómo verificar. Marca `[x]` al terminar. Las líneas pueden moverse; busca por el texto indicado.
+
+### P0: bloqueantes para la demo en la nube
+
+#### T1. Corregir los nombres de host de RabbitMQ (`rabbitmq-1` → `rabbit1`) `[ ]`
+
+- **Servicio:** infra (configuración, no código Kotlin).
+- **Archivos:**
+  - `infra/apps/compose.yml`, en los 8 servicios `bff`, `catalog`, `notify`, `audit`, `report`, `shipments`, `mq-admin` y `kafka-admin`.
+  - `infra/README.md:9`.
+  - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (**fuera del repo: pedir permiso al usuario antes de editarlo**).
+- **Pasos:**
+  1. En cada servicio de `infra/apps/compose.yml`:
+     - `"RABBITMQ_HOST": "rabbitmq-1"` → `"RABBITMQ_HOST": "rabbit1"`
+     - `"RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672"` → `"RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672"`
+  2. `infra/README.md:9`: `exec rabbitmq-1 rabbitmqctl cluster_status` → `exec rabbit1 rabbitmqctl cluster_status`.
+  3. `deploy-aws.bat:652`: `dc_mq exec -T rabbitmq-1 rabbitmqctl cluster_status` → `dc_mq exec -T rabbit1 rabbitmqctl cluster_status`.
+- **Aceptación:**
+  - `grep -rn "rabbitmq-1\|rabbitmq-2" --exclude-dir=docs --exclude-dir=node_modules .` no devuelve nada.
+  - `docker compose -f infra/apps/compose.yml config --quiet` termina sin errores (requiere `docker network create rutaexpress`).
+
+#### T2. Variable de gestión de mq-admin en el compose `[ ]`
+
+- **Servicio:** infra / mq-admin.
+- **Archivo:** `infra/apps/compose.yml:190` (servicio `mq-admin`).
+- **Paso:** reemplazar `"RABBITMQ_MANAGEMENT_URL": "http://rabbitmq-1:15672"` por `"RABBITMQ_MANAGEMENT_URLS": "http://rabbit1:15672,http://rabbit2:15672"`.
+- **Aceptación:** con todo levantado en Docker, `GET http://localhost:8086/api/mq-admin/cluster` devuelve los 2 nodos y `POST /api/mq-admin/topology` responde 200.
+
+#### T3. Bug B1: perfil `local` (H2) mezclado con la URL de Oracle; Oracle no arranca `[ ]`
+
+- **Servicio:** infra; afecta a catalog, audit, report y shipments.
+- **Archivos:**
+  - `infra/apps/compose.yml`, líneas `:43-44`, `:102-103`, `:131-132` y `:160-161`, y el servicio `oracle` (`"profiles": ["oracle"]`, línea ~248).
+  - `infra/apps/.env.example:2`.
+  - `infra/README.md` (sección Oracle).
+  - `deploy-aws.bat:618` y `:663` (fuera del repo).
+- **Causa:** `application-local.yml` fija `driver-class-name: org.h2.Driver`, mientras que la variable de entorno `SPRING_DATASOURCE_URL` (Oracle) tiene prioridad sobre la URL H2 del perfil. Resultado: `Driver org.h2.Driver claims to not accept jdbcUrl`. Además, Oracle está bajo el perfil de compose `oracle` y el deploy nunca lo levanta.
+- **Decisión del usuario** (preguntar): ¿base de datos Oracle en contenedor dentro de la EC2, o una base Oracle **cloud** externa? La guía y el diagrama piden "Base de datos Cloud" en el flujo de extremo a extremo; **H2 no sirve para la demo**.
+- **Pasos (opción recomendada: contenedor Oracle en EC2, con URL configurable):**
+  1. En los 4 servicios con base de datos: `"SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}"`. No existe `application-prod.yml`; el `application.yml` base ya usa Oracle y Flyway.
+  2. Hacer configurable la URL: `"SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}"`.
+  3. Quitar `"profiles": ["oracle"]` del servicio `oracle` y agregar a los 4 servicios `"depends_on": {"oracle": {"condition": "service_healthy"}}`. Si se mantiene el perfil, usar `"required": false` y levantar con `--profile oracle`.
+  4. `.env.example`: `SPRING_PROFILES_ACTIVE=prod` y una línea comentada `# DB_URL=jdbc:oracle:thin:@//<host-cloud>:1521/<servicio>`.
+  5. `deploy-aws.bat`: después de "Redis y Mailpit" (línea ~663), levantar Oracle y esperar a que esté healthy, por ejemplo `dc_apps up -d --wait --wait-timeout 900 oracle` (o con `--profile oracle`).
+  6. `infra/README.md`: documentar el perfil `prod`, `DB_URL` y el orden de arranque.
+- **Notas:**
+  - Las contraseñas de los esquemas vienen de `infra/apps/oracle-init.sql` (`Rutaexpress123`), y el compose pasa `${DB_PASSWORD:-Rutaexpress123}`.
+  - Oracle Free necesita unos 2 GB de RAM; el deploy ya advierte que se requieren alrededor de 8 GB en total.
+  - Las migraciones `V1` y `V2` de catalog y shipments usan sintaxis Oracle; no se probaron contra Oracle real en los tests (que usan H2 con Flyway desactivado). Vigila el primer arranque.
+- **Aceptación:** `docker compose ... up` deja catalog, audit, report y shipments con `/actuator/health` en `UP` sobre Oracle, y Flyway aplica V1 y V2 sin errores.
+
+#### T4. BFF: reenviar las operaciones de administración de RabbitMQ (CÓDIGO, obligatorio) `[ ]`
+
+- **Servicio:** `ms-rutaexpress-bff`.
+- **Archivos:**
+  - `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/controller/BrokerAdminController.kt` (archivo principal).
+  - `ms-rutaexpress-bff/src/test/kotlin/com/rutaexpress/bff/controller/BrokerAdminSecurityTests.kt` (extender).
+  - Opcional: un nuevo `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/MqAdminCliente.kt`, para poder mockearlo en los tests.
+- **Problema:**
+  - Hoy solo existe `GET /api/bff/admin/mq/{resource}` con `cluster`, `queues` y `alerts`.
+  - La guía exige que el Admin cree y elimine por la cadena API Gateway → BFF (solo Admin).
+  - Además, el helper `get(...)` cambia cualquier error por el mensaje genérico "El administrador no pudo completar la consulta", con lo que **se pierde el mensaje 400 claro** que devuelve mq-admin.
+- **Pasos:**
+  1. Ampliar los GET permitidos: `cluster`, `queues`, `alerts`, `metrics`, `exchanges` y `bindings`.
+  2. Agregar estos endpoints (prefijo `/api/bff/admin/mq`, se mantiene `@PreAuthorize("hasRole('ADMIN')")` en la clase):
+
+     | BFF | → mq-admin |
+     |---|---|
+     | `POST /queues` (body JSON tal cual) | `POST /api/mq-admin/queues` |
+     | `DELETE /queues/{name}?force=false` | `DELETE /api/mq-admin/queues/{name}?force=` |
+     | `POST /exchanges` | `POST /api/mq-admin/exchanges` |
+     | `DELETE /exchanges/{name}?force=false` | `DELETE /api/mq-admin/exchanges/{name}?force=` |
+     | `POST /bindings` | `POST /api/mq-admin/bindings` |
+     | `DELETE /bindings?source&destination&destinationType=queue&routingKey=&force=false` | `DELETE /api/mq-admin/bindings?...` |
+     | `POST /topology` | `POST /api/mq-admin/topology` |
+     | `PUT /retention` | `PUT /api/mq-admin/retention` |
+     | `POST /exchanges/{name}/messages` (útil para la demo de la DLQ) | `POST /api/mq-admin/exchanges/{name}/messages` |
+
+  3. Reenviar `Authorization: Bearer <jwt.tokenValue>`, como ya hace `get(...)`.
+  4. Usar plantillas de URI con variables (`"/api/mq-admin/queues/{name}"`) para que los nombres se codifiquen bien. **La `#` de las routing keys debe viajar como `%23`.**
+  5. **Propagar el estado y el cuerpo de mq-admin:** ante una `RestClientResponseException`, devolver `ResponseEntity.status(ex.statusCode).contentType(application/problem+json).body(ex.responseBodyAsString)`. Si es una `RestClientException` sin respuesta, devolver 503.
+  6. Mantener el estilo del archivo: Kotlin compacto y `RestClient` con `JdkClientHttpRequestFactory`.
+- **Seguridad:** `SecurityConfig.kt` ya restringe `/api/bff/admin/**` a ADMIN y tiene `csrf.disable()`; no hay que cambiarlo.
+- **Tests a agregar:**
+  - Anónimo `POST /api/bff/admin/mq/queues` → 401.
+  - `DESPACHADOR` → 403.
+  - `ADMIN` con un mock del cliente → 201.
+  - Un error 400 de mq-admin se propaga como 400 con el mismo `detail`.
+- **Aceptación:** `.\gradlew.bat test bootJar` pasa en `ms-rutaexpress-bff`. Con el stack levantado, un Admin puede crear y borrar una cola vía `http://localhost:8080/api/bff/admin/mq/queues`, y un nombre vacío devuelve 400 con un mensaje claro.
+
+#### T5. API Gateway en AWS (NO es código; lo hace el usuario en la consola) `[ ]`
+
+- Rutas hacia el BFF para `/api/bff/admin/{proxy+}` con los métodos **GET, POST, PUT y DELETE**, o bien `ANY /api/{proxy+}`.
+- La guía menciona `/api/admin/*`. Si se quiere esa ruta literal, crear un alias `/api/admin/{proxy+}` → BFF `/api/bff/admin/{proxy}`.
+- Autorizador JWT:
+  - issuer `https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0`
+  - audience `api://f3136620-804c-4b15-b22d-b6fad957937e`
+- CORS: métodos `GET, POST, PUT, DELETE, OPTIONS`; cabeceras `Authorization, Content-Type`.
+- Confirmar que `bff.atlaa.app` (`frontend/vercel.json`) es el **dominio del API Gateway** y no el BFF directo.
+
+### P1: entrega
+
+#### T6. Actualizar los READMEs `[ ]`
+
+| Archivo | Qué cambiar |
+|---|---|
+| `README.md` (raíz), sección "Mensajería" (~línea 33) | Reemplazar `cmd.direct`, `cmd.topic` y `cmd.dead.dlx` por la topología de la sección 3; explicar direct (comandos) y topic (eventos y notificaciones); ACK manual, DLQ y retención |
+| `README.md` (raíz), "Validación y limpieza" | Actualizar los conteos: 122 tests de backend (shipments 19, catalog 25, notify 23 con 3 de Docker, mq-admin 26, bff 12, audit 8, report 5, kafka-admin 4) y 3 de frontend |
+| `ms-rutaexpress-mq-admin/README.md` | Reescribir "Funcionamiento" (topología nueva y protección con `force`); **borrar** "No existe un endpoint para purgar o borrar colas"; listar todos los endpoints con cuerpos de ejemplo y códigos de error; cambiar `RABBITMQ_MANAGEMENT_URL` por `RABBITMQ_MANAGEMENT_URLS` |
+| `ms-rutaexpress-notify/README.md:5-6` | Cola `q.rutaexpress.notification` enlazada a `ex.rutaexpress.events` con `notification.#`; las 3 routing keys; errores no recuperables a la DLQ sin reintentos y recuperables con 3 reintentos; `DeadLetterRegistro`; `RABBIT_PREFETCH` y `RABBIT_DLQ_CONSUMER_ENABLED` |
+| `ms-rutaexpress-shipments/README.md:5` | La reserva ahora es asíncrona (`capacity.reserve`/`release` por `ex.rutaexpress.cmd`); eventos `shipment.status.<ESTADO>`; notificaciones `notification.*`; consume `q.rutaexpress.audit` y su DLQ; campo `capacityStatus` (NO_APLICA, PENDIENTE, RESERVADA, RECHAZADA, LIBERADA); 503 si el broker no confirma |
+| `ms-rutaexpress-catalog/README.md` | Agregar una sección RabbitMQ: consume `q.rutaexpress.command`, bloqueo pesimista, idempotencia en `tb_capacity_commands` (V2), publica `catalog.capacity.reserved`/`rejected`/`released`, DLQ y variables de entorno |
+| `infra/README.md` | `rabbit1`, `RABBITMQ_MANAGEMENT_URLS`, perfil `prod` con Oracle y `DB_URL` (después de T1-T3) |
+| `docs/dependencias-microservicios.md:140` | **No tocar**: `docs/` está excluido de los commits según el README de la raíz, salvo que el usuario lo pida |
+
+#### T7. `.gitignore` faltante `[ ]`
+
+- Crear `ms-rutaexpress-kafka-admin/.gitignore` copiando `ms-rutaexpress-mq-admin/.gitignore` (Gradle/Kotlin, IDEs, `.env`).
+- Al separar los repos (T9), cada repo backend lleva su `.gitignore` de Gradle y el frontend el suyo de Angular (`frontend/.gitignore` ya existe).
+
+#### T8. Commit y push `[ ]` (**solo con autorización explícita del usuario**)
+
+- Hay 31 archivos modificados, 1 borrado y 33 nuevos sin seguimiento.
+- Sin commit, ni GitHub ni `deploy-aws.bat` (que hace `git archive HEAD` y `git pull --ff-only origin main`) llevan los cambios.
+- Commit sugerido después de T1-T4: `feat(ep2): topología RabbitMQ completa, consumidores con DLQ, administrador REST y proxy BFF`.
+
+#### T9. Repositorios separados `[ ]` (**el usuario debe crear los repos en GitHub**)
+
+- **Obligatorios según la guía:** frontend, BFF, principal (`ms-rutaexpress-shipments`), catálogo (`ms-rutaexpress-catalog`) y administrador RabbitMQ (`ms-rutaexpress-mq-admin`, que puede llamarse `ms-rutaexpress-rabbit-admin`).
+- **Recomendados:** notify (consumidor de la EP2) e infra (los compose).
+- **Método que conserva el historial:**
+  ```bash
+  git subtree split --prefix=ms-rutaexpress-mq-admin -b split/mq-admin
+  git push https://github.com/<usuario>/ms-rutaexpress-rabbit-admin.git split/mq-admin:main
+  ```
+- Cada repo necesita su `README.md` y su `.gitignore`. Los enlaces se suben a AVA y se envían por correo al docente.
+
+### P2: mejoras de robustez (no bloquean la demo)
+
+#### T10. Lo que queda del bug B4: reserva huérfana o doble (CÓDIGO) `[ ]`
+
+- **Servicios:** `ms-rutaexpress-shipments` y `ms-rutaexpress-catalog`.
+- **Archivos:**
+  - `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/servicio/EnvioServicio.kt` (`cambiarEstado`, ~líneas 110-133).
+  - `ms-rutaexpress-catalog/src/main/kotlin/com/rutaexpress/catalog/messaging/CapacidadComandoProcesador.kt` (`procesar` / `reservar`).
+  - `ms-rutaexpress-catalog/src/main/kotlin/com/rutaexpress/catalog/model/repository/RegistroComandoCapacidadRepository.kt`.
+  - Tests: `ms-rutaexpress-shipments/src/test/.../mensajeria/MensajeriaTests.kt` y `ms-rutaexpress-catalog/src/test/.../messaging/CapacidadComandoTests.kt`.
+- **Problema (cadena de pasos):**
+  1. Al pasar a ACEPTADO, `mensajeria.solicitarReserva(guardado)` se publica y el broker la confirma **antes** que `publicarEstado` y `notificarSegunEstado`.
+  2. Si una de esas publicaciones falla, se lanza `MensajeriaNoDisponibleException` y la base hace rollback: el envío queda en CREADO.
+  3. Pero el comando ya está en la cola, así que catalog reserva igual.
+  4. Al reintentar ACEPTADO se genera otro `commandId` y catalog reserva **otra vez** (la idempotencia es por `commandId`, no por envío).
+- **Pasos:**
+  1. shipments: mover `mensajeria.solicitarReserva(guardado)` para que sea la **última** publicación de `cambiarEstado` (después de `publicarEstado`, `eventPublisher.publicarCambioEstado` y `notificarSegunEstado`).
+  2. catalog: idempotencia **por envío** en RESERVAR.
+     - Si ya existe para el mismo `shipmentId` un registro `RESERVAR` con resultado `RESERVADA` sin un `LIBERAR` posterior, devolver ese resultado **sin mover la capacidad** (pero registrando el nuevo `commandId`).
+     - Agregar `fun findByShipmentIdOrderByProcesadoEnAsc(shipmentId: String): List<RegistroComandoCapacidad>` en el repositorio; el índice `idx_capacity_commands_shipment` ya existe.
+  3. Se mantiene la compensación actual (`AuditoriaEnvioService.kt:90` y `AuditoriaListener.kt:40-48`) para el caso de una cancelación antes de reservar.
+- **Tests:**
+  - catalog: "un segundo RESERVAR del mismo envío con otro commandId no descuenta cupo".
+  - shipments: verificar con `inOrder` que la reserva se publica al final.
+- **Aceptación:** los tests de ambos servicios pasan y el cupo no se descuenta dos veces para el mismo envío.
+
+#### T11. Lo que queda del bug B5: el endpoint REST de reserva sin bloqueo (CÓDIGO) `[ ]`
+
+- **Servicio:** `ms-rutaexpress-catalog`.
+- **Archivo:** `ms-rutaexpress-catalog/src/main/kotlin/com/rutaexpress/catalog/viewmodel/service/CatalogViewModelService.kt`, en `reserveCapacity` (~línea 297) y `releaseCapacity` (~línea 346).
+- **Paso:** reemplazar `capacityRepository.findByServiceIdAndZoneAndVehicleType(...)` por `capacityRepository.findLockedByServiceIdAndZoneAndVehicleType(...)`, que ya existe en `FleetCapacityRepository.kt`. La clase ya tiene `@Transactional`, así que el bloqueo vale durante el método.
+- **Tests:** revisar `ms-rutaexpress-catalog/src/test/.../viewmodel/service/CatalogViewModelServiceTests.kt:175,190`. Si mockean `findBy...`, actualizar el stub a `findLockedBy...`.
+- **Alternativa:** si nadie usa estos endpoints (shipments ya no los usa), se pueden dejar solo para ADMIN. **Preguntar al usuario.**
+
+### P3: limpieza y bugs menores (CÓDIGO)
+
+#### T12. Texto fijo de routing key en shipments `[ ]`
+
+- **Archivo:** `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/mensajeria/AuditoriaListener.kt:40`, donde dice `clave.startsWith("catalog.capacity.")`.
+- **Pasos:**
+  1. Agregar `val capacityResultPrefix: String = "catalog.capacity."` en `RabbitNombres.Enrutamiento` (`configuracion/RabbitNombres.kt:39-49`).
+  2. Agregar `capacity-result-prefix: "catalog.capacity."` en `app.rabbit.routing` de `ms-rutaexpress-shipments/src/main/resources/application.yml`.
+  3. Usar `nombres.routing.capacityResultPrefix` en el listener.
+
+#### T13. Bugs menores `[ ]`
+
+- **a) Dashboard del BFF frágil.** En `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/BffGatewayService.kt:107-113`, `buildDashboard` llama a `fetchCatalogServices` y `fetchKpis`, que lanzan `ResponseStatusException` y tumban todo el dashboard. Envolver cada llamada (`runCatching`) y agregar un aviso a `notices` en vez de fallar (`fetchAuditSummary` ya lo hace). Test en `BffDownstreamTests.kt`.
+- **b) Propiedad de Kafka.** En `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/eventos/EnvioEventPublisher.kt:19`, `@Value("\${app.kafka.topics.audit.timeline:audit.timeline}")` debe ser `@Value("\${app.kafka.topics.envios-events:audit.timeline}")`, que es la clave real del yml.
+- **c) `/actuator/prometheus` público.**
+  - `ms-rutaexpress-shipments/.../configuracion/SeguridadConfig.kt:56-58` y `ms-rutaexpress-bff/.../config/SecurityConfig.kt:60-62`.
+  - Sacar prometheus de `permitAll` y exigir `hasRole("ADMIN")`, como hacen notify y mq-admin.
+  - Agregar tests con 401 y 403.
+- **d) Tailwind.** Ejecutar `npm ci && npm run build` en `frontend/` y corregir las reglas CSS descartadas que reporte el build (11 según el análisis anterior; no se volvió a verificar).
+- **e) nginx.** `frontend/nginx.conf` reenvía `/api/` a `http://bff:8080` y se salta el API Gateway. Documentar que es solo para desarrollo local, o apuntarlo al dominio del Gateway en despliegue.
+
+### Opcional
+
+#### T14. Pantalla de administración de RabbitMQ en el frontend (CÓDIGO) `[ ]`
+
+- No lo exigen los documentos: basta con la API REST y el Management UI. Pero mejora la demo.
+- **Archivos:**
+  - `frontend/src/app/core/bff.service.ts`: agregar `mqMetrics()`, `crearCola()`, `eliminarCola()`, `crearExchange()`, `eliminarExchange()`, `crearBinding()` y `eliminarBinding()` contra `/api/bff/admin/mq/...` (requiere T4).
+  - `frontend/src/app/pages/dashboard/dashboard.page.ts` (o una página nueva solo para Admin), con formularios que muestren el `detail` de los errores 400 y 409.
+- Mantener el patrón de interceptor y MSAL existente.
+
+### Preparación de la demo (sin código)
+
+#### T15. Checklist de demo `[ ]`
+
+- **Resiliencia:** todas las colas son classic con líder en `rabbit1` y no se replican. **Apagar `rabbit2`**, no `rabbit1`. Si se apaga `rabbit1`, el clúster sigue vivo gracias a `autoheal`, pero las colas quedan no disponibles. Saber explicarlo; las colas quorum necesitarían 3 nodos para tolerar una caída.
+- **Mensajes en la DLQ:** los listeners de DLQ hacen ACK de inmediato, así que el Management UI siempre muestra 0. Para enseñar la métrica, arrancar con `RABBIT_DLQ_CONSUMER_ENABLED=false`, o mostrar los logs y los contadores `rutaexpress.{shipments,catalog,notify}.dlq.messages`.
+- **Eliminar:** borrar una cola del núcleo da 409 sin `force=true`. Para la demo, crear `q.demo`, enlazarla y después eliminarla.
+- **Error no recuperable en vivo (R9):** `POST /api/mq-admin/exchanges/ex.rutaexpress.events/messages` con `{"routingKey":"notification.email.send","body":"{esto no es json"}`. Notify hace NACK, el mensaje va a `q.rutaexpress.notification.dlq` y aparece el log `Mensaje no entregado...`.
+- **Management UI en EC2:** los puertos están ligados a `127.0.0.1` (`infra/mq/compose.yml`). Usar `ssh -i <llave.pem> -L 15672:localhost:15672 <usuario>@<ip>`, o abrir el puerto en el Security Group solo para tu IP.
+- **Estado del clúster (R7):** `docker compose -p rutaexpress-mq -f infra/mq/compose.yml exec rabbit1 rabbitmqctl cluster_status`.
+
+---
+
+## 8. Qué falta, por servicio
+
+| Servicio | ¿Completo para la EP2? | Archivos pendientes | Tareas |
+|---|---|---|---|
+| `ms-rutaexpress-bff` | ❌ **falta código** | `controller/BrokerAdminController.kt`, `controller/BrokerAdminSecurityTests.kt`, `service/BffGatewayService.kt`, `config/SecurityConfig.kt` | **T4** (obligatoria), T13a, T13c |
+| `infra/apps` | ❌ **falta configuración** | `compose.yml`, `.env.example` | **T1, T2, T3** |
+| `infra` (README) | ⚠️ | `infra/README.md` | T1, T6 |
+| `deploy-aws.bat` (fuera del repo) | ❌ | `C:\Users\pv-alumno\Downloads\deploy-aws.bat` (líneas 618, 652 y 663) | T1, T3 |
+| `ms-rutaexpress-shipments` | ✅ (mejoras opcionales) | `servicio/EnvioServicio.kt`, `mensajeria/AuditoriaListener.kt`, `configuracion/RabbitNombres.kt`, `application.yml`, `eventos/EnvioEventPublisher.kt`, `configuracion/SeguridadConfig.kt`, `README.md` | T6, T10, T12, T13b, T13c |
+| `ms-rutaexpress-catalog` | ✅ (mejoras opcionales) | `messaging/CapacidadComandoProcesador.kt`, `model/repository/RegistroComandoCapacidadRepository.kt`, `viewmodel/service/CatalogViewModelService.kt`, `README.md` | T6, T10, T11 |
+| `ms-rutaexpress-notify` | ✅ | `README.md` | T6 |
+| `ms-rutaexpress-mq-admin` | ✅ | `README.md` | T6 (+ T2 en el compose) |
+| `ms-rutaexpress-kafka-admin` | ⚠️ | `.gitignore` (crear) | T7 |
+| `frontend` | ✅ (opcional) | `core/bff.service.ts`, `pages/dashboard/*`, `nginx.conf`, estilos | T13d, T13e, T14 |
+| `ms-rutaexpress-audit`, `ms-rutaexpress-report` | ✅ (fuera del alcance de RabbitMQ) | — | — |
+| Repos, Git y AWS | ❌ (acción del usuario) | — | T5, T8, T9 |
+
+**Orden sugerido:** T1 → T2 → T3 → T4 → T6 → T7 → (usuario) T8 → T5 → T9 → T15 → T10 → T11 → T12 → T13 → T14.
+
+---
+
+## 9. Reglas para el agente
+
+1. **No cambiar los nombres de la topología** (sección 3). Si fuera inevitable, cambiarlos en los 4 servicios: los `application.yml` o `.properties` **y** los valores por defecto de cada `RabbitNombres.kt`, más `RabbitTopology.kt`.
+2. **No escribir nombres de colas, exchanges ni routing keys a mano** en servicios o listeners: leerlos de `RabbitNombres`.
+3. **Respetar las convenciones del código existente:**
+   - Kotlin con identificadores en español en shipments, catalog y mq-admin.
+   - Comentarios KDoc breves en español.
+   - Errores de mq-admin con `ProblemDetail`.
+   - `tools.jackson.*` (Jackson 3), no `com.fasterxml`.
+   - Tests con `mockito-kotlin` y `@MockitoBean`.
+4. **Cada servicio es un proyecto Gradle independiente.** Probar dentro de su carpeta: `.\gradlew.bat test bootJar`. Si Maven Central responde 429, usar un init script fuera del repo con el mirror `https://maven-central.storage-download.googleapis.com/maven2/`.
+5. **No hacer commit, push, crear repos ni tocar AWS** sin la autorización explícita del usuario.
+6. **No editar `C:\Users\pv-alumno\Downloads\deploy-aws.bat` sin preguntar**: está fuera del repo.
+7. **No modificar `docs/`**: está excluido de los commits por convención del proyecto.
+8. Después de cada tarea, ejecutar los tests del servicio afectado, marcar el `[x]` en este documento y actualizar el README correspondiente si cambió el comportamiento.
+9. Mantener el ACK manual: el ACK solo va al final, cuando el procesamiento terminó, y todo rechazo es `basicNack(tag, false, false)`. No usar `requeue=true`, porque genera bucles.
+10. El clúster local del usuario (`rutaexpress-mq-rabbit1-1` y `rutaexpress-mq-rabbit2-1`) puede estar corriendo. No borrar sus volúmenes ni ejecutar `docker system prune`.
+
+---
+
+## 10. Cómo verificar
+
+```powershell
+# Tests por servicio (repetir en cada carpeta afectada)
+cd ms-rutaexpress-bff; .\gradlew.bat test bootJar
+
+# Integración de notify contra un RabbitMQ real (requiere Docker)
+cd ms-rutaexpress-notify; $env:RUN_DOCKER_TESTS="true"; .\gradlew.bat test --tests "*RabbitMqIntegrationTests*"
+
+# Validar los compose (desde la raíz)
+docker network create rutaexpress   # si no existe
+docker compose -f infra/mq/compose.yml config --quiet
+docker compose --env-file infra/apps/.env -f infra/apps/compose.yml config --quiet
+
+# Clúster (R7)
+docker compose -p rutaexpress-mq -f infra/mq/compose.yml exec rabbit1 rabbitmqctl cluster_status
+docker exec rutaexpress-mq-rabbit1-1 getent hosts rabbit1   # debe resolver
+
+# Administrador en local (SECURITY_ENABLED=false). R11, R12 y R13
+$h = @{ 'Content-Type' = 'application/json' }
+Invoke-RestMethod -Method Post   -Uri http://localhost:8086/api/mq-admin/queues    -Headers $h -Body '{"name":"q.demo","ttlMs":60000,"maxLength":100}'
+Invoke-RestMethod -Method Post   -Uri http://localhost:8086/api/mq-admin/exchanges -Headers $h -Body '{"name":"ex.demo","type":"topic"}'
+Invoke-RestMethod -Method Post   -Uri http://localhost:8086/api/mq-admin/bindings  -Headers $h -Body '{"source":"ex.demo","destination":"q.demo","routingKey":"demo.#"}'
+Invoke-RestMethod -Method Delete -Uri "http://localhost:8086/api/mq-admin/bindings?source=ex.demo&destination=q.demo&routingKey=demo.%23"
+Invoke-RestMethod -Method Delete -Uri http://localhost:8086/api/mq-admin/queues/q.demo
+Invoke-RestMethod -Method Delete -Uri http://localhost:8086/api/mq-admin/exchanges/ex.demo
+Invoke-WebRequest -Method Post   -Uri http://localhost:8086/api/mq-admin/queues    -Headers $h -Body '{"name":""}' -SkipHttpErrorCheck   # 400 con detail
+
+# Métricas
+Invoke-RestMethod http://localhost:8086/api/mq-admin/metrics
+
+# Mensaje no recuperable hacia la DLQ (R9)
+Invoke-RestMethod -Method Post -Uri http://localhost:8086/api/mq-admin/exchanges/ex.rutaexpress.events/messages -Headers $h -Body '{"routingKey":"notification.email.send","body":"{esto no es json"}'
+```
+
+> `-SkipHttpErrorCheck` requiere PowerShell 7. En Windows PowerShell 5.1, usar `try { ... } catch { $_.ErrorDetails.Message }`.
+
+---
+
+## 11. Guía para la defensa: concepto y dónde está en el código
+
+| Concepto | Respuesta corta | Dónde mostrarlo |
+|---|---|---|
+| direct vs topic | **direct:** la routing key exacta va a una cola. Se usa para **comandos** punto a punto (`capacity.reserve` → catalog). **topic:** patrones con `*` y `#`; un evento puede llegar a varias colas. Se usa para **eventos y notificaciones** (`shipment.#`, `catalog.#`, `notification.#`) | `RabbitTopology.kt` (mq-admin), `RabbitMqConfig.kt` de cada servicio |
+| DLQ | Aísla los mensajes que no se pueden procesar, evita bucles infinitos de reintento, conserva el mensaje para inspeccionarlo y no bloquea la cola principal. DLX `ex.rutaexpress.dlx` con una clave por cola | `DeadLetterRegistro.kt` (3 servicios) y el log con `x-death` |
+| ACK / NACK | ACK manual solo después de procesar; si el consumidor cae antes, el mensaje vuelve a entregarse (al menos una vez). Por eso hay **idempotencia**: Redis en notify, `tb_capacity_commands` en catalog y `tb_auditoria_envio` en shipments. NACK sin requeue manda a la DLQ | `NotificationConsumerViewModel.kt`, `CapacidadComandoListener.kt`, `AuditoriaListener.kt` |
+| Recuperable vs no recuperable | JSON inválido, datos fuera de rango o routing key desconocida → DLQ inmediata. SMTP, base de datos o broker caídos → 3 reintentos con backoff y luego DLQ | Método `reintentar` de cada listener |
+| Prefetch (QoS) | Hasta 10 mensajes sin ACK por consumidor. Evita que un consumidor acapare mensajes y sature la memoria, y reparte la carga entre instancias. Con reintentos bloqueantes, un prefetch alto retrasa los mensajes ya entregados | `setPrefetchCount(nombres.consumer.prefetch)`, `RABBIT_PREFETCH` |
+| Separar negocio y mensajería | La configuración (`RabbitMqConfig`, `RabbitNombres`) está separada; los listeners solo traducen el mensaje y delegan en servicios (`AuditoriaEnvioService`, `CapacidadComandoProcesador`, `EmailNotificationViewModel`). Se puede probar y cambiar cada parte por separado | Estructura de paquetes `configuracion/` y `mensajeria/` |
+| Publisher confirms | shipments espera la confirmación del broker (10 s) con `mandatory`; si no llega, revierte la transacción y responde 503. Un envío nunca cambia sin que su mensaje haya llegado | `MensajeriaPublicador.kt` |
+| Métricas | Colas activas, mensajes pendientes (`messages_ready`), sin ACK, consumidores y mensajes en DLQ. Si una DLQ crece, hay errores; si los pendientes crecen, faltan consumidores o hay que escalar | `GET /api/mq-admin/metrics`, gauge `rutaexpress.mq.dlq.depth`, Management UI |
+| Retención | Cola de trabajo: TTL de 24 h, 10000 mensajes y reject-publish (el productor recibe NACK y shipments responde 503). DLQ: 7 días, 10000 mensajes y drop-head. Un TTL vencido en una cola de trabajo pasa a la DLQ | `MqAdminService.aplicarRetencion`, `rabbitmqctl list_policies` |
+| Escalabilidad y resiliencia | El usuario recibe respuesta inmediata; catalog procesa a su ritmo; mensajes persistentes y colas durables; clúster con `autoheal` | Flujo ACEPTADO → `capacityStatus` PENDIENTE → RESERVADA |
+
+---
+
+## 12. No verificable desde el código (confirmar con el usuario)
+
+- El tenant de Entra ID con usuarios y roles (Admin, Despachador, Cliente y Auditor).
+- El API Gateway: autorizador JWT, CORS, rutas y si `bff.atlaa.app` es el Gateway.
+- La instancia EC2: RAM (alrededor de 8 GB), Security Groups y Docker.
+- Base de datos cloud: ¿Oracle en contenedor o un servicio gestionado? (decisión de T3).
+- bff, audit, report, kafka-admin y frontend no se volvieron a ejecutar en esta revisión porque su código no cambió.
