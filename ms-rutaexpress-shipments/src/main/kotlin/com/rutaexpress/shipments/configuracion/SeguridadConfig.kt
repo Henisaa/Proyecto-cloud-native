@@ -54,11 +54,11 @@ class SeguridadConfig(
                     ).permitAll()
                     .requestMatchers(
                         "/actuator/health",
-                        "/actuator/info",
-                        "/actuator/prometheus"
+                        "/actuator/info"
                     ).permitAll()
 
                 if (securityEnabled) {
+                    auth.requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
                     auth.requestMatchers("/api/shipments/**").authenticated()
                     auth.anyRequest().authenticated()
                 } else {

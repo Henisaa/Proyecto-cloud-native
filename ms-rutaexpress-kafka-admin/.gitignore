@@ -1,0 +1,30 @@
+# Gradle / Kotlin (Spring Boot)
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin/
+bin/
+out/
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# Logs, temporales y variables locales
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

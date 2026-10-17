@@ -16,7 +16,7 @@ class EnvioEventPublisher(
     private val kafkaTemplate: KafkaTemplate<String, Any>?,
     @Value("\${app.kafka.topics.shipments-events:shipments.events}")
     private val topicShipmentsEvents: String = "shipments.events",
-    @Value("\${app.kafka.topics.audit.timeline:audit.timeline}")
+    @Value("\${app.kafka.topics.envios-events:audit.timeline}")
     private val topicEnviosEvents: String = "audit.timeline",
     @Value("\${app.kafka.enabled:true}")
     private val kafkaEnabled: Boolean = true

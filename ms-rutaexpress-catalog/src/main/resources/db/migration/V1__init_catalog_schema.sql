@@ -20,7 +20,7 @@ CREATE TABLE catalog_services (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX idx_services_code ON catalog_services(code);
+-- El índice sobre code lo crea la restricción UNIQUE; un segundo índice sobre la misma columna falla en Oracle (ORA-01408).
 CREATE INDEX idx_services_status ON catalog_services(status);
 CREATE INDEX idx_services_category ON catalog_services(category);
 

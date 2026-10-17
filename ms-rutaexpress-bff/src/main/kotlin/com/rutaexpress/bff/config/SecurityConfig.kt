@@ -59,7 +59,6 @@ class SecurityConfig(
                     .requestMatchers(
                         "/actuator/health/**",
                         "/actuator/info/**",
-                        "/actuator/prometheus/**",
                         "/v3/api-docs/**",
                         "/swagger-ui/**",
                         "/swagger-ui.html"
@@ -68,6 +67,7 @@ class SecurityConfig(
                 if (securityEnabled) {
                     // Autorización granular por roles de negocio de Azure AD
                     auth
+                        .requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/report/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/audit/**").hasAnyRole("ADMIN", "AUDITOR")

@@ -21,7 +21,6 @@ app:
     enabled: ${SECURITY_ENABLED:false}
   kafka:
     enabled: false
-  rabbit:
-    enabled: false
+  # RabbitMQ queda activo también en local (requiere el clúster de infra/mq). Catálogo se integra con CATALOGO_ENABLED=true.
   catalogo:
-    enabled: false
+    enabled: ${CATALOGO_ENABLED:false}
