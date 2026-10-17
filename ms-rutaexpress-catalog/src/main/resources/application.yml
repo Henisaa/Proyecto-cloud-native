@@ -48,6 +48,16 @@ spring:
         jwt:
           issuer-uri: ${AZURE_AD_ISSUER_URI:https://login.microsoftonline.com/${AZURE_AD_TENANT_ID:bc307149-9a0a-45b8-9f7d-2dfc104f9a09}/v2.0}
 
+  # RabbitMQ: clúster rabbit1/rabbit2 (comandos de capacidad y resultados)
+  rabbitmq:
+    addresses: ${RABBITMQ_ADDRESSES:${RABBITMQ_HOST:localhost}:${RABBITMQ_PORT:5672}}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
   # Kafka Event Streaming
   kafka:
     enabled: ${KAFKA_ENABLED:true}
@@ -69,6 +79,34 @@ app:
   kafka:
     topics:
       catalog-events: ${KAFKA_TOPIC_CATALOG_EVENTS:catalog.events}
+
+# Topología RabbitMQ compartida por todos los microservicios (nombres centralizados)
+app.rabbit:
+  enabled: ${RABBIT_ENABLED:true}
+  exchanges:
+    command: ${RABBIT_EXCHANGE_COMMAND:ex.rutaexpress.cmd}
+    events: ${RABBIT_EXCHANGE_EVENTS:ex.rutaexpress.events}
+    dead-letter: ${RABBIT_EXCHANGE_DLX:ex.rutaexpress.dlx}
+  queues:
+    command:
+      name: q.rutaexpress.command
+      dlq: q.rutaexpress.command.dlq
+      dead-letter-key: command
+      bindings:
+        - capacity.reserve
+        - capacity.release
+  routing:
+    capacity-reserve: capacity.reserve
+    capacity-release: capacity.release
+    capacity-reserved: catalog.capacity.reserved
+    capacity-rejected: catalog.capacity.rejected
+    capacity-released: catalog.capacity.released
+  consumer:
+    prefetch: ${RABBIT_PREFETCH:10}
+    max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
+    initial-interval-ms: ${RABBIT_RETRY_INITIAL_MS:500}
+  dlq:
+    auto-startup: ${RABBIT_DLQ_CONSUMER_ENABLED:true}
 
 # Springdoc OpenAPI / Swagger UI
 springdoc:

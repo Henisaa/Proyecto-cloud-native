@@ -1,0 +1,43 @@
+package com.rutaexpress.catalog.messaging
+
+import com.rabbitmq.client.Channel
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import org.slf4j.LoggerFactory
+import org.springframework.amqp.core.Message
+import org.springframework.amqp.rabbit.annotation.RabbitListener
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Component
+
+/**
+ * Consumidor de la DLQ de comandos de capacidad: registra en logs cada comando no entregado, con su motivo
+ * (x-death), la cola de origen y el cuerpo. Se puede detener con RABBIT_DLQ_CONSUMER_ENABLED=false
+ * para dejar los mensajes visibles en el Management UI.
+ */
+@Component
+@ConditionalOnProperty(name = ["app.rabbit.enabled"], havingValue = "true", matchIfMissing = true)
+class DeadLetterRegistro(registry: MeterRegistry) {
+    private val log = LoggerFactory.getLogger(DeadLetterRegistro::class.java)
+    private val contador: Counter = Counter.builder("rutaexpress.catalog.dlq.messages")
+        .description("Comandos de capacidad que llegaron a la DLQ")
+        .register(registry)
+
+    @RabbitListener(
+        queues = ["\${app.rabbit.queues.command.dlq}"],
+        autoStartup = "\${app.rabbit.dlq.auto-startup:true}",
+    )
+    fun registrar(message: Message, channel: Channel) {
+        val propiedades = message.messageProperties
+        val muerte = (propiedades.headers["x-death"] as? List<*>)?.firstOrNull() as? Map<*, *>
+        contador.increment()
+        log.error(
+            "Mensaje no entregado: motivo={} colaOrigen={} routingKeyOriginal={} messageId={} cuerpo={}",
+            muerte?.get("reason") ?: "desconocido",
+            muerte?.get("queue") ?: "desconocida",
+            muerte?.get("routing-keys") ?: propiedades.receivedRoutingKey,
+            propiedades.messageId ?: "-",
+            String(message.body, Charsets.UTF_8).take(2000),
+        )
+        channel.basicAck(propiedades.deliveryTag, false)
+    }
+}

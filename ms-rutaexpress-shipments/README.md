@@ -2,7 +2,7 @@ ms-rutaexpress-shipments
 Gestión de envíos y estados
 
 Funcionamiento
-Persiste envíos en Oracle. La máquina de estados permite CREADO, ACEPTADO, EN_BODEGA, EN_RUTA, ENTREGADO y CANCELADO, respetando sus transiciones. Aceptar reserva capacidad mediante catalog; cancelar la libera. Publica shipments.events y audit.timeline, con eventId compartido, identidad del usuario y fecha original. El timeline se publica con eventId como clave para conservar cada evento bajo compactación. Los comandos email.send, warehouse.ticket y label.gen usan RabbitMQ, JSON persistente y confirmación del broker. El destinatario recibe emails y la bodega recibe PDFs mediante notify.
+Persiste envíos en Oracle. La máquina de estados permite CREADO, ACEPTADO, EN_BODEGA, EN_RUTA, ENTREGADO y CANCELADO, respetando sus transiciones. Al aceptar publica `capacity.reserve` en `ex.rutaexpress.cmd`; al cancelar publica `capacity.release`. La reserva es asíncrona y el estado se actualiza con el evento de resultado de catalog. `capacityStatus` puede ser NO_APLICA, PENDIENTE, RESERVADA, RECHAZADA o LIBERADA. Publica `shipment.status.<ESTADO>` y los eventos del timeline Kafka `shipments.events` y `audit.timeline`, con eventId compartido, identidad del usuario y fecha original. Las notificaciones usan `notification.email.send`, `notification.warehouse.ticket` y `notification.label.generate` en `ex.rutaexpress.events`. Consume `q.rutaexpress.audit` y su DLQ. Las publicaciones RabbitMQ esperan confirmación; si el broker no confirma, la API devuelve 503.
 La integración con brokers y capacidad no es una transacción distribuida ni un outbox; una caída entre la escritura de Oracle y el envío requiere reconciliación. No se promete entrega exactamente una vez.
 
 Requisitos
