@@ -34,8 +34,19 @@ class CapacidadComandoProcesador(
             return it.aResultado(comando.serviceId)
         }
 
+        val reservaActiva = if (comando.tipo == TipoComando.RESERVAR) reservaActiva(comando.shipmentId) else null
         val resultado = when (comando.tipo) {
-            TipoComando.RESERVAR -> reservar(comando)
+            TipoComando.RESERVAR -> reservaActiva?.let {
+                ResultadoCapacidad(
+                    commandId = comando.commandId,
+                    shipmentId = comando.shipmentId,
+                    serviceId = comando.serviceId,
+                    estado = EstadoCapacidad.RESERVADA,
+                    vehicleType = it.vehicleType,
+                    capacidadRestante = it.capacidadRestante,
+                    detalle = "Capacidad ya reservada para este envío",
+                )
+            } ?: reservar(comando)
             TipoComando.LIBERAR -> liberar(comando)
         }
         registros.save(
@@ -53,6 +64,15 @@ class CapacidadComandoProcesador(
         invalidarCache(comando.serviceId)
         log.info("Comando {} ({}) del envío {}: {}", comando.commandId, comando.tipo, comando.shipmentId, resultado.estado)
         return resultado
+    }
+
+    /** Un envío conserva su reserva hasta que exista una liberación posterior. */
+    private fun reservaActiva(shipmentId: String): RegistroComandoCapacidad? {
+        val historial = registros.findByShipmentIdOrderByProcesadoEnAsc(shipmentId)
+        val ultimaReserva = historial.lastOrNull { it.tipo == TipoComando.RESERVAR.name && it.resultado == EstadoCapacidad.RESERVADA.name }
+            ?: return null
+        val ultimaLiberacion = historial.lastOrNull { it.tipo == TipoComando.LIBERAR.name }
+        return ultimaReserva.takeIf { ultimaLiberacion == null || it.procesadoEn.isAfter(ultimaLiberacion.procesadoEn) }
     }
 
     private fun reservar(comando: ComandoCapacidad): ResultadoCapacidad {

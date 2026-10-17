@@ -91,6 +91,7 @@ app:
       capacity-reserved: catalog.capacity.reserved
       capacity-rejected: catalog.capacity.rejected
       capacity-released: catalog.capacity.released
+      capacity-result-prefix: "catalog.capacity."
       shipment-status-prefix: "shipment.status."
       notification-email: notification.email.send
       notification-ticket: notification.warehouse.ticket

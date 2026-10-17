@@ -42,6 +42,7 @@ data class RabbitNombres(
         val capacityReserved: String = "catalog.capacity.reserved",
         val capacityRejected: String = "catalog.capacity.rejected",
         val capacityReleased: String = "catalog.capacity.released",
+        val capacityResultPrefix: String = "catalog.capacity.",
         val shipmentStatusPrefix: String = "shipment.status.",
         val notificationEmail: String = "notification.email.send",
         val notificationTicket: String = "notification.warehouse.ticket",

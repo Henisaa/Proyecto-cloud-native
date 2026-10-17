@@ -119,15 +119,16 @@ class EnvioServicio(
         val guardado = repositorio.saveAndFlush(envio)
         val actor = actorActual()
 
-        if (nuevoEstado == EstadoEnvio.ACEPTADO && integrado) {
-            mensajeria.solicitarReserva(guardado)
-        }
         if (nuevoEstado == EstadoEnvio.CANCELADO && integrado && guardado.capacityStatus == EstadoCapacidad.RESERVADA) {
             mensajeria.solicitarLiberacion(guardado)
         }
         mensajeria.publicarEstado(guardado, actor)
         eventPublisher.publicarCambioEstado(guardado, actor)
         notificarSegunEstado(guardado)
+        if (nuevoEstado == EstadoEnvio.ACEPTADO && integrado) {
+            // Publicar la reserva al final reduce el riesgo de dejar cupo reservado si falla otra publicación.
+            mensajeria.solicitarReserva(guardado)
+        }
 
         return EnvioResponse.desde(guardado)
     }

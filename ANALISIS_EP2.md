@@ -2,8 +2,9 @@
 
 > **Para el agente de IA que lea esto.** Este documento resume qué exige la EP2, qué estaba mal antes, qué se arregló, qué sigue faltando y **qué archivos de qué servicio hay que tocar**. Las tareas están en la **sección 7**, ordenadas por prioridad, con archivos, pasos y criterio de aceptación. Antes de programar, lee las secciones 0, 7 y 9.
 >
-> - Fecha del análisis: 2026-10-15
-> - Rama: `main`. **Todos los cambios de la iteración actual están sin commit** (31 archivos modificados, 1 borrado y 33 nuevos sin seguimiento).
+> - Última actualización: 2026-10-17.
+> - Rama de trabajo: `main`. El árbol estaba limpio antes de aplicar este plan; los cambios de esta iteración siguen sin commit.
+> - Revisión de ramas (2026-10-17): los cambios no están todavía en `origin/main` ni en las ramas remotas `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin`, `ms-rutaexpress-kafka-admin` y `testFrontend`. Sus HEAD difieren de `main`; se requiere integrar los cambios en cada rama.
 > - Documentos de la evaluación: `C:\Users\pv-alumno\Downloads\EP2_Guia_Evaluacion.docx` y `C:\Users\pv-alumno\Downloads\Explicacion_de_Evaluacion_2.docx`
 > - Script de despliegue (**fuera del repo**): `C:\Users\pv-alumno\Downloads\deploy-aws.bat`
 
@@ -11,30 +12,25 @@
 
 ## 0. Resumen rápido
 
-**Estado general:** el **código** de la EP2 está casi completo. Cumple IL 2.1, IL 2.2 e IL 2.3 y la topología coincide con el diagrama de la guía. **Lo que falta es sobre todo despliegue y entrega.** Hoy la demo en la nube **no funcionaría** por cuatro motivos:
+**Estado general:** los cambios de configuración, código y documentación de este plan ya están aplicados en el árbol local de `main`. La revisión confirmó que aún no están guardados en commits ni propagados a las ramas remotas. La integración entre ramas está pendiente de poder escribir en el directorio `.git`. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway, publicar cambios y ejecutar la infraestructura.
 
-1. El compose de las apps apunta a `rabbitmq-1`/`rabbitmq-2`, pero los nodos ahora se llaman `rabbit1`/`rabbit2` (tarea T1).
-2. mq-admin lee `RABBITMQ_MANAGEMENT_URLS`, y el compose pasa la variable antigua `RABBITMQ_MANAGEMENT_URL` (tarea T2).
-3. El perfil `local` (H2) se combina con una URL de Oracle y 4 servicios no arrancan (bug B1, tarea T3).
-4. Nada está commiteado, y `deploy-aws.bat` despliega `git archive HEAD` (tarea T8).
+**Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas enumeradas arriba. Ninguna contiene los cambios locales de esta iteración. El árbol tiene divergencias respecto de esos HEAD, por lo que hay que integrar mediante merge y verificar que cada rama conserve sus cambios propios. No se ha hecho push.
 
-**Lo que falta CODIFICAR (código fuente):**
+**Pendientes de entrega o validación:**
 
 | Prioridad | Servicio | Qué falta | Tarea |
 |---|---|---|---|
-| **P0 obligatorio** | `ms-rutaexpress-bff` | Reenvío (proxy) de POST/DELETE de colas, exchanges y bindings hacia mq-admin, solo para Admin | T4 |
-| P0 (config) | `infra/apps` | Nombres de host, variable de gestión y perfil/BD | T1, T2, T3 |
-| P1 (docs) | todos | READMEs que describen la topología antigua | T6 |
-| P1 (config) | `ms-rutaexpress-kafka-admin` | Falta el `.gitignore` | T7 |
-| P2 (mejora) | `ms-rutaexpress-shipments` + `ms-rutaexpress-catalog` | Lo que queda del bug B4: reserva huérfana o doble | T10 |
-| P2 (mejora) | `ms-rutaexpress-catalog` | Lo que queda del bug B5: el endpoint REST de reserva no usa bloqueo | T11 |
-| P3 (limpieza) | `ms-rutaexpress-shipments` | Texto fijo `"catalog.capacity."` en el listener | T12 |
-| P3 (menores) | bff, shipments, frontend | Dashboard frágil, propiedad de Kafka mal nombrada, prometheus público, Tailwind, nginx | T13 |
-| Opcional | `frontend` | Pantalla de administración de RabbitMQ | T14 |
+| **P0 obligatorio** | `ms-rutaexpress-bff` | Proxy de administración completado; ejecución de tests pendiente | T4 |
+| P0 (config) | `infra/apps` | Compose corregido; script de despliegue externo aún usa valores antiguos | T1, T2, T3 |
+| P1 (docs) | todos | READMEs de topología y despliegue actualizados | T6 |
+| P1 (config) | `ms-rutaexpress-kafka-admin` | `.gitignore` agregado | T7 |
+| P2 (mejora) | shipments + catalog | Orden de publicación e idempotencia por envío implementados; tests pendientes de ejecución | T10 |
+| P2 (mejora) | `ms-rutaexpress-catalog` | Reserva y liberación REST usan bloqueo pesimista | T11 |
+| P3 (limpieza) | `ms-rutaexpress-shipments` | Routing key de resultado centralizada en `RabbitNombres` | T12 |
+| P3 (menores) | bff, shipments, frontend | Dashboard tolerante a fallos, Kafka config y métricas protegidas; Tailwind pendiente de build | T13 |
+| Opcional | `frontend` | Vista Admin de RabbitMQ agregada | T14 |
 
-**Tareas que NO son código** (requieren al usuario o la consola de AWS): T5 (API Gateway), T8 (commit y push), T9 (repos separados) y T15 (preparar la demo).
-
-**Avance:** el checklist de la guía estaba al **≈47 % (8 de 17)** antes y está al **≈79 % (13,5 de 17)** ahora. Del listado de pendientes del análisis anterior se resolvió **≈65 % ponderado** (detalle en la sección 6.8).
+**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T8 (integrar y publicar los cambios en las ramas; autorizado por el usuario, pendiente de permiso de escritura sobre `.git`), T9 (repos separados) y T15 (preparar y ejecutar la demo).
 
 ---
 
@@ -47,7 +43,7 @@
 | Servicio | Carpeta | Puerto | Rol en la EP2 | ¿Cambió en esta iteración? |
 |---|---|---|---|---|
 | Frontend | `frontend/` | 4200 / 80 | Angular + MSAL, login con Entra ID | No |
-| BFF | `ms-rutaexpress-bff/` | 8080 | Valida el JWT, autoriza por rol y reenvía a los servicios internos | No (**falta el proxy admin**) |
+| BFF | `ms-rutaexpress-bff/` | 8080 | Valida el JWT, autoriza por rol y reenvía a los servicios internos | Sí (incluye proxy admin) |
 | Catálogo | `ms-rutaexpress-catalog/` | 8081 | Consume comandos de capacidad y publica el resultado | Sí |
 | Notificaciones | `ms-rutaexpress-notify/` | 8082 | Consume solicitudes de notificación (email, ticket, etiqueta) | Sí |
 | Auditoría | `ms-rutaexpress-audit/` | 8083 | Timeline por Kafka (no es parte de RabbitMQ) | No |
@@ -334,7 +330,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - Los 3 exchanges, las 6 colas, los 8 bindings y las 2 políticas coinciden exactamente con la sección 3. ✅
 - `GET /api/mq-admin/metrics`, `/queues`, `/exchanges` y `/bindings` responden 200 con los datos esperados. ✅
 - **Las 6 colas tienen su líder en `rabbit1`.** Son colas classic y no se replican (ver T15).
-- **Resolución DNS dentro de la red `rutaexpress`:** `rabbit1` y `rabbit2` resuelven; **`rabbitmq-1` y `rabbitmq-2` NO resuelven** (confirma N1).
+- **Resolución DNS dentro de la red `rutaexpress`:** `rabbit1` y `rabbit2` resuelven; los nombres anteriores de host no resuelven (confirma N1).
 
 ### 6.3 Cumplimiento actual por requisito
 
@@ -381,8 +377,8 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - **N1 (bloqueante): renombrado incompleto del clúster.**
   - `infra/mq/compose.yml` ahora define `rabbit1` y `rabbit2`, pero estas referencias siguen con los nombres antiguos:
     - `infra/apps/compose.yml`, en los 8 servicios (líneas 13-14, 39-40, 68-69, 98-99, 127-128, 156-157, 186-187 y 206-207).
-    - `infra/README.md:9` (`exec rabbitmq-1`).
-    - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (`exec -T rabbitmq-1`).
+    - `infra/README.md:9` (comando de estado del clúster con el hostname antiguo).
+    - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (comando de estado con el hostname antiguo).
   - Efecto: en Docker o EC2 ningún servicio conecta a RabbitMQ. shipments respondería 503 a cada creación o cambio de estado y los listeners nunca se conectarían.
 - **N2 (bloqueante para el admin): variable renombrada.**
   - mq-admin lee `app.mq.management-urls=${RABBITMQ_MANAGEMENT_URLS:...}` (`application.properties:37`), pero el compose pasa `RABBITMQ_MANAGEMENT_URL` (`infra/apps/compose.yml:190`).
@@ -458,7 +454,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### P0: bloqueantes para la demo en la nube
 
-#### T1. Corregir los nombres de host de RabbitMQ (`rabbitmq-1` → `rabbit1`) `[ ]`
+#### T1. Corregir los nombres de host de RabbitMQ `[ ]` (compose del repo completado; falta el script externo)
 
 - **Servicio:** infra (configuración, no código Kotlin).
 - **Archivos:**
@@ -466,23 +462,21 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - `infra/README.md:9`.
   - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (**fuera del repo: pedir permiso al usuario antes de editarlo**).
 - **Pasos:**
-  1. En cada servicio de `infra/apps/compose.yml`:
-     - `"RABBITMQ_HOST": "rabbitmq-1"` → `"RABBITMQ_HOST": "rabbit1"`
-     - `"RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672"` → `"RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672"`
-  2. `infra/README.md:9`: `exec rabbitmq-1 rabbitmqctl cluster_status` → `exec rabbit1 rabbitmqctl cluster_status`.
-  3. `deploy-aws.bat:652`: `dc_mq exec -T rabbitmq-1 rabbitmqctl cluster_status` → `dc_mq exec -T rabbit1 rabbitmqctl cluster_status`.
+  1. En los ocho servicios de `infra/apps/compose.yml`, usar `rabbit1` y `rabbit2` en `RABBITMQ_HOST` y `RABBITMQ_ADDRESSES`. **Aplicado.**
+  2. En `infra/README.md`, consultar el clúster con `rabbit1`. **Aplicado.**
+  3. Actualizar el comando equivalente en `deploy-aws.bat:652`. **Pendiente:** está fuera del repositorio y no se modificó.
 - **Aceptación:**
-  - `grep -rn "rabbitmq-1\|rabbitmq-2" --exclude-dir=docs --exclude-dir=node_modules .` no devuelve nada.
+  - No quedan referencias a los hostnames anteriores en la configuración activa del repositorio.
   - `docker compose -f infra/apps/compose.yml config --quiet` termina sin errores (requiere `docker network create rutaexpress`).
 
-#### T2. Variable de gestión de mq-admin en el compose `[ ]`
+#### T2. Variable de gestión de mq-admin en el compose `[x]`
 
 - **Servicio:** infra / mq-admin.
 - **Archivo:** `infra/apps/compose.yml:190` (servicio `mq-admin`).
-- **Paso:** reemplazar `"RABBITMQ_MANAGEMENT_URL": "http://rabbitmq-1:15672"` por `"RABBITMQ_MANAGEMENT_URLS": "http://rabbit1:15672,http://rabbit2:15672"`.
+- **Paso:** reemplazar la variable singular antigua y su host por `RABBITMQ_MANAGEMENT_URLS=http://rabbit1:15672,http://rabbit2:15672`.
 - **Aceptación:** con todo levantado en Docker, `GET http://localhost:8086/api/mq-admin/cluster` devuelve los 2 nodos y `POST /api/mq-admin/topology` responde 200.
 
-#### T3. Bug B1: perfil `local` (H2) mezclado con la URL de Oracle; Oracle no arranca `[ ]`
+#### T3. Bug B1: perfil `local` (H2) mezclado con la URL de Oracle; Oracle no arranca `[ ]` (compose del repo completado; falta el script externo)
 
 - **Servicio:** infra; afecta a catalog, audit, report y shipments.
 - **Archivos:**
@@ -491,7 +485,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - `infra/README.md` (sección Oracle).
   - `deploy-aws.bat:618` y `:663` (fuera del repo).
 - **Causa:** `application-local.yml` fija `driver-class-name: org.h2.Driver`, mientras que la variable de entorno `SPRING_DATASOURCE_URL` (Oracle) tiene prioridad sobre la URL H2 del perfil. Resultado: `Driver org.h2.Driver claims to not accept jdbcUrl`. Además, Oracle está bajo el perfil de compose `oracle` y el deploy nunca lo levanta.
-- **Decisión del usuario** (preguntar): ¿base de datos Oracle en contenedor dentro de la EC2, o una base Oracle **cloud** externa? La guía y el diagrama piden "Base de datos Cloud" en el flujo de extremo a extremo; **H2 no sirve para la demo**.
+- **Decisión aplicada en el compose:** Oracle Free en contenedor, con `DB_URL` configurable para el servicio JDBC. H2 sigue reservado al perfil local de ejecución con Gradle.
 - **Pasos (opción recomendada: contenedor Oracle en EC2, con URL configurable):**
   1. En los 4 servicios con base de datos: `"SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}"`. No existe `application-prod.yml`; el `application.yml` base ya usa Oracle y Flyway.
   2. Hacer configurable la URL: `"SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}"`.
@@ -505,11 +499,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - Las migraciones `V1` y `V2` de catalog y shipments usan sintaxis Oracle; no se probaron contra Oracle real en los tests (que usan H2 con Flyway desactivado). Vigila el primer arranque.
 - **Aceptación:** `docker compose ... up` deja catalog, audit, report y shipments con `/actuator/health` en `UP` sobre Oracle, y Flyway aplica V1 y V2 sin errores.
 
-#### T4. BFF: reenviar las operaciones de administración de RabbitMQ (CÓDIGO, obligatorio) `[ ]`
+#### T4. BFF: reenviar las operaciones de administración de RabbitMQ (CÓDIGO, obligatorio) `[x]` (tests agregados; ejecución pendiente)
 
 - **Servicio:** `ms-rutaexpress-bff`.
 - **Archivos:**
-  - `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/controller/BrokerAdminController.kt` (archivo principal).
+  - `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/controller/BrokerAdminController.kt` (rutas).
+  - `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/MqAdminCliente.kt` (proxy y propagación de respuestas).
   - `ms-rutaexpress-bff/src/test/kotlin/com/rutaexpress/bff/controller/BrokerAdminSecurityTests.kt` (extender).
   - Opcional: un nuevo `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/MqAdminCliente.kt`, para poder mockearlo en los tests.
 - **Problema:**
@@ -556,12 +551,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### P1: entrega
 
-#### T6. Actualizar los READMEs `[ ]`
+#### T6. Actualizar los READMEs `[x]`
 
 | Archivo | Qué cambiar |
 |---|---|
 | `README.md` (raíz), sección "Mensajería" (~línea 33) | Reemplazar `cmd.direct`, `cmd.topic` y `cmd.dead.dlx` por la topología de la sección 3; explicar direct (comandos) y topic (eventos y notificaciones); ACK manual, DLQ y retención |
-| `README.md` (raíz), "Validación y limpieza" | Actualizar los conteos: 122 tests de backend (shipments 19, catalog 25, notify 23 con 3 de Docker, mq-admin 26, bff 12, audit 8, report 5, kafka-admin 4) y 3 de frontend |
+| `README.md` (raíz), "Validación y limpieza" | Inventariar 136 métodos de prueba backend (shipments 23, catalog 26, notify 24 con 3 de Docker, mq-admin 26, bff 20, audit 8, report 5, kafka-admin 4) y 3 de frontend |
 | `ms-rutaexpress-mq-admin/README.md` | Reescribir "Funcionamiento" (topología nueva y protección con `force`); **borrar** "No existe un endpoint para purgar o borrar colas"; listar todos los endpoints con cuerpos de ejemplo y códigos de error; cambiar `RABBITMQ_MANAGEMENT_URL` por `RABBITMQ_MANAGEMENT_URLS` |
 | `ms-rutaexpress-notify/README.md:5-6` | Cola `q.rutaexpress.notification` enlazada a `ex.rutaexpress.events` con `notification.#`; las 3 routing keys; errores no recuperables a la DLQ sin reintentos y recuperables con 3 reintentos; `DeadLetterRegistro`; `RABBIT_PREFETCH` y `RABBIT_DLQ_CONSUMER_ENABLED` |
 | `ms-rutaexpress-shipments/README.md:5` | La reserva ahora es asíncrona (`capacity.reserve`/`release` por `ex.rutaexpress.cmd`); eventos `shipment.status.<ESTADO>`; notificaciones `notification.*`; consume `q.rutaexpress.audit` y su DLQ; campo `capacityStatus` (NO_APLICA, PENDIENTE, RESERVADA, RECHAZADA, LIBERADA); 503 si el broker no confirma |
@@ -569,12 +564,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | `infra/README.md` | `rabbit1`, `RABBITMQ_MANAGEMENT_URLS`, perfil `prod` con Oracle y `DB_URL` (después de T1-T3) |
 | `docs/dependencias-microservicios.md:140` | **No tocar**: `docs/` está excluido de los commits según el README de la raíz, salvo que el usuario lo pida |
 
-#### T7. `.gitignore` faltante `[ ]`
+#### T7. `.gitignore` faltante `[x]`
 
 - Crear `ms-rutaexpress-kafka-admin/.gitignore` copiando `ms-rutaexpress-mq-admin/.gitignore` (Gradle/Kotlin, IDEs, `.env`).
 - Al separar los repos (T9), cada repo backend lleva su `.gitignore` de Gradle y el frontend el suyo de Angular (`frontend/.gitignore` ya existe).
 
-#### T8. Commit y push `[ ]` (**solo con autorización explícita del usuario**)
+#### T8. Integración de los cambios en las ramas y publicación `[ ]` (autorizado por el usuario; pendiente de acceso de escritura a `.git`)
 
 - Hay 31 archivos modificados, 1 borrado y 33 nuevos sin seguimiento.
 - Sin commit, ni GitHub ni `deploy-aws.bat` (que hace `git archive HEAD` y `git pull --ff-only origin main`) llevan los cambios.
@@ -593,7 +588,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### P2: mejoras de robustez (no bloquean la demo)
 
-#### T10. Lo que queda del bug B4: reserva huérfana o doble (CÓDIGO) `[ ]`
+#### T10. Lo que queda del bug B4: reserva huérfana o doble (CÓDIGO) `[x]` (tests agregados; ejecución pendiente)
 
 - **Servicios:** `ms-rutaexpress-shipments` y `ms-rutaexpress-catalog`.
 - **Archivos:**
@@ -617,7 +612,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - shipments: verificar con `inOrder` que la reserva se publica al final.
 - **Aceptación:** los tests de ambos servicios pasan y el cupo no se descuenta dos veces para el mismo envío.
 
-#### T11. Lo que queda del bug B5: el endpoint REST de reserva sin bloqueo (CÓDIGO) `[ ]`
+#### T11. Lo que queda del bug B5: el endpoint REST de reserva sin bloqueo (CÓDIGO) `[x]`
 
 - **Servicio:** `ms-rutaexpress-catalog`.
 - **Archivo:** `ms-rutaexpress-catalog/src/main/kotlin/com/rutaexpress/catalog/viewmodel/service/CatalogViewModelService.kt`, en `reserveCapacity` (~línea 297) y `releaseCapacity` (~línea 346).
@@ -627,7 +622,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### P3: limpieza y bugs menores (CÓDIGO)
 
-#### T12. Texto fijo de routing key en shipments `[ ]`
+#### T12. Texto fijo de routing key en shipments `[x]`
 
 - **Archivo:** `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/mensajeria/AuditoriaListener.kt:40`, donde dice `clave.startsWith("catalog.capacity.")`.
 - **Pasos:**
@@ -635,7 +630,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   2. Agregar `capacity-result-prefix: "catalog.capacity."` en `app.rabbit.routing` de `ms-rutaexpress-shipments/src/main/resources/application.yml`.
   3. Usar `nombres.routing.capacityResultPrefix` en el listener.
 
-#### T13. Bugs menores `[ ]`
+#### T13. Bugs menores `[ ]` (a, b, c y e completados; d pendiente de build)
 
 - **a) Dashboard del BFF frágil.** En `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/BffGatewayService.kt:107-113`, `buildDashboard` llama a `fetchCatalogServices` y `fetchKpis`, que lanzan `ResponseStatusException` y tumban todo el dashboard. Envolver cada llamada (`runCatching`) y agregar un aviso a `notices` en vez de fallar (`fetchAuditSummary` ya lo hace). Test en `BffDownstreamTests.kt`.
 - **b) Propiedad de Kafka.** En `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/eventos/EnvioEventPublisher.kt:19`, `@Value("\${app.kafka.topics.audit.timeline:audit.timeline}")` debe ser `@Value("\${app.kafka.topics.envios-events:audit.timeline}")`, que es la clave real del yml.
@@ -648,12 +643,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### Opcional
 
-#### T14. Pantalla de administración de RabbitMQ en el frontend (CÓDIGO) `[ ]`
+#### T14. Pantalla de administración de RabbitMQ en el frontend (CÓDIGO) `[x]`
 
 - No lo exigen los documentos: basta con la API REST y el Management UI. Pero mejora la demo.
 - **Archivos:**
   - `frontend/src/app/core/bff.service.ts`: agregar `mqMetrics()`, `crearCola()`, `eliminarCola()`, `crearExchange()`, `eliminarExchange()`, `crearBinding()` y `eliminarBinding()` contra `/api/bff/admin/mq/...` (requiere T4).
-  - `frontend/src/app/pages/dashboard/dashboard.page.ts` (o una página nueva solo para Admin), con formularios que muestren el `detail` de los errores 400 y 409.
+  - `frontend/src/app/pages/admin-mq/admin-mq.page.ts`, con formularios que muestran el `detail` de los errores 400 y 409.
 - Mantener el patrón de interceptor y MSAL existente.
 
 ### Preparación de la demo (sin código)
@@ -669,24 +664,24 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ---
 
-## 8. Qué falta, por servicio
+## 8. Estado por servicio después de aplicar el plan
 
 | Servicio | ¿Completo para la EP2? | Archivos pendientes | Tareas |
 |---|---|---|---|
-| `ms-rutaexpress-bff` | ❌ **falta código** | `controller/BrokerAdminController.kt`, `controller/BrokerAdminSecurityTests.kt`, `service/BffGatewayService.kt`, `config/SecurityConfig.kt` | **T4** (obligatoria), T13a, T13c |
-| `infra/apps` | ❌ **falta configuración** | `compose.yml`, `.env.example` | **T1, T2, T3** |
-| `infra` (README) | ⚠️ | `infra/README.md` | T1, T6 |
-| `deploy-aws.bat` (fuera del repo) | ❌ | `C:\Users\pv-alumno\Downloads\deploy-aws.bat` (líneas 618, 652 y 663) | T1, T3 |
-| `ms-rutaexpress-shipments` | ✅ (mejoras opcionales) | `servicio/EnvioServicio.kt`, `mensajeria/AuditoriaListener.kt`, `configuracion/RabbitNombres.kt`, `application.yml`, `eventos/EnvioEventPublisher.kt`, `configuracion/SeguridadConfig.kt`, `README.md` | T6, T10, T12, T13b, T13c |
-| `ms-rutaexpress-catalog` | ✅ (mejoras opcionales) | `messaging/CapacidadComandoProcesador.kt`, `model/repository/RegistroComandoCapacidadRepository.kt`, `viewmodel/service/CatalogViewModelService.kt`, `README.md` | T6, T10, T11 |
-| `ms-rutaexpress-notify` | ✅ | `README.md` | T6 |
-| `ms-rutaexpress-mq-admin` | ✅ | `README.md` | T6 (+ T2 en el compose) |
-| `ms-rutaexpress-kafka-admin` | ⚠️ | `.gitignore` (crear) | T7 |
-| `frontend` | ✅ (opcional) | `core/bff.service.ts`, `pages/dashboard/*`, `nginx.conf`, estilos | T13d, T13e, T14 |
-| `ms-rutaexpress-audit`, `ms-rutaexpress-report` | ✅ (fuera del alcance de RabbitMQ) | — | — |
-| Repos, Git y AWS | ❌ (acción del usuario) | — | T5, T8, T9 |
+| `ms-rutaexpress-bff` | Código aplicado; tests pendientes de ejecutar | Proxy Admin, dashboard tolerante a fallos, protección de Prometheus | T4, T13a, T13c |
+| `infra/apps` | Compose actualizado; validación Docker pendiente | Nombres RabbitMQ, management URLs, Oracle y perfiles | T1, T2, T3 |
+| `infra` (README) | Actualizado | Comandos de RabbitMQ y Oracle documentados | T1, T3, T6 |
+| `deploy-aws.bat` (fuera del repo) | Pendiente, sin editar | Líneas 618, 652 y 663 | T1, T3 |
+| `ms-rutaexpress-shipments` | Código y README aplicados; tests pendientes | Reserva al final, prefijo centralizado, propiedad Kafka y Prometheus protegido | T6, T10, T12, T13b, T13c |
+| `ms-rutaexpress-catalog` | Código y README aplicados; tests pendientes | Idempotencia por envío y bloqueo pesimista REST | T6, T10, T11 |
+| `ms-rutaexpress-notify` | README actualizado | Topología, DLQ, reintentos y variables documentados | T6 |
+| `ms-rutaexpress-mq-admin` | README actualizado | CRUD, retención, errores y URL de Management documentados | T6 |
+| `ms-rutaexpress-kafka-admin` | `.gitignore` agregado | Reglas de Gradle/Kotlin, IDE y `.env` | T7 |
+| `frontend` | Vista Admin y documentación nginx aplicadas; build pendiente | Gestión RabbitMQ y ruta de producción por Gateway | T13d, T13e, T14 |
+| `ms-rutaexpress-audit`, `ms-rutaexpress-report` | Sin cambios de código | — | — |
+| Repos, Git y AWS | Pendiente fuera del alcance autorizado | Commit, push, repos separados, API Gateway y demo | T5, T8, T9, T15 |
 
-**Orden sugerido:** T1 → T2 → T3 → T4 → T6 → T7 → (usuario) T8 → T5 → T9 → T15 → T10 → T11 → T12 → T13 → T14.
+**Pendiente:** validar cuando estén disponibles JDK, Node/npm y Docker; editar el script de despliegue externo; configurar API Gateway y preparar la demo.
 
 ---
 
@@ -711,6 +706,8 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 ---
 
 ## 10. Cómo verificar
+
+En esta sesión `.\gradlew.bat test bootJar` no pudo iniciar en BFF, catalog ni shipments porque no hay `java` en `PATH` ni un `JAVA_HOME` válido. Tampoco están disponibles Node/npm para el build Angular ni Docker para validar Compose. Se agregaron pruebas para el proxy BFF, el dashboard, la reserva idempotente y la seguridad de Prometheus, pero quedan pendientes de ejecución.
 
 ```powershell
 # Tests por servicio (repetir en cada carpeta afectada)
@@ -771,5 +768,5 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8086/api/mq-admin/exchanges
 - El tenant de Entra ID con usuarios y roles (Admin, Despachador, Cliente y Auditor).
 - El API Gateway: autorizador JWT, CORS, rutas y si `bff.atlaa.app` es el Gateway.
 - La instancia EC2: RAM (alrededor de 8 GB), Security Groups y Docker.
-- Base de datos cloud: ¿Oracle en contenedor o un servicio gestionado? (decisión de T3).
+- Base de datos cloud desplegada y accesible desde EC2 (el compose usa Oracle Free en contenedor y permite `DB_URL`; el despliegue real no se verificó).
 - bff, audit, report, kafka-admin y frontend no se volvieron a ejecutar en esta revisión porque su código no cambió.

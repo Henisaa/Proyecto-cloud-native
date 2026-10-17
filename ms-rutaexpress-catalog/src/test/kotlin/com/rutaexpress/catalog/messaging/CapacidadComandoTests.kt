@@ -82,6 +82,29 @@ class CapacidadComandoTests {
     }
 
     @Test
+    fun `otro commandId del mismo envío no vuelve a descontar el cupo reservado`() {
+        val capacidades = mock<FleetCapacityRepository>()
+        val registros = mock<RegistroComandoCapacidadRepository>()
+        val linea = linea(VehicleType.VAN, usados = 3)
+        whenever(registros.findById("cmd-new")).thenReturn(Optional.empty())
+        whenever(registros.findByShipmentIdOrderByProcesadoEnAsc("shipment-1")).thenReturn(
+            listOf(RegistroComandoCapacidad("cmd-old", "RESERVAR", "shipment-1", "RESERVADA", "VAN", 7, "Capacidad reservada")),
+        )
+
+        val resultado = procesador(capacidades, registros).procesar(
+            reserva("cmd-new", vehicleType = "VAN", paquetes = 3).copy(shipmentId = "shipment-1"),
+        )
+
+        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.RESERVADA)
+        assertThat(linea.currentBookedPackages).isEqualTo(3)
+        val registro = argumentCaptor<RegistroComandoCapacidad>()
+        verify(registros).save(registro.capture())
+        assertThat(registro.firstValue.commandId).isEqualTo("cmd-new")
+        assertThat(registro.firstValue.shipmentId).isEqualTo("shipment-1")
+        verifyNoInteractions(capacidades)
+    }
+
+    @Test
     fun `liberar nunca deja el cupo en negativo`() {
         val capacidades = mock<FleetCapacityRepository>()
         val registros = mock<RegistroComandoCapacidadRepository>()

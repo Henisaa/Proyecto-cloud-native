@@ -37,7 +37,7 @@ class AuditoriaListener(
             when {
                 clave.startsWith(nombres.routing.shipmentStatusPrefix) ->
                     reintentar { auditoria.registrarEstado(sobre, clave) }
-                clave.startsWith("catalog.capacity.") -> {
+                clave.startsWith(nombres.routing.capacityResultPrefix) -> {
                     val compensar = reintentar { auditoria.aplicarResultadoCapacidad(sobre, clave) }
                     if (compensar != null) {
                         // La reserva llegó después de cancelar el envío: se devuelve el cupo.

@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
 @Repository
-interface RegistroComandoCapacidadRepository : JpaRepository<RegistroComandoCapacidad, String>
+interface RegistroComandoCapacidadRepository : JpaRepository<RegistroComandoCapacidad, String> {
+    fun findByShipmentIdOrderByProcesadoEnAsc(shipmentId: String): List<RegistroComandoCapacidad>
+}

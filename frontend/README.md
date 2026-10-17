@@ -2,7 +2,7 @@ Frontend RutaExpress
 Angular 19, TypeScript, MSAL Angular/Browser, Tailwind CSS y GSAP.
 
 Función
-Login corporativo Azure AD, dashboard, envíos, catálogo, reportería y auditoría. El dashboard agrega una sección Mensajería visible solo para Admin: colas RabbitMQ, pendientes, consumidores, alertas DLQ y tópicos Kafka. Las consultas muestran errores independientes y permiten actualizar manualmente; no inventan conectividad ni datos.
+Login corporativo Azure AD, dashboard, envíos, catálogo, reportería y auditoría. El dashboard agrega monitoreo de colas RabbitMQ y tópicos Kafka para Admin. La vista `/admin/mq` permite consultar métricas y crear o eliminar colas, exchanges y bindings; los errores 400/409 del administrador se muestran en pantalla.
 authGuard exige sesión; roleGuard limita módulos. El interceptor solicita access token y adjunta Bearer para /api/bff. El BFF aplica la autorización real; los guards no sustituyen la validación backend. Los alias Operador del dominio y Cliente del dominio se normalizan para navegación.
 
 Requisitos
@@ -21,7 +21,7 @@ Las pruebas de navegador requieren Chrome o Chromium instalado. Puede usar Edge 
 
 Producción
 npm run build
-Dockerfile compila Angular y nginx sirve dist con fallback de rutas SPA y proxy /api hacia bff:8080. Configure MSAL redirectUri y los orígenes registrados para el dominio real. El servicio bff debe ser resoluble desde el contenedor nginx.
+El despliegue estático usa `vercel.json`, que reescribe `/api/*` hacia el dominio del API Gateway. `nginx.conf` conserva un proxy `/api` a `bff:8080` únicamente para desarrollo local cuando ambos contenedores comparten red; no debe usarse como entrada pública de producción. Configure MSAL redirectUri y los orígenes registrados para el dominio real.
 
 Limpiar después de validación
 Remove-Item -LiteralPath node_modules,dist,.angular -Recurse -Force -ErrorAction SilentlyContinue
