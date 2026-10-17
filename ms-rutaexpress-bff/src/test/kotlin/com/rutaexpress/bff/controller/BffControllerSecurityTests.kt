@@ -53,6 +53,19 @@ class BffControllerSecurityTests {
     }
 
     @Test
+    fun `prometheus requiere autenticacion`() {
+        mockMvc.perform(get("/actuator/prometheus"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    @WithMockUser(username = "despachador@rutaexpress.cl", roles = ["DESPACHADOR"])
+    fun `prometheus queda reservado a Admin`() {
+        mockMvc.perform(get("/actuator/prometheus"))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
     @WithMockUser(username = "admin@rutaexpress.cl", roles = ["ADMIN"])
     fun `usuario con rol ADMIN puede solicitar kpis de reporteria`() {
         `when`(bffService.fetchKpis("last24h", "")).thenReturn(mapOf("totalShipments" to 150))

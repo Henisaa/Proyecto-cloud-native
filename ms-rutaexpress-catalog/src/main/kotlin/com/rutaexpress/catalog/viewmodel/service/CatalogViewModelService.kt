@@ -295,7 +295,7 @@ class CatalogViewModelService(
 
     @CacheEvict(value = ["catalog_service_details"], key = "#serviceId")
     fun reserveCapacity(serviceId: Long, request: CapacityReservationViewModel): CapacityReservationResultViewModel {
-        val capacity = capacityRepository.findByServiceIdAndZoneAndVehicleType(
+        val capacity = capacityRepository.findLockedByServiceIdAndZoneAndVehicleType(
             serviceId, request.zone, request.vehicleType
         ).orElseThrow {
             NoSuchElementException("No fleet capacity configured for service $serviceId in zone ${request.zone} with vehicle ${request.vehicleType}")
@@ -344,7 +344,7 @@ class CatalogViewModelService(
 
     @CacheEvict(value = ["catalog_service_details"], key = "#serviceId")
     fun releaseCapacity(serviceId: Long, request: CapacityReleaseViewModel): CapacityReservationResultViewModel {
-        val capacity = capacityRepository.findByServiceIdAndZoneAndVehicleType(
+        val capacity = capacityRepository.findLockedByServiceIdAndZoneAndVehicleType(
             serviceId, request.zone, request.vehicleType
         ).orElseThrow {
             NoSuchElementException("No fleet capacity found for service $serviceId in zone ${request.zone} with vehicle ${request.vehicleType}")
