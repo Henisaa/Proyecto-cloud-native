@@ -4,7 +4,7 @@
 >
 > - Última actualización: 2026-10-17.
 > - Rama de trabajo: `main`. Los cambios de código y documentación tienen el commit local `19e364a`.
-> - Revisión de ramas (2026-10-17): `main` y las ramas locales `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin` ya contienen los cambios. Sus ramas remotas aún no se han actualizado. `testFrontend` se dejó intacta porque es una aplicación React/Vite independiente en la raíz y no corresponde al frontend Angular de este análisis.
+> - Revisión de ramas (2026-10-17): `main` y las ramas remotas `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin` ya recibieron los cambios. `testFrontend` se dejó intacta porque es una aplicación React/Vite independiente en la raíz y no corresponde al frontend Angular de este análisis.
 > - Documentos de la evaluación: `C:\Users\pv-alumno\Downloads\EP2_Guia_Evaluacion.docx` y `C:\Users\pv-alumno\Downloads\Explicacion_de_Evaluacion_2.docx`
 > - Script de despliegue (**fuera del repo**): `C:\Users\pv-alumno\Downloads\deploy-aws.bat`
 
@@ -12,9 +12,9 @@
 
 ## 0. Resumen rápido
 
-**Estado general:** los cambios de configuración, código y documentación están guardados en `main` y fusionados localmente en nueve ramas del proyecto. Las fusiones no tuvieron conflictos, salvo `testFrontend`, que se restauró sin cambios por usar otra aplicación y estructura. Falta publicar los commits en las ramas remotas. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway y ejecutar la infraestructura.
+**Estado general:** los cambios de configuración, código y documentación están guardados en `main` y publicados en GitHub junto con nueve ramas del proyecto. Las fusiones no tuvieron conflictos, salvo `testFrontend`, que se restauró sin cambios por usar otra aplicación y estructura. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway y ejecutar la infraestructura.
 
-**Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas. Se integró `main` mediante merge en las nueve ramas activas del monorepo, preservando los commits propios; las nueve ramas locales y `main` están listas para push. `testFrontend` conserva su HEAD original (`abffea3`) porque es un frontend React/Vite separado; el merge automático produjo conflictos de renombres y README, se canceló y no se alteró su historial. No se ha hecho push.
+**Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas. Se integró `main` mediante merge en las nueve ramas activas del monorepo, preservando sus commits propios, y se publicaron `main` y esas nueve ramas con éxito el 2026-10-17. `testFrontend` conserva su HEAD original (`abffea3`) porque es un frontend React/Vite separado; el merge automático produjo conflictos de renombres y README, se canceló y no se alteró su historial.
 
 **Pendientes de entrega o validación:**
 
@@ -30,7 +30,7 @@
 | P3 (menores) | bff, shipments, frontend | Dashboard tolerante a fallos, Kafka config y métricas protegidas; Tailwind pendiente de build | T13 |
 | Opcional | `frontend` | Vista Admin de RabbitMQ agregada | T14 |
 
-**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T8 (push de `main` y las nueve ramas integradas; autorizado por el usuario), T9 (repos separados) y T15 (preparar y ejecutar la demo). `testFrontend` requeriría una adaptación independiente a React/Vite antes de incorporar cambios de interfaz.
+**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T9 (repos separados) y T15 (preparar y ejecutar la demo). `testFrontend` requeriría una adaptación independiente a React/Vite antes de incorporar cambios de interfaz.
 
 ---
 
@@ -354,7 +354,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | **Entrega** Repos separados | ❌ | ❌ | **T9** |
 | `.gitignore` | ⚠️ | ✅ | mq-admin y kafka-admin tienen reglas para sus herramientas y secretos (**T7**) |
 | README | ✅ | ✅ | READMEs de topología, administración, despliegue y servicios actualizados (**T6**) |
-| Cambios en GitHub | — | ⚠️ | Commit local `19e364a` y merges locales en nueve ramas; push pendiente (**T8**) |
+| Cambios en GitHub | — | ✅ | `main` y las nueve ramas activas del monorepo se actualizaron el 2026-10-17 (**T8**); `testFrontend` quedó intacta por ser otra app |
 
 ### 6.4 Estado de los bugs anteriores
 
@@ -376,7 +376,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 - **N1 (resuelto en el repositorio; queda el script externo):** los ocho servicios de `infra/apps/compose.yml` y `infra/README.md` usan `rabbit1`/`rabbit2`. Falta actualizar `deploy-aws.bat:652` (**T1**).
 - **N2 (resuelto):** compose pasa `RABBITMQ_MANAGEMENT_URLS`, que es la variable que consume mq-admin.
-- **N3 (parcial):** cambios guardados en commit local `19e364a` y fusionados localmente en nueve ramas; sin push, GitHub y el `git archive HEAD` del servidor siguen usando las versiones remotas (**T8**).
+- **N3 (resuelto en GitHub):** cambios guardados en `main` y publicados junto con las nueve ramas activas el 2026-10-17 (**T8**). El servidor los recibirá cuando se ejecute el despliegue actualizado.
 - **N4 (resuelto):** READMEs raíz, frontend, infraestructura y servicios actualizados (**T6**).
 
 ### 6.6 Pruebas mínimas (sección 7 de la guía): estado actual
@@ -402,7 +402,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | 2 | API Gateway rechaza lo no autorizado y enruta todo, incluido `/api/admin/*` | ⚠️ | ⚠️ (BFF completado; falta configurar API Gateway, T5) |
 | 3 | El BFF valida el JWT y no accede a la base | ✅ | ✅ |
 | 4 | Dos nodos en clúster | ⚠️ | ✅ |
-| 5 | Clúster en la nube con Compose y accesible | ❌ | ❌ (T1-T3, T8) |
+| 5 | Clúster en la nube con Compose y accesible | ❌ | ❌ (script externo y despliegue pendientes: T1, T3, T15) |
 | 6 | Tres colas diferenciadas con DLQ | ✅ | ✅ |
 | 7 | direct y topic con keys y bindings correctos | ⚠️ | ✅ |
 | 8 | Nombres centralizados y separados | ⚠️ | ✅ |
@@ -413,7 +413,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | 13 | El admin valida nombres vacíos y configuraciones inválidas | ❌ | ✅ |
 | 14 | Políticas de retención | ✅ | ✅ |
 | 15 | Puedo explicar las métricas | ✅ | ✅ |
-| 16 | Repos en GitHub con `.gitignore` y README, enlaces enviados | ❌ | ❌ (T6-T9) |
+| 16 | Repos en GitHub con `.gitignore` y README, enlaces enviados | ❌ | ❌ (repositorios separados y enlaces pendientes: T9) |
 | 17 | Flujo completo de extremo a extremo | ❌ | ❌ (depende de todo lo anterior) |
 | | **Puntaje (✅=1, ⚠️=0,5, ❌=0)** | **8 / 17 ≈ 47 %** | **13,5 / 17 ≈ 79 %** |
 
@@ -429,7 +429,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - Ponderado (críticos ×3, importantes ×2, menores ×1): **27,5 / 42 ≈ 65 %**. Contando los puntos por igual: ≈55 %.
 - Lo de mayor peso en la nota ya está hecho: IL 2.3 completo, DLQ, errores y catálogo por cola.
 - **Lo que falta es despliegue y entrega.** Eso es lo que permite mostrar todo en la presentación, que vale el 60 % de la EP2.
-- Mientras no se haga push, **GitHub sigue mostrando la versión anterior**; los commits están preparados solo en las ramas locales (**T8**).
+- El código actualizado ya está en `main` y las nueve ramas del monorepo en GitHub (**T8**). El script externo y el despliegue en la nube siguen pendientes.
 
 ---
 
@@ -554,12 +554,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - Crear `ms-rutaexpress-kafka-admin/.gitignore` copiando `ms-rutaexpress-mq-admin/.gitignore` (Gradle/Kotlin, IDEs, `.env`).
 - Al separar los repos (T9), cada repo backend lleva su `.gitignore` de Gradle y el frontend el suyo de Angular (`frontend/.gitignore` ya existe).
 
-#### T8. Integración de los cambios en las ramas y publicación `[ ]` (merge local completado; push pendiente)
+#### T8. Integración de los cambios en las ramas y publicación `[x]`
 
 - Commit de código/documentación en `main`: `19e364a feat(ep2): apply ANALISIS_EP2 improvements`.
-- Merge de `main` aplicado sin conflictos en `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin`. Sus ramas locales están listas para publicar.
+- Merge de `main` aplicado sin conflictos y publicado en `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin`.
 - `testFrontend` se conserva intacta: contiene otra app React/Vite en la raíz, no el frontend Angular de este plan; el merge de monorepo se canceló tras detectar conflictos.
-- Pendiente: push de `main` y las nueve ramas anteriores. El usuario autorizó esta publicación.
+- Push de `main` y las nueve ramas anteriores completado el 2026-10-17.
 
 #### T9. Repositorios separados `[ ]` (**el usuario debe crear los repos en GitHub**)
 
@@ -665,12 +665,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | `ms-rutaexpress-kafka-admin` | `.gitignore` agregado | Reglas de Gradle/Kotlin, IDE y `.env` | T7 |
 | `frontend` | Vista Admin y documentación nginx aplicadas; build pendiente | Gestión RabbitMQ y ruta de producción por Gateway | T13d, T13e, T14 |
 | `ms-rutaexpress-audit`, `ms-rutaexpress-report` | Sin cambios de código | — | — |
-| Ramas Git | Merge local hecho en `main` y nueve ramas; push pendiente; `testFrontend` separado | Publicar ramas integradas | T8 |
+| Ramas Git | `main` y nueve ramas actualizadas en GitHub; `testFrontend` separado | Adaptación específica solo si se mantiene la app React/Vite | T8 |
 | Repos separados, Gateway y AWS | Pendiente | Crear repos, configurar API Gateway y preparar demo | T5, T9, T15 |
 
 **Hecho:** código, documentación y pruebas nuevas aplicados; commit local en `main`; merges limpios en nueve ramas locales.
 
-**Pendiente:** push de `main` y las nueve ramas; adaptar `testFrontend` solo si se decide mantener esa app React/Vite; ejecutar validaciones cuando estén disponibles JDK, Node/npm y Docker; editar el script externo, configurar API Gateway y preparar la demo.
+**Pendiente:** adaptar `testFrontend` solo si se decide mantener esa app React/Vite; ejecutar validaciones cuando estén disponibles JDK, Node/npm y Docker; editar el script externo, configurar API Gateway y preparar la demo.
 
 ---
 
@@ -685,7 +685,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
    - `tools.jackson.*` (Jackson 3), no `com.fasterxml`.
    - Tests con `mockito-kotlin` y `@MockitoBean`.
 4. **Cada servicio es un proyecto Gradle independiente.** Probar dentro de su carpeta: `.\gradlew.bat test bootJar`. Si Maven Central responde 429, usar un init script fuera del repo con el mirror `https://maven-central.storage-download.googleapis.com/maven2/`.
-5. **No hacer commit, push, crear repos ni tocar AWS** sin autorización explícita. Para esta iteración el usuario autorizó commit e integración en las ramas existentes; el push sigue pendiente de ejecución.
+5. **No hacer commit, push, crear repos ni tocar AWS** sin autorización explícita. Para esta iteración el usuario autorizó y se completó la publicación de `main` y nueve ramas existentes.
 6. **No editar `C:\Users\pv-alumno\Downloads\deploy-aws.bat` sin preguntar**: está fuera del repo.
 7. **No modificar `docs/`**: está excluido de los commits por convención del proyecto.
 8. Después de cada tarea, ejecutar los tests del servicio afectado, marcar el `[x]` en este documento y actualizar el README correspondiente si cambió el comportamiento.
