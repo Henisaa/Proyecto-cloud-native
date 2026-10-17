@@ -25,8 +25,8 @@ data class ResultadoCapacidad(
 )
 
 /**
- * Cliente del microservicio de catálogo (ms-rutaexpress-catalog).
- * Reenvía el JWT del llamador porque los endpoints de capacidad exigen rol ADMIN/OPERADOR.
+ * Consulta síncrona de disponibilidad al microservicio de catálogo (validación al crear el envío).
+ * La reserva y la liberación de cupo no se hacen aquí: viajan como comandos por RabbitMQ.
  */
 @Component
 class CatalogoCliente(
@@ -67,52 +67,6 @@ class CatalogoCliente(
             remainingSlots = data.path("remainingSlots").asInt(0),
             message = data.path("message").asText("")
         )
-    }
-
-    fun reservarCapacidad(
-        serviceId: Long,
-        zone: String,
-        vehicleType: String,
-        packagesCount: Int,
-        weightKg: BigDecimal,
-        volumeM3: BigDecimal,
-        token: String?
-    ): Int {
-        val data = llamar(
-            serviceId,
-            "capacity/reserve",
-            mapOf(
-                "zone" to zone,
-                "vehicleType" to vehicleType,
-                "packagesCount" to packagesCount,
-                "weightKg" to weightKg,
-                "volumeM3" to volumeM3
-            ),
-            token
-        ) ?: throw ServicioCatalogoNoEncontradoException("El servicio $serviceId no existe en el catálogo")
-
-        return data.path("remainingCapacity").asInt(0)
-    }
-
-    fun liberarCapacidad(
-        serviceId: Long,
-        zone: String,
-        vehicleType: String,
-        packagesCount: Int,
-        token: String?
-    ): Int {
-        val data = llamar(
-            serviceId,
-            "capacity/release",
-            mapOf(
-                "zone" to zone,
-                "vehicleType" to vehicleType,
-                "packagesCount" to packagesCount
-            ),
-            token
-        ) ?: throw ServicioCatalogoNoEncontradoException("El servicio $serviceId no existe en el catálogo")
-
-        return data.path("remainingCapacity").asInt(0)
     }
 
     private fun llamar(serviceId: Long, operacion: String, body: Map<String, Any?>, token: String?): JsonNode? {
