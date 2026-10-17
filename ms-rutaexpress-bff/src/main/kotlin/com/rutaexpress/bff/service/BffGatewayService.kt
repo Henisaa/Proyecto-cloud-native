@@ -105,11 +105,19 @@ class DefaultBffGatewayService(
         val notices = mutableListOf<String>()
 
         if (primaryRole in listOf("ADMIN", "DESPACHADOR")) {
-            catalogData = fetchCatalogServices(token)
+            catalogData = runCatching { fetchCatalogServices(token) }
+                .onFailure {
+                    notices += "No se pudo consultar el catálogo; inténtelo nuevamente más tarde."
+                }
+                .getOrNull()
         }
 
         if (primaryRole == "ADMIN") {
-            reportData = fetchKpis("last24h", token)
+            reportData = runCatching { fetchKpis("last24h", token) }
+                .onFailure {
+                    notices += "No se pudieron consultar los indicadores de reportes."
+                }
+                .getOrNull()
         }
 
         if (primaryRole in listOf("ADMIN", "AUDITOR")) {

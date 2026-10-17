@@ -68,6 +68,7 @@ data class EnvioResponse(
     val packagesCount: Int,
     val price: BigDecimal?,
     val capacityReserved: Boolean,
+    val capacityStatus: String,
     val createdAt: Instant,
     val updatedAt: Instant,
 ) {
@@ -91,6 +92,7 @@ data class EnvioResponse(
             packagesCount = envio.packagesCount,
             price = envio.price,
             capacityReserved = envio.capacityReserved,
+            capacityStatus = envio.capacityStatus.name,
             createdAt = envio.createdAt,
             updatedAt = envio.updatedAt,
         )

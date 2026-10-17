@@ -10,6 +10,30 @@ export interface BrokerQueue {
   alert: boolean;
 }
 
+export interface MqQueueRequest {
+  name: string;
+  durable?: boolean;
+  ttlMs?: number;
+  maxLength?: number;
+  expiresMs?: number;
+  overflow?: 'reject-publish' | 'drop-head';
+  deadLetterExchange?: string;
+  deadLetterRoutingKey?: string;
+}
+
+export interface MqExchangeRequest {
+  name: string;
+  type: 'direct' | 'topic' | 'fanout' | 'headers';
+  durable?: boolean;
+}
+
+export interface MqBindingRequest {
+  source: string;
+  destination: string;
+  destinationType?: 'queue' | 'exchange';
+  routingKey?: string;
+}
+
 export interface Envio {
   id: string;
   trackingCode: string;
@@ -51,6 +75,36 @@ export class BffService {
 
   mqQueues(): Observable<BrokerQueue[]> {
     return this.http.get<BrokerQueue[]>(`${this.base}/api/bff/admin/mq/queues`);
+  }
+
+  mqMetrics(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/api/bff/admin/mq/metrics`);
+  }
+
+  crearCola(body: MqQueueRequest): Observable<unknown> {
+    return this.http.post(`${this.base}/api/bff/admin/mq/queues`, body);
+  }
+
+  eliminarCola(name: string, force = false): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/bff/admin/mq/queues/${encodeURIComponent(name)}`, { params: { force } });
+  }
+
+  crearExchange(body: MqExchangeRequest): Observable<unknown> {
+    return this.http.post(`${this.base}/api/bff/admin/mq/exchanges`, body);
+  }
+
+  eliminarExchange(name: string, force = false): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/bff/admin/mq/exchanges/${encodeURIComponent(name)}`, { params: { force } });
+  }
+
+  crearBinding(body: MqBindingRequest): Observable<unknown> {
+    return this.http.post(`${this.base}/api/bff/admin/mq/bindings`, body);
+  }
+
+  eliminarBinding(source: string, destination: string, routingKey = '', destinationType: 'queue' | 'exchange' = 'queue', force = false): Observable<unknown> {
+    return this.http.delete(`${this.base}/api/bff/admin/mq/bindings`, {
+      params: { source, destination, destinationType, routingKey, force },
+    });
   }
 
   kafkaTopics(): Observable<string[]> {

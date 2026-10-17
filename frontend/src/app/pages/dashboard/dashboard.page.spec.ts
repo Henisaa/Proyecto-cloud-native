@@ -6,7 +6,7 @@ import { DashboardPage } from './dashboard.page';
 
 describe('Monitoreo de mensajería', () => {
   it('mantiene las colas visibles cuando Kafka falla', () => {
-    const queues = [{ name: 'q.cmd.email.dlq', messages: 2, consumers: 0, alert: true }];
+    const queues = [{ name: 'q.rutaexpress.notification.dlq', messages: 2, consumers: 0, alert: true }];
     TestBed.configureTestingModule({ providers: [
       { provide: AuthService, useValue: { hasRole: () => true } },
       { provide: BffService, useValue: { mqQueues: () => of(queues), kafkaTopics: () => throwError(() => new Error('offline')) } },
