@@ -10,8 +10,8 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
         "CATALOG_SERVICE_URL": "http://catalog:8081",
@@ -36,12 +36,12 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-local}",
-        "SPRING_DATASOURCE_URL": "jdbc:oracle:thin:@//oracle:1521/FREEPDB1",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
+        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
         "SPRING_DATASOURCE_USERNAME": "ruta_catalog",
         "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
         "KAFKA_ENABLED": "true",
@@ -53,7 +53,12 @@
       },
       "ports": [
         "127.0.0.1:8081:8081"
-      ]
+      ],
+      "depends_on": {
+        "oracle": {
+          "condition": "service_healthy"
+        }
+      }
     },
     "notify": {
       "build": {
@@ -65,8 +70,8 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
         "REDIS_HOST": "redis",
@@ -95,12 +100,12 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-local}",
-        "SPRING_DATASOURCE_URL": "jdbc:oracle:thin:@//oracle:1521/FREEPDB1",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
+        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
         "SPRING_DATASOURCE_USERNAME": "ruta_audit",
         "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
         "KAFKA_ENABLED": "true",
@@ -112,7 +117,12 @@
       },
       "ports": [
         "127.0.0.1:8083:8083"
-      ]
+      ],
+      "depends_on": {
+        "oracle": {
+          "condition": "service_healthy"
+        }
+      }
     },
     "report": {
       "build": {
@@ -124,12 +134,12 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-local}",
-        "SPRING_DATASOURCE_URL": "jdbc:oracle:thin:@//oracle:1521/FREEPDB1",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
+        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
         "SPRING_DATASOURCE_USERNAME": "ruta_report",
         "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
         "KAFKA_ENABLED": "true",
@@ -141,7 +151,12 @@
       },
       "ports": [
         "127.0.0.1:8084:8084"
-      ]
+      ],
+      "depends_on": {
+        "oracle": {
+          "condition": "service_healthy"
+        }
+      }
     },
     "shipments": {
       "build": {
@@ -153,12 +168,12 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-local}",
-        "SPRING_DATASOURCE_URL": "jdbc:oracle:thin:@//oracle:1521/FREEPDB1",
+        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
+        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
         "SPRING_DATASOURCE_USERNAME": "ruta_shipments",
         "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
         "KAFKA_ENABLED": "true",
@@ -171,7 +186,12 @@
       },
       "ports": [
         "127.0.0.1:8085:8085"
-      ]
+      ],
+      "depends_on": {
+        "oracle": {
+          "condition": "service_healthy"
+        }
+      }
     },
     "mq-admin": {
       "build": {
@@ -183,11 +203,11 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "RABBITMQ_MANAGEMENT_URL": "http://rabbitmq-1:15672"
+        "RABBITMQ_MANAGEMENT_URLS": "http://rabbit1:15672,http://rabbit2:15672"
       },
       "ports": [
         "127.0.0.1:8086:8086"
@@ -203,8 +223,8 @@
         "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
         "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
         "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbitmq-1",
-        "RABBITMQ_ADDRESSES": "rabbitmq-1:5672,rabbitmq-2:5672",
+        "RABBITMQ_HOST": "rabbit1",
+        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
         "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
         "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}"
       },
@@ -245,9 +265,6 @@
     },
     "oracle": {
       "image": "gvenzl/oracle-free:23-slim",
-      "profiles": [
-        "oracle"
-      ],
       "environment": {
         "ORACLE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}"
       },

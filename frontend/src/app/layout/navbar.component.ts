@@ -76,11 +76,17 @@ export class NavbarComponent {
   readonly auth = inject(AuthService);
   readonly demo = environment.demo;
 
-  readonly menu = [
+  private readonly menuBase = [
     { path: '/dashboard', label: 'Dashboard' },
     { path: '/shipments', label: 'Envíos' },
     { path: '/catalog', label: 'Catálogo' },
     { path: '/reports', label: 'Reportes' },
     { path: '/audit', label: 'Auditoría' },
   ];
+
+  get menu(): { path: string; label: string }[] {
+    return this.auth.hasRole('Admin')
+      ? [...this.menuBase, { path: '/admin/mq', label: 'RabbitMQ' }]
+      : this.menuBase;
+  }
 }

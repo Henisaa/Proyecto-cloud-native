@@ -2,14 +2,16 @@ package com.rutaexpress.shipments.servicio
 
 import com.rutaexpress.shipments.cliente.CapacidadNoDisponibleException
 import com.rutaexpress.shipments.cliente.CatalogoCliente
-import com.rutaexpress.shipments.comandos.NotificacionPublisher
 import com.rutaexpress.shipments.dominio.CrearEnvioRequest
 import com.rutaexpress.shipments.dominio.Envio
 import com.rutaexpress.shipments.dominio.EnvioRepositorio
 import com.rutaexpress.shipments.dominio.EnvioResponse
+import com.rutaexpress.shipments.dominio.EstadoCapacidad
 import com.rutaexpress.shipments.dominio.EstadoEnvio
 import com.rutaexpress.shipments.eventos.EnvioEventPublisher
+import com.rutaexpress.shipments.mensajeria.MensajeriaPublicador
 import org.slf4j.LoggerFactory
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.security.SecureRandom
@@ -19,12 +21,18 @@ class EnvioNoEncontradoException(mensaje: String) : RuntimeException(mensaje)
 
 class TransicionInvalidaException(mensaje: String) : RuntimeException(mensaje)
 
+/**
+ * Reglas de envíos. Cada operación persiste el cambio y publica sus mensajes dentro de la misma transacción:
+ * el envío solo queda cambiado si el broker confirmó los comandos, eventos y solicitudes de notificación.
+ * La reserva de capacidad es asíncrona: al aceptar se envía el comando capacity.reserve y catalog responde
+ * con su resultado; la respuesta HTTP no espera ese procesamiento.
+ */
 @Service
 class EnvioServicio(
     private val repositorio: EnvioRepositorio,
     private val catalogoCliente: CatalogoCliente,
     private val eventPublisher: EnvioEventPublisher,
-    private val notificacionPublisher: NotificacionPublisher
+    private val mensajeria: MensajeriaPublicador,
 ) {
     private val logger = LoggerFactory.getLogger(EnvioServicio::class.java)
     private val random = SecureRandom()
@@ -39,6 +47,7 @@ class EnvioServicio(
         var vehicleType: String? = null
 
         if (catalogoCliente.habilitado) {
+            // Validación de la regla de negocio: hay cupo en la zona. La reserva se pide al aceptar el envío.
             val capacidad = catalogoCliente.verificarCapacidad(
                 serviceId, request.zone, weightKg, volumeM3, request.packagesCount, token
             )
@@ -64,11 +73,14 @@ class EnvioServicio(
             volumeM3 = volumeM3,
             packagesCount = request.packagesCount,
             price = request.price,
-            status = EstadoEnvio.CREADO
+            status = EstadoEnvio.CREADO,
+            capacityStatus = EstadoCapacidad.NO_APLICA,
         )
 
-        val guardado = repositorio.save(envio)
-        eventPublisher.publicarCambioEstado(guardado, org.springframework.security.core.context.SecurityContextHolder.getContext().authentication?.name ?: "LOCAL")
+        val guardado = repositorio.saveAndFlush(envio)
+        val actor = actorActual()
+        mensajeria.publicarEstado(guardado, actor)
+        eventPublisher.publicarCambioEstado(guardado, actor)
         logger.info("Envío {} creado (tracking {})", guardado.id, guardado.trackingCode)
         return EnvioResponse.desde(guardado)
     }
@@ -95,60 +107,52 @@ class EnvioServicio(
             )
         }
 
-        if (nuevoEstado == EstadoEnvio.ACEPTADO && !envio.capacityReserved && catalogoCliente.habilitado) {
-            val zone = envio.zone
-            val vehicleType = envio.vehicleType
-            if (zone != null && vehicleType != null) {
-                val restante = catalogoCliente.reservarCapacidad(
-                    envio.serviceId, zone, vehicleType, envio.packagesCount, envio.weightKg, envio.volumeM3, token
-                )
-                envio.capacityReserved = true
-                logger.info("Capacidad reservada para envío {} (cupo restante {})", envio.id, restante)
-            } else {
-                logger.warn("Envío {} sin zona/vehículo resuelto; no se reserva capacidad", envio.id)
-            }
-        }
-
-        if (nuevoEstado == EstadoEnvio.CANCELADO && envio.capacityReserved && catalogoCliente.habilitado) {
-            val zone = envio.zone
-            val vehicleType = envio.vehicleType
-            if (zone != null && vehicleType != null) {
-                catalogoCliente.liberarCapacidad(envio.serviceId, zone, vehicleType, envio.packagesCount, token)
-                envio.capacityReserved = false
-                logger.info("Capacidad liberada para envío {}", envio.id)
-            }
-        }
-
+        val integrado = catalogoCliente.habilitado
         envio.status = nuevoEstado
         envio.updatedAt = Instant.now()
-        val guardado = repositorio.save(envio)
+        if (nuevoEstado == EstadoEnvio.ACEPTADO && integrado) {
+            envio.capacityStatus = EstadoCapacidad.PENDIENTE
+        }
 
-        eventPublisher.publicarCambioEstado(guardado, org.springframework.security.core.context.SecurityContextHolder.getContext().authentication?.name ?: "LOCAL")
+        // Primero se persiste el estado; después se publica. Así el resultado de catalog nunca llega
+        // antes de que el cambio exista en la base.
+        val guardado = repositorio.saveAndFlush(envio)
+        val actor = actorActual()
+
+        if (nuevoEstado == EstadoEnvio.CANCELADO && integrado && guardado.capacityStatus == EstadoCapacidad.RESERVADA) {
+            mensajeria.solicitarLiberacion(guardado)
+        }
+        mensajeria.publicarEstado(guardado, actor)
+        eventPublisher.publicarCambioEstado(guardado, actor)
         notificarSegunEstado(guardado)
+        if (nuevoEstado == EstadoEnvio.ACEPTADO && integrado) {
+            // Publicar la reserva al final reduce el riesgo de dejar cupo reservado si falla otra publicación.
+            mensajeria.solicitarReserva(guardado)
+        }
 
         return EnvioResponse.desde(guardado)
     }
 
     private fun notificarSegunEstado(envio: Envio) {
         when (envio.status) {
-            EstadoEnvio.ACEPTADO -> notificacionPublisher.enviarEmailEstado(
+            EstadoEnvio.ACEPTADO -> mensajeria.enviarEmailEstado(
                 envio,
                 "Tu envío ${envio.trackingCode} fue aceptado",
                 "Hemos aceptado tu envío ${envio.trackingCode}. Pronto será preparado en bodega."
             )
 
-            EstadoEnvio.EN_BODEGA -> notificacionPublisher.generarTicketBodega(envio)
+            EstadoEnvio.EN_BODEGA -> mensajeria.generarTicketBodega(envio)
 
             EstadoEnvio.EN_RUTA -> {
-                notificacionPublisher.generarEtiqueta(envio)
-                notificacionPublisher.enviarEmailEstado(
+                mensajeria.generarEtiqueta(envio)
+                mensajeria.enviarEmailEstado(
                     envio,
                     "Tu envío ${envio.trackingCode} está en ruta",
                     "Tu envío ${envio.trackingCode} está en ruta hacia ${envio.destinationAddress}."
                 )
             }
 
-            EstadoEnvio.ENTREGADO -> notificacionPublisher.enviarEmailEstado(
+            EstadoEnvio.ENTREGADO -> mensajeria.enviarEmailEstado(
                 envio,
                 "Tu envío ${envio.trackingCode} fue entregado",
                 "Tu envío ${envio.trackingCode} fue entregado a ${envio.recipientName}."
@@ -157,6 +161,9 @@ class EnvioServicio(
             else -> Unit
         }
     }
+
+    private fun actorActual(): String =
+        SecurityContextHolder.getContext().authentication?.name ?: "LOCAL"
 
     private fun buscar(id: String): Envio = repositorio.findById(id)
         .orElseThrow { EnvioNoEncontradoException("Envío no encontrado: $id") }

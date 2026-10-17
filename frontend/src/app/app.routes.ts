@@ -33,6 +33,11 @@ export const routes: Routes = [
     canActivate: [authGuard, roleGuard(['Admin', 'Auditor'])],
     loadComponent: () => import('./pages/audit/audit.page').then((m) => m.AuditPage),
   },
+  {
+    path: 'admin/mq',
+    canActivate: [authGuard, roleGuard(['Admin'])],
+    loadComponent: () => import('./pages/admin-mq/admin-mq.page').then((m) => m.AdminMqPage),
+  },
   { path: 'login', redirectTo: '' },
   { path: '**', redirectTo: '' },
 ];
