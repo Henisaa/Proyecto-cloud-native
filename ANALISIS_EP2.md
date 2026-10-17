@@ -3,7 +3,7 @@
 > **Para el agente de IA que lea esto.** Este documento resume qué exige la EP2, qué estaba mal antes, qué se arregló, qué sigue faltando y **qué archivos de qué servicio hay que tocar**. Las tareas están en la **sección 7**, ordenadas por prioridad, con archivos, pasos y criterio de aceptación. Antes de programar, lee las secciones 0, 7 y 9.
 >
 > - Última actualización: 2026-10-17.
-> - Rama de trabajo: `main`. Los cambios de código y documentación tienen el commit local `19e364a`.
+> - Base de esta revisión: `main` en `32f23d4`, con los cambios de implementación de `19e364a`. La sección 13 registra los hallazgos y los resultados de las pruebas de la revisión independiente.
 > - Revisión de ramas (2026-10-17): `main` y las ramas remotas `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin` ya recibieron los cambios. `testFrontend` se dejó intacta porque es una aplicación React/Vite independiente en la raíz y no corresponde al frontend Angular de este análisis.
 > - Documentos de la evaluación: `C:\Users\pv-alumno\Downloads\EP2_Guia_Evaluacion.docx` y `C:\Users\pv-alumno\Downloads\Explicacion_de_Evaluacion_2.docx`
 > - Script de despliegue (**fuera del repo**): `C:\Users\pv-alumno\Downloads\deploy-aws.bat`
@@ -12,7 +12,7 @@
 
 ## 0. Resumen rápido
 
-**Estado general:** los cambios de configuración, código y documentación están guardados en `main` y publicados en GitHub junto con nueve ramas del proyecto. Las fusiones no tuvieron conflictos, salvo `testFrontend`, que se restauró sin cambios por usar otra aplicación y estructura. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway y ejecutar la infraestructura.
+**Estado general tras la revisión independiente del 2026-10-17:** los cambios sí están en `main` y en las nueve ramas publicadas del monorepo, pero todavía no funcionan correctamente en conjunto. El BFF no compila; sus tests y el test nuevo de shipments tienen otros errores de compilación. Se reprodujeron fallos de idempotencia y compensación de capacidad. El frontend compila y pasa sus 3 tests, con 11 advertencias CSS pendientes. Los tres Compose validan su configuración, pero el script de inicialización Oracle requiere correcciones. Los resultados y límites de esta verificación están en la **sección 13**, que prevalece sobre los estados anteriores.
 
 **Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas. Se integró `main` mediante merge en las nueve ramas activas del monorepo, preservando sus commits propios, y se publicaron `main` y esas nueve ramas con éxito el 2026-10-17. `testFrontend` conserva su HEAD original (`abffea3`) porque es un frontend React/Vite separado; el merge automático produjo conflictos de renombres y README, se canceló y no se alteró su historial.
 
@@ -20,17 +20,17 @@
 
 | Prioridad | Servicio | Qué falta | Tarea |
 |---|---|---|---|
-| **P0 obligatorio** | `ms-rutaexpress-bff` | Proxy de administración completado; ejecución de tests pendiente | T4 |
+| **P0 obligatorio** | `ms-rutaexpress-bff` | Rutas presentes, pero falla `compileKotlin`; también hay errores independientes en sus tests | T4, revisión R1/R2 |
 | P0 (config) | `infra/apps` | Compose corregido; script de despliegue externo aún usa valores antiguos | T1, T2, T3 |
 | P1 (docs) | todos | READMEs de topología y despliegue actualizados | T6 |
 | P1 (config) | `ms-rutaexpress-kafka-admin` | `.gitignore` agregado | T7 |
-| P2 (mejora) | shipments + catalog | Orden de publicación e idempotencia por envío implementados; tests pendientes de ejecución | T10 |
+| P2 (mejora) | shipments + catalog | Orden aplicado; idempotencia y compensaciones incompletas, con fallos reproducidos | T10, revisión R4/R5/R6 |
 | P2 (mejora) | `ms-rutaexpress-catalog` | Reserva y liberación REST usan bloqueo pesimista | T11 |
 | P3 (limpieza) | `ms-rutaexpress-shipments` | Routing key de resultado centralizada en `RabbitNombres` | T12 |
-| P3 (menores) | bff, shipments, frontend | Dashboard tolerante a fallos, Kafka config y métricas protegidas; Tailwind pendiente de build | T13 |
+| P3 (menores) | bff, shipments, frontend | Cambios presentes; build Angular ejecutado, persisten 11 advertencias CSS | T13 |
 | Opcional | `frontend` | Vista Admin de RabbitMQ agregada | T14 |
 
-**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T9 (repos separados) y T15 (preparar y ejecutar la demo). `testFrontend` requeriría una adaptación independiente a React/Vite antes de incorporar cambios de interfaz.
+**Acciones pendientes:** corregir los hallazgos R1-R6 de la sección 13, T1/T3 en el script externo, T5 (API Gateway), T9 (repos separados), T13d (advertencias CSS) y T15 (preparar y ejecutar la demo). `testFrontend` requeriría una adaptación independiente a React/Vite antes de incorporar cambios de interfaz.
 
 ---
 
@@ -305,7 +305,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ---
 
-## 6. Análisis NUEVO (estado actual verificado el 2026-10-15)
+## 6. Análisis registrado el 2026-10-15 (histórico; revisión actual en la sección 13)
 
 ### 6.1 Compilación y tests (en una copia aislada del working tree)
 
@@ -484,7 +484,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - Las migraciones `V1` y `V2` de catalog y shipments usan sintaxis Oracle; no se probaron contra Oracle real en los tests (que usan H2 con Flyway desactivado). Vigila el primer arranque.
 - **Aceptación:** `docker compose ... up` deja catalog, audit, report y shipments con `/actuator/health` en `UP` sobre Oracle, y Flyway aplica V1 y V2 sin errores.
 
-#### T4. BFF: reenviar las operaciones de administración de RabbitMQ (CÓDIGO, obligatorio) `[x]` (tests agregados; ejecución pendiente)
+#### T4. BFF: reenviar las operaciones de administración de RabbitMQ (CÓDIGO, obligatorio) `[ ]` (reabierta: rutas aplicadas, compilación fallida; R1/R2)
 
 - **Servicio:** `ms-rutaexpress-bff`.
 - **Archivos:**
@@ -574,7 +574,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ### P2: mejoras de robustez (no bloquean la demo)
 
-#### T10. Lo que queda del bug B4: reserva huérfana o doble (CÓDIGO) `[x]` (tests agregados; ejecución pendiente)
+#### T10. Lo que queda del bug B4: reserva huérfana o doble (CÓDIGO) `[ ]` (reabierta: orden aplicado, fallos de idempotencia y compensación reproducidos; R4/R5/R6)
 
 - **Servicios:** `ms-rutaexpress-shipments` y `ms-rutaexpress-catalog`.
 - **Archivos:**
@@ -616,7 +616,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   2. Agregar `capacity-result-prefix: "catalog.capacity."` en `app.rabbit.routing` de `ms-rutaexpress-shipments/src/main/resources/application.yml`.
   3. Usar `nombres.routing.capacityResultPrefix` en el listener.
 
-#### T13. Bugs menores `[ ]` (a, b, c y e completados; d pendiente de build)
+#### T13. Bugs menores `[ ]` (a, b, c y e aplicados; build ejecutado, d conserva 11 advertencias CSS)
 
 - **a) Dashboard del BFF frágil.** En `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/service/BffGatewayService.kt:107-113`, `buildDashboard` llama a `fetchCatalogServices` y `fetchKpis`, que lanzan `ResponseStatusException` y tumban todo el dashboard. Envolver cada llamada (`runCatching`) y agregar un aviso a `notices` en vez de fallar (`fetchAuditSummary` ya lo hace). Test en `BffDownstreamTests.kt`.
 - **b) Propiedad de Kafka.** En `ms-rutaexpress-shipments/src/main/kotlin/com/rutaexpress/shipments/eventos/EnvioEventPublisher.kt:19`, `@Value("\${app.kafka.topics.audit.timeline:audit.timeline}")` debe ser `@Value("\${app.kafka.topics.envios-events:audit.timeline}")`, que es la clave real del yml.
@@ -624,7 +624,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
   - `ms-rutaexpress-shipments/.../configuracion/SeguridadConfig.kt:56-58` y `ms-rutaexpress-bff/.../config/SecurityConfig.kt:60-62`.
   - Sacar prometheus de `permitAll` y exigir `hasRole("ADMIN")`, como hacen notify y mq-admin.
   - Agregar tests con 401 y 403.
-- **d) Tailwind.** Ejecutar `npm ci && npm run build` en `frontend/` y corregir las reglas CSS descartadas que reporte el build (11 según el análisis anterior; no se volvió a verificar).
+- **d) Tailwind.** `npm ci` y `npm run build` ejecutados en la revisión independiente. El build termina correctamente, pero sigue informando 11 reglas descartadas por `Empty sub-selector`; falta corregir esas advertencias.
 - **e) nginx.** `frontend/nginx.conf` reenvía `/api/` a `http://bff:8080` y se salta el API Gateway. Documentar que es solo para desarrollo local, o apuntarlo al dominio del Gateway en despliegue.
 
 ### Opcional
@@ -650,7 +650,9 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ---
 
-## 8. Estado por servicio después de aplicar el plan
+## 8. Estado por servicio registrado antes de la revisión independiente
+
+> Esta tabla conserva el registro previo de implementación. La sección 13 contiene los resultados ejecutados y las correcciones pendientes; un cambio presente en el código no equivale a un criterio de aceptación superado.
 
 | Servicio | ¿Completo para la EP2? | Archivos pendientes | Tareas |
 |---|---|---|---|
@@ -696,7 +698,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 
 ## 10. Cómo verificar
 
-En esta sesión `.\gradlew.bat test bootJar` no pudo iniciar en BFF, catalog ni shipments porque no hay `java` en `PATH` ni un `JAVA_HOME` válido. Tampoco están disponibles Node/npm para el build Angular ni Docker para validar Compose. Se agregaron pruebas para el proxy BFF, el dashboard, la reserva idempotente y la seguridad de Prometheus, pero quedan pendientes de ejecución.
+En la iteración anterior no se ejecutaron las validaciones por las herramientas ausentes del `PATH`. En la revisión independiente se encontró Node en `C:\Program Files\nodejs` y se utilizaron un JDK 21 y Docker Compose portátiles en `%TEMP%`. Se ejecutaron compilaciones y tests de los ocho servicios, el build y los tests Angular y la validación de los tres Compose. Hay fallos de compilación y comportamiento; véanse los resultados exactos en la sección 13. No se dispone de un motor Docker para las pruebas con contenedores reales.
 
 ```powershell
 # Tests por servicio (repetir en cada carpeta afectada)
@@ -758,4 +760,77 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8086/api/mq-admin/exchanges
 - El API Gateway: autorizador JWT, CORS, rutas y si `bff.atlaa.app` es el Gateway.
 - La instancia EC2: RAM (alrededor de 8 GB), Security Groups y Docker.
 - Base de datos cloud desplegada y accesible desde EC2 (el compose usa Oracle Free en contenedor y permite `DB_URL`; el despliegue real no se verificó).
-- bff, audit, report, kafka-admin y frontend no se volvieron a ejecutar en esta revisión porque su código no cambió.
+- Los pipelines locales sí se ejecutaron en la revisión independiente; el funcionamiento del stack real en AWS y sus integraciones externas sigue sin verificarse.
+
+---
+
+## 13. Revisión independiente ejecutada el 2026-10-17
+
+**Veredicto:** implementación presente y propagada, pero validación funcional incompleta y con errores confirmados. T4 y T10 se reabren. Esta revisión documenta los resultados; las correcciones del código de producción siguen pendientes.
+
+### 13.1 Comprobación de ramas
+
+Se consultó GitHub con `git ls-remote --heads origin` y se comprobó que las nueve ramas del monorepo contienen el commit `19e364a`. El código de aplicación coincide con `main`; las diferencias restantes entre árboles son PDFs históricos.
+
+| Rama | HEAD remoto revisado |
+|---|---|
+| `main` | `32f23d4` |
+| `frontend` | `725e2b0` |
+| `ms-rutaexpress-bff` | `e1ce149` |
+| `ms_catalog` | `b397059` |
+| `ms_notify` | `b1b6c15` |
+| `ms-rutaexpress-audit` | `d8436fa` |
+| `ms-rutaexpress-report` | `4e5f7bc` |
+| `ms-rutaexpress-shipments` | `2a5d72a` |
+| `ms-rutaexpress-mq-admin` | `049fca5` |
+| `ms-rutaexpress-kafka-admin` | `9586042` |
+| `testFrontend` | `abffea3`, sin los cambios: aplicación React/Vite separada, excepción ya documentada |
+
+### 13.2 Resultados sobre el código publicado, sin corregirlo
+
+Se usaron Node 24.22.0, el wrapper Gradle 9.7.1, un JDK 21 temporal y Docker Compose 5.6.0 portátil. No se modificó la instalación del sistema.
+
+| Componente | Resultado medido |
+|---|---|
+| BFF | `test bootJar` falla en `compileKotlin`: tres arrays con tipos heterogéneos no compilan |
+| Shipments | Código principal y `bootJar` generados; `compileTestKotlin` falla en `EnvioServicioTests.kt:32` |
+| Catalog | `test bootJar` correcto; 26 tests existentes pasan. Dos pruebas adicionales reproducen fallos de capacidad |
+| mq-admin | `test bootJar` correcto; 26 tests pasan |
+| Notify | `test bootJar` correcto; 20 tests pasan y 3 de integración quedan omitidos |
+| Audit | `test bootJar` correcto; 8 tests pasan |
+| Report | `test bootJar` correcto; 5 tests pasan |
+| Kafka-admin | `test bootJar` correcto; 4 tests pasan |
+| Angular | `npm ci`, build de producción y 3 tests Karma/ChromeHeadless correctos; 11 advertencias CSS persisten |
+| Compose apps, mq y kafka | `config --quiet` devuelve 0 en los tres; esto valida configuración, no arranque ni conectividad |
+
+Los recuentos anteriores proceden de los resultados JUnit ejecutados, no de contar apariciones de `@Test` en los fuentes. El inventario previo de 136 métodos no demuestra que esos tests compilen o se ejecuten.
+
+### 13.3 Hallazgos que requieren corrección
+
+**R1 — P1: el BFF no compila (T4).** En `ms-rutaexpress-bff/src/main/kotlin/com/rutaexpress/bff/controller/BrokerAdminController.kt:48,64,83`, `arrayOf(name, force)` y el array de parámetros de bindings mezclan `String` y `Boolean`. Kotlin 2.3.21 rechaza el tipo de intersección inferido para el parámetro reificado. Es necesario explicitar un tipo común, por ejemplo `arrayOf<Any>(...)`. La versión publicada no puede generar su ejecutable.
+
+**R2 — P1: los tests nuevos tienen errores independientes de compilación (T4/T10).**
+
+- BFF: `BrokerAdminSecurityTests.kt:22` importa `SecurityMockMvcRequestPostProcessors` desde `org.springframework.test...`; la clase pertenece a `org.springframework.security.test...`.
+- BFF: el test importa `org.mockito.kotlin.any/eq/whenever`, pero `build.gradle.kts` no declara `org.mockito.kotlin:mockito-kotlin`. El compilador confirma referencias no resueltas después de aislar R1.
+- Shipments: `EnvioServicioTests.kt:32` no permite inferir el tipo genérico de `saveAndFlush(any())`. En la copia de diagnóstico se hizo explícito `any<Envio>()` y `getArgument<Envio>(0)` para continuar la ejecución.
+
+**R3 — P1: el arranque Oracle con un volumen nuevo no inicializa los esquemas esperados (T3).** `infra/apps/oracle-init.sql` comienza con `CREATE USER ruta_catalog`, sin cambiar a `FREEPDB1`. La imagen ejecuta los `.sql` como SYS conectado a la instancia `FREE`; los usuarios locales deben crearse dentro de la PDB. Falta `ALTER SESSION SET CONTAINER=FREEPDB1;`. Además, las contraseñas de los cuatro usuarios están fijadas en el SQL mientras compose permite sobrescribir `DB_PASSWORD`: un valor distinto rompe las credenciales de las aplicaciones incluso después de corregir la PDB. Este hallazgo se confirmó por inspección del script y de la [documentación oficial de la imagen](https://github.com/gvenzl/oci-oracle-free#initialization-scripts), cuyo ejemplo para `23-slim` cambia de contenedor antes de crear el usuario, y de su [entrypoint](https://github.com/gvenzl/oci-oracle-free/blob/main/container-entrypoint.sh#L222). No se ejecutó Oracle real.
+
+**R4 — P1: el resultado de una compensación no cabe en auditoría (T10).** El comando original usa un UUID de 36 caracteres; catalog genera `UUID:resultado` (46), `AuditoriaListener.kt:45` agrega `compensacion:` (59) y catalog agrega de nuevo `:resultado` (69). Sin embargo, `RegistroAuditoriaEnvio.kt:17` y la migración `V2__capacidad_y_auditoria_rabbit.sql:11` limitan `event_id` a 64. Una prueba de integración con H2 en modo Oracle reproduce `Value too long for column EVENT_ID ... (69)`. El resultado de liberación hace rollback en shipments y terminaría rechazado tras los reintentos. Se requiere un identificador determinista acotado o una migración que amplíe el campo, manteniendo coherencia entre entidad y esquema.
+
+**R5 — P1: una redelivery puede reabrir una reserva y provocar una segunda liberación (T10).** `AuditoriaEnvioService.aplicarResultadoCapacidad` cambia el estado antes de consultar si el evento ya estaba registrado: el `existsById` solo evita duplicar la fila de auditoría. Repetir un resultado `RESERVADA` después de una liberación cambia `LIBERADA` a `RESERVADA` y vuelve a pedir compensación si el envío está cancelado. Por su parte, `CapacidadComandoProcesador.liberar` resta capacidad para cada `commandId` nuevo sin comprobar una reserva activa de ese envío. Las pruebas reproducen la regresión de estado y que una cancelación más su compensación dejan 0 cupos ocupados cuando debían quedar 2 pertenecientes a otro envío. Se necesita idempotencia persistente de liberación por reserva/envío y gestionar la compensación sin reabrir estados ni perder el reintento si falla su publicación.
+
+**R6 — P2: la idempotencia por envío no protege reservas concurrentes (T10).** `CapacidadComandoProcesador.kt:37,70` consulta el historial antes de bloquear la fila de flota en `reservar`. Con dos consumidores o instancias, ambas transacciones pueden observar que no hay reserva, y luego adquirir sucesivamente el bloqueo y descontar cupo dos veces. Una prueba determinista con dos hilos, barrera en la lectura del historial y bloqueo de fila simulado reproduce 6 cupos en vez de 3 para el mismo envío. Se debe serializar la comprobación y modificación por una clave estable de reserva/envío, con garantía en la base de datos; el test previo solo cubre el caso secuencial.
+
+### 13.4 Pruebas adicionales y límites de la evidencia
+
+Las pruebas de diagnóstico están en `%TEMP%\rutaexpress-ep2-review`, fuera del árbol de fuentes versionado:
+
+- Catalog: dos tests adicionales ejecutan el procesador real con dobles de repositorio; fallan con 6 frente a 3 cupos para reservas simultáneas y 0 frente a 2 para dos liberaciones. No sustituyen una prueba de concurrencia contra Oracle real.
+- Shipments: en una copia temporal, tras hacer explícitos los tipos del test que bloqueaba la compilación, pasan sus 22 tests existentes; fallan dos tests adicionales por redelivery y longitud del evento de compensación. La prueba de longitud usa el servicio transaccional y la base H2 real, con la columna de 64 caracteres.
+- BFF: en una copia temporal, tras corregir únicamente los arrays de R1, el import y la dependencia de R2, pasan sus 19 tests existentes y cuatro pruebas nuevas con un servidor HTTP local. Estas últimas comprueban Bearer y JSON/201, conservación de 400 y `ProblemDetail`, codificación de `#` como `%23`, y 503 ante conexión rechazada. Este resultado no convierte en válido el build del BFF publicado, que sigue fallando.
+
+Quedan sin verificar el stack con RabbitMQ, Redis y Oracle reales, los tres tests Docker de notify, las migraciones Oracle, Entra ID, API Gateway y la demo AWS. `deploy-aws.bat` no se encuentra en la ruta de Downloads indicada en este documento; no se pudo revisar ni modificar.
+
+Los cambios de T1/T2 dentro de compose, el bloqueo REST de T11, el prefijo centralizado de T12, la propiedad Kafka y las restricciones Prometheus están presentes. Las comprobaciones en copias temporales permiten validar dashboard y seguridad después de aislar los errores de compilación. El build de Angular confirma que T14 está incluido, pero los tres tests existentes no cubren específicamente la pantalla Admin.
