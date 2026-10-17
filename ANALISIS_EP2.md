@@ -3,8 +3,8 @@
 > **Para el agente de IA que lea esto.** Este documento resume qué exige la EP2, qué estaba mal antes, qué se arregló, qué sigue faltando y **qué archivos de qué servicio hay que tocar**. Las tareas están en la **sección 7**, ordenadas por prioridad, con archivos, pasos y criterio de aceptación. Antes de programar, lee las secciones 0, 7 y 9.
 >
 > - Última actualización: 2026-10-17.
-> - Rama de trabajo: `main`. El árbol estaba limpio antes de aplicar este plan; los cambios de esta iteración siguen sin commit.
-> - Revisión de ramas (2026-10-17): los cambios no están todavía en `origin/main` ni en las ramas remotas `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin`, `ms-rutaexpress-kafka-admin` y `testFrontend`. Sus HEAD difieren de `main`; se requiere integrar los cambios en cada rama.
+> - Rama de trabajo: `main`. Los cambios de código y documentación tienen el commit local `19e364a`.
+> - Revisión de ramas (2026-10-17): `main` y las ramas locales `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin` ya contienen los cambios. Sus ramas remotas aún no se han actualizado. `testFrontend` se dejó intacta porque es una aplicación React/Vite independiente en la raíz y no corresponde al frontend Angular de este análisis.
 > - Documentos de la evaluación: `C:\Users\pv-alumno\Downloads\EP2_Guia_Evaluacion.docx` y `C:\Users\pv-alumno\Downloads\Explicacion_de_Evaluacion_2.docx`
 > - Script de despliegue (**fuera del repo**): `C:\Users\pv-alumno\Downloads\deploy-aws.bat`
 
@@ -12,9 +12,9 @@
 
 ## 0. Resumen rápido
 
-**Estado general:** los cambios de configuración, código y documentación de este plan ya están aplicados en el árbol local de `main`. La revisión confirmó que aún no están guardados en commits ni propagados a las ramas remotas. La integración entre ramas está pendiente de poder escribir en el directorio `.git`. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway, publicar cambios y ejecutar la infraestructura.
+**Estado general:** los cambios de configuración, código y documentación están guardados en `main` y fusionados localmente en nueve ramas del proyecto. Las fusiones no tuvieron conflictos, salvo `testFrontend`, que se restauró sin cambios por usar otra aplicación y estructura. Falta publicar los commits en las ramas remotas. La validación quedó pendiente porque este entorno no tiene Java, Node/npm ni Docker. La demo en la nube sigue pendiente de actualizar el script externo de despliegue, configurar API Gateway y ejecutar la infraestructura.
 
-**Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas enumeradas arriba. Ninguna contiene los cambios locales de esta iteración. El árbol tiene divergencias respecto de esos HEAD, por lo que hay que integrar mediante merge y verificar que cada rama conserve sus cambios propios. No se ha hecho push.
+**Estado de ramas:** se revisaron `origin/main` y las diez ramas remotas. Se integró `main` mediante merge en las nueve ramas activas del monorepo, preservando los commits propios; las nueve ramas locales y `main` están listas para push. `testFrontend` conserva su HEAD original (`abffea3`) porque es un frontend React/Vite separado; el merge automático produjo conflictos de renombres y README, se canceló y no se alteró su historial. No se ha hecho push.
 
 **Pendientes de entrega o validación:**
 
@@ -30,7 +30,7 @@
 | P3 (menores) | bff, shipments, frontend | Dashboard tolerante a fallos, Kafka config y métricas protegidas; Tailwind pendiente de build | T13 |
 | Opcional | `frontend` | Vista Admin de RabbitMQ agregada | T14 |
 
-**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T8 (integrar y publicar los cambios en las ramas; autorizado por el usuario, pendiente de permiso de escritura sobre `.git`), T9 (repos separados) y T15 (preparar y ejecutar la demo).
+**Acciones pendientes:** T1/T3 en el script externo, T5 (API Gateway), T8 (push de `main` y las nueve ramas integradas; autorizado por el usuario), T9 (repos separados) y T15 (preparar y ejecutar la demo). `testFrontend` requeriría una adaptación independiente a React/Vite antes de incorporar cambios de interfaz.
 
 ---
 
@@ -338,7 +338,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 |---|---|---|---|
 | **IL 2.1** Nombres centralizados | ⚠️ | ✅ | `RabbitNombres` (`@ConfigurationProperties("app.rabbit")`) en los 4 servicios. Queda **1 texto fijo**: `AuditoriaListener.kt:40` (T12) |
 | Beans separados | ✅ | ✅ | `RabbitMqConfig` en shipments, catalog y notify; `RabbitTopology` en mq-admin |
-| 2 nodos en clúster | ⚠️ | ✅ local / ❌ nube | Nombres de la guía y `autoheal`. El compose de las apps está roto (N1) |
+| 2 nodos en clúster | ⚠️ | ✅ local / ❌ nube | Nombres de la guía y `autoheal`; compose de apps corregido. La nube aún depende del script y despliegue (T1, T3, T8, T15) |
 | **IL 2.2** 3 colas con DLQ | ✅ | ✅ | command, notification y audit, cada una con su `.dlq` |
 | direct y topic | ⚠️ | ✅ | direct para comandos punto a punto; topic para eventos y notificaciones por patrón |
 | `@RabbitListener` por dominio y ACK manual | ✅ | ✅ | `AcknowledgeMode.MANUAL` en 3 servicios |
@@ -348,65 +348,50 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | Prefetch explícito | — | ✅ | `setPrefetchCount(RABBIT_PREFETCH=10)` |
 | **IL 2.3** REST crear y eliminar | ❌ | ✅ | Ver la tabla de endpoints de la sección 3 |
 | `RabbitAdminService` y validación | ⚠️ | ✅ | `@NotBlank`, regex de nombre, prefijo `amq.` reservado, rangos de TTL, tipos válidos, 400/404/409/503, topología núcleo protegida con `force` |
-| Rutas admin por BFF/Gateway | ⚠️ | ❌ | `BrokerAdminController.kt:26-29` sigue reenviando solo los GET `cluster`, `queues` y `alerts` (**T4, T5**) |
+| Rutas admin por BFF/Gateway | ⚠️ | ⚠️ | El BFF ahora reenvía las operaciones admin y restringe el acceso a Admin; falta configurar el API Gateway (**T5**) |
 | Métricas | ✅ | ✅ | Además: `/metrics` (activeQueues, messagesReady, messagesUnacknowledged, consumers, dlqQueues, dlqMessages) |
 | Retención | ✅ | ✅ | Aplicada en el broker (verificado) |
 | **Entrega** Repos separados | ❌ | ❌ | **T9** |
-| `.gitignore` | ⚠️ | ⚠️ | mq-admin ✅; kafka-admin todavía no (**T7**) |
-| README | ✅ | ⚠️ | Desactualizados (N4, **T6**) |
-| Cambios en GitHub | — | ❌ | Nada commiteado (N3, **T8**) |
+| `.gitignore` | ⚠️ | ✅ | mq-admin y kafka-admin tienen reglas para sus herramientas y secretos (**T7**) |
+| README | ✅ | ✅ | READMEs de topología, administración, despliegue y servicios actualizados (**T6**) |
+| Cambios en GitHub | — | ⚠️ | Commit local `19e364a` y merges locales en nueve ramas; push pendiente (**T8**) |
 
 ### 6.4 Estado de los bugs anteriores
 
 | Bug | Estado | Detalle |
 |---|---|---|
-| B1 | ❌ **sigue** | `infra/apps/compose.yml:43-44` (catalog), `:102-103` (audit), `:131-132` (report), `:160-161` (shipments) y `infra/apps/.env.example:2`. **T3** |
+| B1 | ⚠️ parcial | Compose y `.env.example` del repo ya usan el perfil Oracle y `DB_URL`; queda actualizar el script externo de despliegue (**T1, T3**) |
 | B2 | ✅ | `application-local.yml` de shipments ya no apaga RabbitMQ; el compose define `RABBIT_ENABLED=true` y `CATALOGO_ENABLED=true` |
 | B3 | ✅ | `autoheal` (verificado en vivo) |
-| B4 | ⚠️ casi | **Resuelto:** la reserva por REST se eliminó; ahora es un comando asíncrono idempotente por `commandId`, con compensación si el envío se cancela antes de reservar. **Queda (T10):** ver la tarea |
-| B5 | ⚠️ casi | **Resuelto:** la mensajería usa `findLockedByServiceIdAndZoneAndVehicleType` (`PESSIMISTIC_WRITE`). **Queda (T11):** el endpoint REST `reserveCapacity` y `releaseCapacity` (`CatalogViewModelService.kt:297` y `:346`) sigue sin bloqueo |
-| Menor 1: dashboard del BFF | ❌ | T13a |
-| Menor 2: propiedad de Kafka | ❌ | T13b |
+| B4 | ✅ código | Se ordenó la publicación para que la reserva sea el último paso y se agregó idempotencia por envío; tests agregados, falta ejecutarlos (**T10**) |
+| B5 | ✅ código | Los endpoints REST de reserva/liberación ahora usan consultas con bloqueo pesimista (**T11**); tests pendientes de ejecución |
+| Menor 1: dashboard del BFF | ✅ código | Las fuentes de datos fallidas generan avisos y no tumban todo el dashboard (**T13a**); tests pendientes |
+| Menor 2: propiedad de Kafka | ✅ | Propiedad de Kafka corregida (**T13b**) |
 | Menor 3: 500 vs 503 | ✅ | shipments `MensajeriaNoDisponibleException` → 503; mq-admin → 503 |
-| Menor 4: prometheus público | ❌ | T13c |
-| Menor 5: Tailwind | ❌ (no se volvió a verificar) | T13d |
-| Menor 6: nginx | ❌ | T13e |
+| Menor 4: prometheus público | ✅ código | Métricas restringidas a Admin en BFF y shipments; tests agregados, falta ejecutarlos (**T13c**) |
+| Menor 5: Tailwind | ⚠️ pendiente de verificación | El build del frontend no se pudo ejecutar porque no hay Node/npm (**T13d**) |
+| Menor 6: nginx | ✅ | Configuración documentada como local y variables de entorno aclaradas (**T13e**) |
 
 ### 6.5 Problemas NUEVOS introducidos por la iteración actual
 
-- **N1 (bloqueante): renombrado incompleto del clúster.**
-  - `infra/mq/compose.yml` ahora define `rabbit1` y `rabbit2`, pero estas referencias siguen con los nombres antiguos:
-    - `infra/apps/compose.yml`, en los 8 servicios (líneas 13-14, 39-40, 68-69, 98-99, 127-128, 156-157, 186-187 y 206-207).
-    - `infra/README.md:9` (comando de estado del clúster con el hostname antiguo).
-    - `C:\Users\pv-alumno\Downloads\deploy-aws.bat:652` (comando de estado con el hostname antiguo).
-  - Efecto: en Docker o EC2 ningún servicio conecta a RabbitMQ. shipments respondería 503 a cada creación o cambio de estado y los listeners nunca se conectarían.
-- **N2 (bloqueante para el admin): variable renombrada.**
-  - mq-admin lee `app.mq.management-urls=${RABBITMQ_MANAGEMENT_URLS:...}` (`application.properties:37`), pero el compose pasa `RABBITMQ_MANAGEMENT_URL` (`infra/apps/compose.yml:190`).
-  - En el contenedor usaría `http://localhost:15672`, así que todas las operaciones de administración darían 503. El `POST /topology` del deploy fallaría y solo dejaría un warning (deploy, línea 465).
-- **N3 (bloqueante para la entrega): sin commit.**
-  - `deploy-aws.bat:940` empaqueta con `git archive HEAD`, así que desplegaría el código antiguo. GitHub, que es lo que se entrega, tampoco tiene los cambios.
-- **N4: READMEs desactualizados.**
-  - `README.md:33` (sección Mensajería con `cmd.direct`, `cmd.topic` y `cmd.dead.dlx`).
-  - `README.md` "Validación realizada el 14 de octubre de 2026: 83 pruebas".
-  - `ms-rutaexpress-mq-admin/README.md:5` (topología antigua y "No existe un endpoint para purgar o borrar colas") y la lista de endpoints de las líneas 27-33.
-  - `ms-rutaexpress-notify/README.md:5-6`.
-  - `ms-rutaexpress-shipments/README.md:5` (reserva por REST y las claves `email.send`, `warehouse.ticket` y `label.gen`).
-  - El README de catalog no menciona el consumidor RabbitMQ.
-  - `infra/README.md:9`.
+- **N1 (resuelto en el repositorio; queda el script externo):** los ocho servicios de `infra/apps/compose.yml` y `infra/README.md` usan `rabbit1`/`rabbit2`. Falta actualizar `deploy-aws.bat:652` (**T1**).
+- **N2 (resuelto):** compose pasa `RABBITMQ_MANAGEMENT_URLS`, que es la variable que consume mq-admin.
+- **N3 (parcial):** cambios guardados en commit local `19e364a` y fusionados localmente en nueve ramas; sin push, GitHub y el `git archive HEAD` del servidor siguen usando las versiones remotas (**T8**).
+- **N4 (resuelto):** READMEs raíz, frontend, infraestructura y servicios actualizados (**T6**).
 
 ### 6.6 Pruebas mínimas (sección 7 de la guía): estado actual
 
 | ID | En el código | Evidencia | ¿Demostrable en la nube hoy? |
 |---|---|---|---|
 | R1-R3 | ✅ | Filtros JWT existentes; `AdminSecurityTests` (401) | ❌ (depende de T1-T3) |
-| R4 | ✅ | `AdminSecurityTests` "rechaza crear colas sin rol administrador" → 403. Por BFF todavía no hay ruta (T4) | ❌ |
+| R4 | ✅ código | `AdminSecurityTests` y nuevos tests de seguridad del proxy BFF → 403. Falta ejecutar los tests | ❌ |
 | R5 | ✅ | `EnvioServicio`: la transición inválida o la falta de capacidad lanzan la excepción antes de guardar y publicar | ❌ |
 | R6 | ✅ | `MensajeriaTests` | ❌ |
 | R7 | ✅ | Verificado en vivo en local | ❌ en la nube |
 | R8 | ✅ | Los 3 consumidores con ACK | ❌ |
 | R9 | ✅ | Tests unitarios y de integración (JSON inválido → DLQ) | ❌ |
 | R10 | ✅ | Test de integración (SMTP caído → reintentos → DLQ) | ❌ |
-| R11-R13 | ✅ | `MqAdminControllerTests`, `RabbitAdminServiceTests` | ❌ (N2) |
+| R11-R13 | ✅ código | `MqAdminControllerTests`, `RabbitAdminServiceTests` y proxy admin BFF; ejecución de tests pendiente | ❌ (falta despliegue) |
 | R14 | ✅ | Políticas verificadas en el broker | ❌ |
 
 ### 6.7 Checklist final de la guía (sección 9)
@@ -414,7 +399,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | # | Punto | Antes | Ahora |
 |---|---|---|---|
 | 1 | La EP1 sigue operativa (login, rutas protegidas y roles) | ✅ | ✅ (sin cambios; no verificado en vivo) |
-| 2 | API Gateway rechaza lo no autorizado y enruta todo, incluido `/api/admin/*` | ⚠️ | ⚠️ (T4, T5) |
+| 2 | API Gateway rechaza lo no autorizado y enruta todo, incluido `/api/admin/*` | ⚠️ | ⚠️ (BFF completado; falta configurar API Gateway, T5) |
 | 3 | El BFF valida el JWT y no accede a la base | ✅ | ✅ |
 | 4 | Dos nodos en clúster | ⚠️ | ✅ |
 | 5 | Clúster en la nube con Compose y accesible | ❌ | ❌ (T1-T3, T8) |
@@ -444,7 +429,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - Ponderado (críticos ×3, importantes ×2, menores ×1): **27,5 / 42 ≈ 65 %**. Contando los puntos por igual: ≈55 %.
 - Lo de mayor peso en la nota ya está hecho: IL 2.3 completo, DLQ, errores y catálogo por cola.
 - **Lo que falta es despliegue y entrega.** Eso es lo que permite mostrar todo en la presentación, que vale el 60 % de la EP2.
-- Importante: mientras no se haga commit y push, **GitHub sigue mostrando la versión antigua (≈47 %)**.
+- Mientras no se haga push, **GitHub sigue mostrando la versión anterior**; los commits están preparados solo en las ramas locales (**T8**).
 
 ---
 
@@ -569,11 +554,12 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 - Crear `ms-rutaexpress-kafka-admin/.gitignore` copiando `ms-rutaexpress-mq-admin/.gitignore` (Gradle/Kotlin, IDEs, `.env`).
 - Al separar los repos (T9), cada repo backend lleva su `.gitignore` de Gradle y el frontend el suyo de Angular (`frontend/.gitignore` ya existe).
 
-#### T8. Integración de los cambios en las ramas y publicación `[ ]` (autorizado por el usuario; pendiente de acceso de escritura a `.git`)
+#### T8. Integración de los cambios en las ramas y publicación `[ ]` (merge local completado; push pendiente)
 
-- Hay 31 archivos modificados, 1 borrado y 33 nuevos sin seguimiento.
-- Sin commit, ni GitHub ni `deploy-aws.bat` (que hace `git archive HEAD` y `git pull --ff-only origin main`) llevan los cambios.
-- Commit sugerido después de T1-T4: `feat(ep2): topología RabbitMQ completa, consumidores con DLQ, administrador REST y proxy BFF`.
+- Commit de código/documentación en `main`: `19e364a feat(ep2): apply ANALISIS_EP2 improvements`.
+- Merge de `main` aplicado sin conflictos en `frontend`, `ms-rutaexpress-bff`, `ms_catalog`, `ms_notify`, `ms-rutaexpress-audit`, `ms-rutaexpress-report`, `ms-rutaexpress-shipments`, `ms-rutaexpress-mq-admin` y `ms-rutaexpress-kafka-admin`. Sus ramas locales están listas para publicar.
+- `testFrontend` se conserva intacta: contiene otra app React/Vite en la raíz, no el frontend Angular de este plan; el merge de monorepo se canceló tras detectar conflictos.
+- Pendiente: push de `main` y las nueve ramas anteriores. El usuario autorizó esta publicación.
 
 #### T9. Repositorios separados `[ ]` (**el usuario debe crear los repos en GitHub**)
 
@@ -669,19 +655,22 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
 | Servicio | ¿Completo para la EP2? | Archivos pendientes | Tareas |
 |---|---|---|---|
 | `ms-rutaexpress-bff` | Código aplicado; tests pendientes de ejecutar | Proxy Admin, dashboard tolerante a fallos, protección de Prometheus | T4, T13a, T13c |
-| `infra/apps` | Compose actualizado; validación Docker pendiente | Nombres RabbitMQ, management URLs, Oracle y perfiles | T1, T2, T3 |
-| `infra` (README) | Actualizado | Comandos de RabbitMQ y Oracle documentados | T1, T3, T6 |
+| `infra/apps` | Compose actualizado; validación Docker pendiente | Script externo y verificación de Oracle | T1, T2, T3 |
+| `infra` (README) | Actualizado | Configuración documentada; queda el script externo | T1, T3, T6 |
 | `deploy-aws.bat` (fuera del repo) | Pendiente, sin editar | Líneas 618, 652 y 663 | T1, T3 |
-| `ms-rutaexpress-shipments` | Código y README aplicados; tests pendientes | Reserva al final, prefijo centralizado, propiedad Kafka y Prometheus protegido | T6, T10, T12, T13b, T13c |
-| `ms-rutaexpress-catalog` | Código y README aplicados; tests pendientes | Idempotencia por envío y bloqueo pesimista REST | T6, T10, T11 |
+| `ms-rutaexpress-shipments` | Código y README aplicados; tests pendientes | Orden de reserva, routing key, propiedad Kafka y Prometheus protegidos | T6, T10, T12, T13b, T13c |
+| `ms-rutaexpress-catalog` | Código y README aplicados; tests pendientes | Idempotencia por envío y bloqueo pesimista REST implementados | T6, T10, T11 |
 | `ms-rutaexpress-notify` | README actualizado | Topología, DLQ, reintentos y variables documentados | T6 |
 | `ms-rutaexpress-mq-admin` | README actualizado | CRUD, retención, errores y URL de Management documentados | T6 |
 | `ms-rutaexpress-kafka-admin` | `.gitignore` agregado | Reglas de Gradle/Kotlin, IDE y `.env` | T7 |
 | `frontend` | Vista Admin y documentación nginx aplicadas; build pendiente | Gestión RabbitMQ y ruta de producción por Gateway | T13d, T13e, T14 |
 | `ms-rutaexpress-audit`, `ms-rutaexpress-report` | Sin cambios de código | — | — |
-| Repos, Git y AWS | Pendiente fuera del alcance autorizado | Commit, push, repos separados, API Gateway y demo | T5, T8, T9, T15 |
+| Ramas Git | Merge local hecho en `main` y nueve ramas; push pendiente; `testFrontend` separado | Publicar ramas integradas | T8 |
+| Repos separados, Gateway y AWS | Pendiente | Crear repos, configurar API Gateway y preparar demo | T5, T9, T15 |
 
-**Pendiente:** validar cuando estén disponibles JDK, Node/npm y Docker; editar el script de despliegue externo; configurar API Gateway y preparar la demo.
+**Hecho:** código, documentación y pruebas nuevas aplicados; commit local en `main`; merges limpios en nueve ramas locales.
+
+**Pendiente:** push de `main` y las nueve ramas; adaptar `testFrontend` solo si se decide mantener esa app React/Vite; ejecutar validaciones cuando estén disponibles JDK, Node/npm y Docker; editar el script externo, configurar API Gateway y preparar la demo.
 
 ---
 
@@ -696,7 +685,7 @@ No se pudo verificar entonces: el tenant de Entra ID, el API Gateway (autorizado
    - `tools.jackson.*` (Jackson 3), no `com.fasterxml`.
    - Tests con `mockito-kotlin` y `@MockitoBean`.
 4. **Cada servicio es un proyecto Gradle independiente.** Probar dentro de su carpeta: `.\gradlew.bat test bootJar`. Si Maven Central responde 429, usar un init script fuera del repo con el mirror `https://maven-central.storage-download.googleapis.com/maven2/`.
-5. **No hacer commit, push, crear repos ni tocar AWS** sin la autorización explícita del usuario.
+5. **No hacer commit, push, crear repos ni tocar AWS** sin autorización explícita. Para esta iteración el usuario autorizó commit e integración en las ramas existentes; el push sigue pendiente de ejecución.
 6. **No editar `C:\Users\pv-alumno\Downloads\deploy-aws.bat` sin preguntar**: está fuera del repo.
 7. **No modificar `docs/`**: está excluido de los commits por convención del proyecto.
 8. Después de cada tarea, ejecutar los tests del servicio afectado, marcar el `[x]` en este documento y actualizar el README correspondiente si cambió el comportamiento.
