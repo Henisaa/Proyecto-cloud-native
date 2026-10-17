@@ -6,11 +6,17 @@ import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.annotations.DynamicUpdate
 import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * DynamicUpdate: cada escritura solo actualiza las columnas que cambió. Así, el resultado de capacidad que
+ * llega por RabbitMQ y una transición de estado hecha en paralelo no se pisan entre sí.
+ */
 @Entity
+@DynamicUpdate
 @Table(name = "tb_shipments")
 class Envio(
     @Id
@@ -71,6 +77,10 @@ class Envio(
 
     @Column(name = "capacity_reserved", nullable = false)
     var capacityReserved: Boolean = false,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "capacity_status", length = 20, nullable = false)
+    var capacityStatus: EstadoCapacidad = EstadoCapacidad.NO_APLICA,
 
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant = Instant.now(),

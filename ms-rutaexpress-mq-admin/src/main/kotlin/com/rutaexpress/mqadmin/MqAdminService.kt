@@ -1,88 +1,119 @@
 package com.rutaexpress.mqadmin
 
 import io.micrometer.core.instrument.MeterRegistry
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
-import org.springframework.amqp.core.AmqpAdmin
+import io.micrometer.core.instrument.Tag
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.client.JdkClientHttpRequestFactory
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
-import org.springframework.web.client.RestClient
-import java.net.http.HttpClient
-import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
-data class RetentionRequest(
-    @field:Min(1000) @field:Max(2592000000) val commandTtlMs: Long = 86400000,
-    @field:Min(1000) @field:Max(2592000000) val dlqTtlMs: Long = 604800000,
-    @field:Min(1) @field:Max(1000000) val maxLength: Int = 10000
-)
-
+/**
+ * Monitoreo y políticas de retención del clúster: colas de la topología, DLQ con alerta,
+ * métricas agregadas y políticas que limitan tamaño y expiración de los mensajes.
+ */
 @Service
 class MqAdminService(
-    private val admin: AmqpAdmin,
-    registry: MeterRegistry,
-    @Value("\${app.mq.management-url}") url: String,
-    @Value("\${spring.rabbitmq.username}") username: String,
-    @Value("\${spring.rabbitmq.password}") password: String,
+    private val cliente: ClienteGestion,
+    private val topologia: RabbitTopology,
+    registro: MeterRegistry,
     @Value("\${spring.rabbitmq.virtual-host:/}") private val vhost: String,
-    @Value("\${app.mq.alert-threshold:1}") private val threshold: Int,
-    @Value("\${app.mq.command-ttl-ms:86400000}") private val commandTtl: Long,
-    @Value("\${app.mq.dlq-ttl-ms:604800000}") private val dlqTtl: Long,
-    @Value("\${app.mq.max-length:10000}") private val maxLength: Int
+    @Value("\${app.mq.alert-threshold:1}") private val umbralAlerta: Int,
 ) {
-    private val client = RestClient.builder().baseUrl(url)
-        .requestFactory(JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()).apply { setReadTimeout(Duration.ofSeconds(10)) })
-        .defaultHeaders { it.setBasicAuth(username, password) }.build()
-    private val observed = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+    private val log = LoggerFactory.getLogger(MqAdminService::class.java)
+    private val profundidadDlq = ConcurrentHashMap<String, AtomicLong>()
+
     init {
-        RabbitTopology.queues.filter { it.endsWith(".dlq") }.forEach { name ->
-            val count = java.util.concurrent.atomic.AtomicLong()
-            observed[name] = count
-            registry.gauge("rutaexpress.mq.dlq.depth", listOf(io.micrometer.core.instrument.Tag.of("queue", name)), count)
+        topologia.dlqs().forEach { dlq ->
+            val valor = AtomicLong()
+            profundidadDlq[dlq] = valor
+            registro.gauge("rutaexpress.mq.dlq.depth", listOf(Tag.of("queue", dlq)), valor)
         }
     }
 
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelayString="\${app.mq.poll-interval-ms:30000}", initialDelay=10000)
-    fun monitor() {
+    @Scheduled(fixedDelayString = "\${app.mq.poll-interval-ms:30000}", initialDelay = 10000)
+    fun monitorizar() {
         try {
-            queues().filter { it["alert"] == true }.forEach {
-                org.slf4j.LoggerFactory.getLogger(javaClass).warn("DLQ {} tiene {} mensajes pendientes", it["name"], it["messages"])
-            }
-        } catch(ex: org.springframework.web.client.RestClientException) {
-            org.slf4j.LoggerFactory.getLogger(javaClass).warn("No se pudo muestrear RabbitMQ: {}", ex.javaClass.simpleName)
+            alertas().forEach { log.warn("DLQ {} tiene {} mensajes pendientes", it["name"], it["messages"]) }
+        } catch (ex: BrokerNoDisponibleException) {
+            log.warn("No se pudo muestrear RabbitMQ: {}", ex.message)
         }
     }
 
-    fun cluster(): Any = client.get().uri("/api/nodes").retrieve().body(Any::class.java) ?: emptyList<Any>()
-    fun queues(): List<Map<String, Any>> = RabbitTopology.queues.sorted().map { name ->
-        val data = client.get().uri("/api/queues/{vhost}/{name}", vhost, name).retrieve().body(Map::class.java) ?: emptyMap<String, Any>()
-        val messages = (data["messages"] as? Number)?.toLong() ?: 0L
-        observed[name]?.set(messages)
-        mapOf("name" to name, "messages" to messages,
-            "messagesReady" to ((data["messages_ready"] as? Number)?.toLong() ?: 0L),
-            "unacknowledged" to ((data["messages_unacknowledged"] as? Number)?.toLong() ?: 0L),
-            "consumers" to ((data["consumers"] as? Number)?.toLong() ?: 0L),
-            "alert" to (name.endsWith(".dlq") && messages >= threshold))
+    fun cluster(): Any = cliente.obtener("/api/nodes", List::class.java) ?: emptyList<Any>()
+
+    /** Estado de las colas de la topología fija. Una cola no declarada aparece con declared=false. */
+    fun colas(): List<Map<String, Any?>> = topologia.colasDeMonitoreo().map { nombre ->
+        val datos = cliente.objeto(RutasGestion.cola(vhost, nombre))
+        val mensajes = numero(datos, "messages")
+        profundidadDlq[nombre]?.set(mensajes)
+        mapOf(
+            "name" to nombre,
+            "declared" to (datos != null),
+            "messages" to mensajes,
+            "messagesReady" to numero(datos, "messages_ready"),
+            "unacknowledged" to numero(datos, "messages_unacknowledged"),
+            "consumers" to numero(datos, "consumers"),
+            "alert" to (nombre.endsWith(".dlq") && mensajes >= umbralAlerta),
+        )
     }
-    fun reconcile(): Map<String, Any> {
-        val declarations = RabbitTopology().topology().declarables
-        declarations.filterIsInstance<org.springframework.amqp.core.Exchange>().forEach { admin.declareExchange(it) }
-        declarations.filterIsInstance<org.springframework.amqp.core.Queue>().forEach { admin.declareQueue(it) }
-        declarations.filterIsInstance<org.springframework.amqp.core.Binding>().forEach { admin.declareBinding(it) }
-        retention(RetentionRequest(commandTtl, dlqTtl, maxLength))
-        return mapOf("exchanges" to listOf("cmd.direct", "cmd.topic", "cmd.dead.dlx"), "queues" to RabbitTopology.queues)
+
+    fun alertas(): List<Map<String, Any?>> = colas().filter { it["alert"] == true }
+
+    /** Totales del vhost: colas activas, mensajes pendientes, sin confirmar, consumidores y mensajes en DLQ. */
+    fun metricas(): Map<String, Any> {
+        val todas = cliente.lista(RutasGestion.colasDelVhost(vhost))
+        val dlq = todas.filter { (it["name"] as? String)?.endsWith(".dlq") == true }
+        return mapOf(
+            "activeQueues" to todas.size,
+            "messagesReady" to todas.sumOf { numero(it, "messages_ready") },
+            "messagesUnacknowledged" to todas.sumOf { numero(it, "messages_unacknowledged") },
+            "consumers" to todas.sumOf { numero(it, "consumers") },
+            "dlqQueues" to dlq.size,
+            "dlqMessages" to dlq.sumOf { numero(it, "messages") },
+            "queues" to todas.map {
+                mapOf("name" to it["name"], "messages" to numero(it, "messages"), "consumers" to numero(it, "consumers"))
+            },
+        )
     }
-    fun retention(request: RetentionRequest): RetentionRequest {
-        val validator = jakarta.validation.Validation.buildDefaultValidatorFactory()
-        validator.use { require(it.validator.validate(request).isEmpty()) { "Retención fuera de límites" } }
-        policy("rutaexpress.commands", "^q\\.cmd\\.(email|warehouse|label)$", request.commandTtlMs, request.maxLength)
-        policy("rutaexpress.dlq", "^q\\.cmd\\.(email|warehouse|label)\\.dlq$", request.dlqTtlMs, request.maxLength)
-        return request
+
+    /** Política para colas de trabajo (rechaza publicar al llegar al límite) y otra para DLQ (descarta lo más antiguo). */
+    fun aplicarRetencion(solicitud: RetentionRequest): RetentionRequest {
+        require(solicitud.commandTtlMs in 1000..2_592_000_000L) { "commandTtlMs debe estar entre 1000 ms y 30 días" }
+        require(solicitud.dlqTtlMs in 1000..2_592_000_000L) { "dlqTtlMs debe estar entre 1000 ms y 30 días" }
+        require(solicitud.maxLength in 1..1_000_000) { "maxLength debe estar entre 1 y 1.000.000" }
+        cliente.escribir(
+            RutasGestion.politica(vhost, "rutaexpress.trabajo"),
+            mapOf(
+                "pattern" to patron(topologia.colasDeTrabajo()),
+                "apply-to" to "queues",
+                "priority" to 10,
+                "definition" to mapOf(
+                    "message-ttl" to solicitud.commandTtlMs,
+                    "max-length" to solicitud.maxLength,
+                    "overflow" to "reject-publish",
+                ),
+            ),
+        )
+        cliente.escribir(
+            RutasGestion.politica(vhost, "rutaexpress.dlq"),
+            mapOf(
+                "pattern" to patron(topologia.dlqs()),
+                "apply-to" to "queues",
+                "priority" to 10,
+                "definition" to mapOf(
+                    "message-ttl" to solicitud.dlqTtlMs,
+                    "max-length" to solicitud.maxLength,
+                    "overflow" to "drop-head",
+                ),
+            ),
+        )
+        return solicitud
     }
-    private fun policy(name: String, pattern: String, ttl: Long, length: Int) {
-        client.put().uri("/api/policies/{vhost}/{name}", vhost, name).body(mapOf(
-            "pattern" to pattern, "apply-to" to "queues", "priority" to 10,
-            "definition" to mapOf("message-ttl" to ttl, "max-length" to length, "overflow" to "reject-publish")
-        )).retrieve().toBodilessEntity()
-    }
+
+    private fun patron(nombres: List<String>): String =
+        "^(" + nombres.joinToString("|") { it.replace(".", "\\.") } + ")$"
+
+    private fun numero(datos: Map<*, *>?, clave: String): Long = (datos?.get(clave) as? Number)?.toLong() ?: 0L
 }
