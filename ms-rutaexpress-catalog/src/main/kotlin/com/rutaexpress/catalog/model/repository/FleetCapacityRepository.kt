@@ -3,7 +3,9 @@ package com.rutaexpress.catalog.model.repository
 import com.rutaexpress.catalog.model.entity.FleetCapacity
 import com.rutaexpress.catalog.model.enums.VehicleType
 import com.rutaexpress.catalog.model.enums.ZoneType
+import jakarta.persistence.LockModeType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
@@ -17,6 +19,14 @@ interface FleetCapacityRepository : JpaRepository<FleetCapacity, Long> {
     fun findByServiceIdAndZone(serviceId: Long, zone: ZoneType): List<FleetCapacity>
 
     fun findByServiceIdAndZoneAndVehicleType(
+        serviceId: Long,
+        zone: ZoneType,
+        vehicleType: VehicleType
+    ): Optional<FleetCapacity>
+
+    /** Lectura con bloqueo de escritura: evita que dos reservas simultáneas vendan el mismo cupo. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findLockedByServiceIdAndZoneAndVehicleType(
         serviceId: Long,
         zone: ZoneType,
         vehicleType: VehicleType

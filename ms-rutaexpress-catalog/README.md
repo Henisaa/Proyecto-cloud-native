@@ -2,7 +2,10 @@ ms-rutaexpress-catalog
 Servicios, tarifas y capacidad de flota
 
 Funcionamiento
-Persiste servicios, tarifas y capacidad en Oracle con JPA y Flyway. Permite consultar y administrar servicios, verificar disponibilidad y reservar/liberar cupos. Usa caché Caffeine y publica cambios en catalog.events. Las operaciones de administración requieren Admin; las consultas permiten los roles del dominio indicados por cada endpoint.
+Persiste servicios, tarifas y capacidad en Oracle con JPA y Flyway. Permite consultar y administrar servicios y tarifas, y verificar disponibilidad. Usa caché Caffeine y publica cambios en Kafka `catalog.events`. Las operaciones de administración requieren Admin; las consultas permiten los roles del dominio indicados por cada endpoint.
+
+RabbitMQ
+Consume comandos desde `q.rutaexpress.command`, enlazada a `ex.rutaexpress.cmd` con `capacity.reserve` y `capacity.release`. `CapacidadComandoProcesador` bloquea la línea de capacidad con `PESSIMISTIC_WRITE`, registra cada commandId en `tb_capacity_commands` (migración Flyway V2) y evita repetir reservas de un envío ya reservado. Publica `catalog.capacity.reserved`, `catalog.capacity.rejected` o `catalog.capacity.released` en `ex.rutaexpress.events`. Los rechazos no recuperables y los errores que agotan los reintentos van a `q.rutaexpress.command.dlq` sin requeue; `DeadLetterRegistro` los confirma y deja constancia en logs. `RABBIT_PREFETCH` define el QoS, `RABBIT_RETRY_MAX_ATTEMPTS` limita los reintentos, `RABBIT_RETRY_INITIAL_MS` define su espera inicial y `RABBIT_DLQ_CONSUMER_ENABLED=false` permite inspeccionar mensajes en Management UI.
 
 Requisitos
 JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.

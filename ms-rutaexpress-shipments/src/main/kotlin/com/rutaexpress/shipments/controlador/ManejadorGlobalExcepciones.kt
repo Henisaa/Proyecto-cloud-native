@@ -4,6 +4,7 @@ import com.rutaexpress.shipments.cliente.CapacidadNoDisponibleException
 import com.rutaexpress.shipments.cliente.CatalogoNoDisponibleException
 import com.rutaexpress.shipments.cliente.ServicioCatalogoNoEncontradoException
 import com.rutaexpress.shipments.dominio.ErrorResponse
+import com.rutaexpress.shipments.mensajeria.MensajeriaNoDisponibleException
 import com.rutaexpress.shipments.servicio.EnvioNoEncontradoException
 import com.rutaexpress.shipments.servicio.TransicionInvalidaException
 import jakarta.servlet.http.HttpServletRequest
@@ -31,6 +32,10 @@ class ManejadorGlobalExcepciones {
 
     @ExceptionHandler(CatalogoNoDisponibleException::class)
     fun catalogoCaido(ex: CatalogoNoDisponibleException, request: HttpServletRequest) =
+        respuesta(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.message, request)
+
+    @ExceptionHandler(MensajeriaNoDisponibleException::class)
+    fun mensajeriaCaida(ex: MensajeriaNoDisponibleException, request: HttpServletRequest) =
         respuesta(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.message, request)
 
     @ExceptionHandler(AccessDeniedException::class)

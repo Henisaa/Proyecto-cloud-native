@@ -1,6 +1,10 @@
 package com.rutaexpress.bff.controller
+
+import com.rutaexpress.bff.service.MqAdminCliente
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -16,18 +20,89 @@ import java.time.Duration
 @RequestMapping("/api/bff/admin")
 @PreAuthorize("hasRole('ADMIN')")
 class BrokerAdminController(
-    @Value("\${rutaexpress.services.mq-admin-url}") mqUrl: String,
+    private val mqAdmin: MqAdminCliente,
     @Value("\${rutaexpress.services.kafka-admin-url}") kafkaUrl: String
 ) {
     private fun client(url: String) = RestClient.builder().baseUrl(url)
         .requestFactory(JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()).apply { setReadTimeout(Duration.ofSeconds(15)) }).build()
-    private val mq = client(mqUrl)
     private val kafka = client(kafkaUrl)
     @GetMapping("/mq/{resource}")
-    fun mq(@PathVariable resource: String, @AuthenticationPrincipal jwt: Jwt?): Any {
-        requireResource(resource, setOf("cluster", "queues", "alerts"))
-        return get(mq, "/api/mq-admin/$resource", jwt)
+    fun mq(@PathVariable("resource") resource: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> {
+        requireResource(resource, setOf("cluster", "queues", "alerts", "metrics", "exchanges", "bindings"))
+        return mqAdmin.enviar(HttpMethod.GET, "/api/mq-admin/$resource", jwt?.tokenValue)
     }
+
+    @PostMapping("/mq/queues")
+    fun crearCola(@RequestBody body: Any, @AuthenticationPrincipal jwt: Jwt?) =
+        mqAdmin.enviar(HttpMethod.POST, "/api/mq-admin/queues", jwt?.tokenValue, body)
+
+    @DeleteMapping("/mq/queues/{name}")
+    fun eliminarCola(
+        @PathVariable("name") name: String,
+        @RequestParam("force", defaultValue = "false") force: Boolean,
+        @AuthenticationPrincipal jwt: Jwt?,
+    ) = mqAdmin.enviar(
+        HttpMethod.DELETE,
+        "/api/mq-admin/queues/{name}?force={force}",
+        jwt?.tokenValue,
+        uriVariables = arrayOf(name, force),
+    )
+
+    @PostMapping("/mq/exchanges")
+    fun crearExchange(@RequestBody body: Any, @AuthenticationPrincipal jwt: Jwt?) =
+        mqAdmin.enviar(HttpMethod.POST, "/api/mq-admin/exchanges", jwt?.tokenValue, body)
+
+    @DeleteMapping("/mq/exchanges/{name}")
+    fun eliminarExchange(
+        @PathVariable("name") name: String,
+        @RequestParam("force", defaultValue = "false") force: Boolean,
+        @AuthenticationPrincipal jwt: Jwt?,
+    ) = mqAdmin.enviar(
+        HttpMethod.DELETE,
+        "/api/mq-admin/exchanges/{name}?force={force}",
+        jwt?.tokenValue,
+        uriVariables = arrayOf(name, force),
+    )
+
+    @PostMapping("/mq/bindings")
+    fun crearEnlace(@RequestBody body: Any, @AuthenticationPrincipal jwt: Jwt?) =
+        mqAdmin.enviar(HttpMethod.POST, "/api/mq-admin/bindings", jwt?.tokenValue, body)
+
+    @DeleteMapping("/mq/bindings")
+    fun eliminarEnlace(
+        @RequestParam("source") source: String,
+        @RequestParam("destination") destination: String,
+        @RequestParam("destinationType", defaultValue = "queue") destinationType: String,
+        @RequestParam("routingKey", defaultValue = "") routingKey: String,
+        @RequestParam("force", defaultValue = "false") force: Boolean,
+        @AuthenticationPrincipal jwt: Jwt?,
+    ) = mqAdmin.enviar(
+        HttpMethod.DELETE,
+        "/api/mq-admin/bindings?source={source}&destination={destination}&destinationType={destinationType}&routingKey={routingKey}&force={force}",
+        jwt?.tokenValue,
+        uriVariables = arrayOf(source, destination, destinationType, routingKey, force),
+    )
+
+    @PostMapping("/mq/topology")
+    fun reconciliarTopologia(@AuthenticationPrincipal jwt: Jwt?) =
+        mqAdmin.enviar(HttpMethod.POST, "/api/mq-admin/topology", jwt?.tokenValue)
+
+    @PutMapping("/mq/retention")
+    fun actualizarRetencion(@RequestBody body: Any, @AuthenticationPrincipal jwt: Jwt?) =
+        mqAdmin.enviar(HttpMethod.PUT, "/api/mq-admin/retention", jwt?.tokenValue, body)
+
+    @PostMapping("/mq/exchanges/{name}/messages")
+    fun publicarMensaje(
+        @PathVariable("name") name: String,
+        @RequestBody body: Any,
+        @AuthenticationPrincipal jwt: Jwt?,
+    ) = mqAdmin.enviar(
+        HttpMethod.POST,
+        "/api/mq-admin/exchanges/{name}/messages",
+        jwt?.tokenValue,
+        body,
+        arrayOf(name),
+    )
     @GetMapping("/kafka/{resource}")
     fun kafka(@PathVariable resource: String, @AuthenticationPrincipal jwt: Jwt?): Any {
         requireResource(resource, setOf("cluster", "topics"))
