@@ -29,7 +29,7 @@ class EnvioServicioTests {
             recipientEmail = "ana@example.com",
         )
         whenever(repositorio.findById("shipment-1")).thenReturn(Optional.of(envio))
-        whenever(repositorio.saveAndFlush(any())).thenAnswer { it.getArgument(0) }
+        whenever(repositorio.saveAndFlush(any<Envio>())).thenAnswer { it.getArgument<Envio>(0) }
 
         EnvioServicio(repositorio, catalogo, eventos, mensajeria)
             .cambiarEstado("shipment-1", "ACEPTADO", "token")

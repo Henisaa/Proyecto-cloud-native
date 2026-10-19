@@ -45,7 +45,7 @@ class BrokerAdminController(
         HttpMethod.DELETE,
         "/api/mq-admin/queues/{name}?force={force}",
         jwt?.tokenValue,
-        uriVariables = arrayOf(name, force),
+        uriVariables = arrayOf<Any>(name, force),
     )
 
     @PostMapping("/mq/exchanges")
@@ -61,7 +61,7 @@ class BrokerAdminController(
         HttpMethod.DELETE,
         "/api/mq-admin/exchanges/{name}?force={force}",
         jwt?.tokenValue,
-        uriVariables = arrayOf(name, force),
+        uriVariables = arrayOf<Any>(name, force),
     )
 
     @PostMapping("/mq/bindings")
@@ -80,7 +80,7 @@ class BrokerAdminController(
         HttpMethod.DELETE,
         "/api/mq-admin/bindings?source={source}&destination={destination}&destinationType={destinationType}&routingKey={routingKey}&force={force}",
         jwt?.tokenValue,
-        uriVariables = arrayOf(source, destination, destinationType, routingKey, force),
+        uriVariables = arrayOf<Any>(source, destination, destinationType, routingKey, force),
     )
 
     @PostMapping("/mq/topology")

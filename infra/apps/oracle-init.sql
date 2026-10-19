@@ -1,3 +1,6 @@
+-- Oracle 23c Free: Cambiar a la PDB por defecto para crear los usuarios de aplicación
+ALTER SESSION SET CONTAINER = FREEPDB1;
+
 CREATE USER ruta_catalog IDENTIFIED BY "Rutaexpress123";
 GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE TO ruta_catalog;
 ALTER USER ruta_catalog QUOTA UNLIMITED ON USERS;
