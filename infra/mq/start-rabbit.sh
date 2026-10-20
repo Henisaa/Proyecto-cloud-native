@@ -8,7 +8,15 @@ ctl() { gosu rabbitmq rabbitmqctl "$@"; }
 # Existing accounts must authenticate: never silently rotate an existing password.
 if [ "${HOSTNAME}" = rabbit1 ]; then
   (
-    ctl await_startup
+    ready=false
+    for attempt in {1..60}; do
+      if ctl await_startup >/dev/null 2>&1; then ready=true; break; fi
+      sleep 2
+    done
+    if [ "$ready" != true ]; then
+      echo 'RabbitMQ did not become ready for account initialization' >&2
+      exit 1
+    fi
     if ! ctl authenticate_user "$RABBITMQ_DEFAULT_USER" "$RABBITMQ_DEFAULT_PASS" >/dev/null 2>&1; then
       ctl add_user "$RABBITMQ_DEFAULT_USER" "$RABBITMQ_DEFAULT_PASS"
     fi
