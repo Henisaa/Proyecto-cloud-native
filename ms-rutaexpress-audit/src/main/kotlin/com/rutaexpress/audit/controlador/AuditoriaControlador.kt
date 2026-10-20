@@ -4,6 +4,8 @@ import com.rutaexpress.audit.dominio.EventoAuditoria
 import com.rutaexpress.audit.repositorio.AuditoriaRepositorio
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -15,9 +17,14 @@ class AuditoriaControlador(
 ) {
 
     @GetMapping
-    @Operation(summary = "Listar eventos recientes de auditoría")
-    fun listarTodos(): ResponseEntity<List<EventoAuditoria>> =
-        ResponseEntity.ok(auditoriaRepositorio.findAll())
+    @Operation(summary = "Listar eventos recientes de auditoría, paginados (máximo 100 por página)")
+    fun listarTodos(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "50") size: Int,
+    ): ResponseEntity<List<EventoAuditoria>> {
+        val pagina = PageRequest.of(page.coerceAtLeast(0), size.coerceIn(1, 100), Sort.by(Sort.Direction.DESC, "fechaEvento"))
+        return ResponseEntity.ok(auditoriaRepositorio.findAll(pagina).content)
+    }
 
     @GetMapping("/entidad/{idEntidad}")
     @Operation(summary = "Consultar el historial y timeline por identificador de entidad (ej: idEnvio)")

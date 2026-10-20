@@ -69,6 +69,7 @@ class SecurityConfig(
                     auth
                         .requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/bff/status").hasRole("ADMIN")
                         .requestMatchers("/api/bff/report/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/audit/**").hasAnyRole("ADMIN", "AUDITOR")
                         .requestMatchers("/api/bff/catalog/manage/**").hasRole("ADMIN")

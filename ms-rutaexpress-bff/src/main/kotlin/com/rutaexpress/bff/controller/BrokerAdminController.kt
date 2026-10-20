@@ -28,7 +28,7 @@ class BrokerAdminController(
     private val kafka = client(kafkaUrl)
     @GetMapping("/mq/{resource}")
     fun mq(@PathVariable("resource") resource: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> {
-        requireResource(resource, setOf("cluster", "queues", "alerts", "metrics", "exchanges", "bindings"))
+        requireResource(resource, setOf("cluster", "queues", "alerts", "metrics", "exchanges", "bindings", "policies"))
         return mqAdmin.enviar(HttpMethod.GET, "/api/mq-admin/$resource", jwt?.tokenValue)
     }
 

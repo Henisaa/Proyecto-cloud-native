@@ -25,6 +25,9 @@ rutaexpress:
     azure-client-id: ${AZURE_CLIENT_ID:f3136620-804c-4b15-b22d-b6fad957937e}
     audience: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
     scope: ${AZURE_SCOPE:api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
+  http:
+    connect-timeout-ms: ${HTTP_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${HTTP_READ_TIMEOUT_MS:8000}
   services:
     catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
     notify-url: ${NOTIFY_SERVICE_URL:http://localhost:8082}
@@ -41,7 +44,9 @@ management:
         include: health,info,prometheus,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
+      probes:
+        enabled: true
 
 springdoc:
   api-docs:
