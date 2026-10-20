@@ -56,7 +56,13 @@ class BffDownstreamTests {
 
     @Test
     fun `la lista de envios codifica los filtros en la consulta`() {
-        server.expect(requestTo("http://catalog/api/shipments?page=1&size=20&from=2026-10-20T10:00:00%2B00:00"))
+        server.expect { request ->
+            assertThat(request.uri.path).isEqualTo("/api/shipments")
+            val consulta = requireNotNull(request.uri.rawQuery)
+            assertThat(consulta).contains("page=1", "size=20", "%2B").doesNotContain("+")
+            assertThat(org.springframework.web.util.UriUtils.decode(consulta, java.nio.charset.StandardCharsets.UTF_8))
+                .contains("from=2026-10-20T10:00:00+00:00")
+        }
             .andRespond(withSuccess("""{"content":[],"page":1}""", MediaType.APPLICATION_JSON))
 
         val respuesta = gateway.fetchShipments(
