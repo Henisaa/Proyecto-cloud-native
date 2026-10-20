@@ -129,9 +129,9 @@ export class ShipmentNewPage implements OnInit {
   readonly form = this.fb.group({
     serviceId: this.fb.control<number | null>(null, [Validators.required]),
     zone: this.fb.nonNullable.control('URBAN_CENTER', [Validators.required]),
-    packagesCount: this.fb.nonNullable.control(1, [Validators.required, Validators.min(1), Validators.max(99999)]),
-    weightKg: this.fb.control<number | null>(null, [Validators.required, Validators.min(0.01), Validators.max(99999999.99)]),
-    volumeM3: this.fb.control<number | null>(null, [Validators.required, Validators.min(0.001), Validators.max(9999999.999)]),
+    packagesCount: this.fb.nonNullable.control(1, [Validators.required, Validators.min(1), Validators.max(99999), Validators.pattern(/^\d+$/)]),
+    weightKg: this.fb.control<number | null>(null, [Validators.required, Validators.min(0.01), Validators.max(99999999.99), Validators.pattern(/^\d+(\.\d{1,2})?$/)]),
+    volumeM3: this.fb.control<number | null>(null, [Validators.required, Validators.min(0.001), Validators.max(9999999.999), Validators.pattern(/^\d+(\.\d{1,3})?$/)]),
     recipientName: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(120)]),
     recipientEmail: this.fb.nonNullable.control('', [Validators.email, Validators.maxLength(120)]),
     recipientPhone: this.fb.nonNullable.control('', [Validators.maxLength(30)]),
@@ -166,6 +166,7 @@ export class ShipmentNewPage implements OnInit {
   }
 
   enviar(): void {
+    if (this.enviando()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;

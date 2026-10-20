@@ -45,7 +45,7 @@ class RabbitAdminService(
         // y aquí se traduce a 409 con una explicación, no a un 503 "Broker no disponible".
         declaraciones.filterIsInstance<Exchange>().forEach { e -> enRabbit("el exchange", e.name) { admin.declareExchange(e) } }
         declaraciones.filterIsInstance<Queue>().forEach { q -> enRabbit("la cola", q.name) { admin.declareQueue(q) } }
-        declaraciones.filterIsInstance<Binding>().forEach { b -> enRabbit("el enlace", b.exchange) { admin.declareBinding(b) } }
+        declaraciones.filterIsInstance<Binding>().forEach { b -> enRabbit("el enlace", b.exchange.orEmpty()) { admin.declareBinding(b) } }
         monitor.aplicarRetencion(RetentionRequest(ttlComandos, ttlDlq, maxLength))
         return mapOf(
             "exchanges" to topologia.nombresExchangesProtegidos().sorted(),

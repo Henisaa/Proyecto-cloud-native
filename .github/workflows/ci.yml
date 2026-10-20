@@ -137,6 +137,14 @@ jobs:
             -e RUN_DOCKER_TESTS=true \
             eclipse-temurin:21-jdk \
             sh -c "chmod +x gradlew && ./gradlew --no-daemon test"
+      - name: Reportes de integración
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracion-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}/build/reports/tests
+            ${{ matrix.service }}/build/test-results
 
   # Valida la sintaxis de los compose con valores de ejemplo.
   compose:

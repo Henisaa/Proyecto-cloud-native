@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { concat, from, toArray, concatMap } from 'rxjs';
+import { from, concatMap, tap } from 'rxjs';
 import { BffService } from '../../core/bff.service';
 import { interpretarError } from '../../core/http-error';
 import { MqExchange, MqPublicarResultado } from '../../core/models';
@@ -158,9 +158,14 @@ export class MqPublicarComponent implements OnInit {
   }
 
   publicar(): void {
+    if (this.enCurso()) return;
     const motivo = validarNombreMq(this.exchange(), 'el exchange') ?? validarClaveMq(this.clave());
     if (motivo) {
       this.errorForm.set(motivo);
+      return;
+    }
+    try { JSON.parse(this.cuerpo()); } catch {
+      this.errorForm.set('El cuerpo debe ser un JSON válido');
       return;
     }
     const repeticiones = Math.min(50, Math.max(1, Math.floor(Number(this.veces()) || 1)));
@@ -174,13 +179,12 @@ export class MqPublicarComponent implements OnInit {
         concatMap(() =>
           this.bff.publicarMensaje(this.exchange(), { routingKey: this.clave(), body: conIdNuevo(this.cuerpo()) })
         ),
-        toArray()
+        tap((resultado) => this.resultados.update(actuales => [...actuales, resultado]))
       )
       .subscribe({
-        next: (resultados) => {
-          this.resultados.set(resultados);
+        complete: () => {
           this.enCurso.set(false);
-          this.toasts.exito(`${resultados.length} mensaje(s) publicado(s).`);
+          this.toasts.exito(`${this.resultados().length} mensaje(s) publicado(s).`);
         },
         error: (err: unknown) => {
           this.enCurso.set(false);
@@ -190,5 +194,3 @@ export class MqPublicarComponent implements OnInit {
   }
 }
 
-// `concat` se importa por claridad de la API de rxjs usada arriba.
-void concat;
