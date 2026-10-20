@@ -1,43 +1,68 @@
-Infraestructura RutaExpress
-Ejecute los comandos desde la raíz del repositorio. Docker Compose v2 es necesario.
+# Infraestructura RutaExpress
 
-Desarrollo local con aplicaciones ejecutadas mediante Gradle
-docker network create rutaexpress
-docker compose -p rutaexpress-mq -f infra/mq/compose.yml up -d
-docker compose -p rutaexpress-kafka -f infra/kafka/compose.yml up -d
-docker compose -p rutaexpress-apps -f infra/apps/compose.yml up -d redis mailpit
-docker compose -p rutaexpress-mq -f infra/mq/compose.yml exec rabbit1 rabbitmqctl cluster_status
-docker compose -p rutaexpress-kafka -f infra/kafka/compose.yml ps
-RabbitMQ Management: localhost:15672 y localhost:15673, usuario rutaexpress, password rutaexpress-local. SMTP: localhost:1025; Mailpit: localhost:8025; Redis: localhost:6379; Kafka UI: localhost:8090.
-Arranque los administradores según sus README. En modo local sin JWT:
-Invoke-RestMethod -Method Post -Uri http://localhost:8086/api/mq-admin/topology
-Invoke-RestMethod -Method Post -Uri http://localhost:8087/api/kafka-admin/topology
-Luego arranque los consumidores y productores. No cree tópicos con réplicas 3 antes de que los tres brokers estén disponibles.
+Ejecución en EC2 con Docker Engine y Compose v2. GitHub Actions construye y prueba las imágenes y las publica en GHCR; el EC2 solo las descarga. No se instala JDK, Gradle, Node ni bases de datos en el PC.
 
-Aplicaciones en contenedores
-Los tres Compose utilizan la red externa rutaexpress. En infra/apps puede copiar .env.example a .env. Para desarrollo sin Azure defina SECURITY_ENABLED=false en el entorno o en ese archivo. El stack de aplicaciones inicia Oracle y espera a que esté saludable antes de iniciar catalog, audit, report y shipments.
-docker compose --env-file infra/apps/.env -p rutaexpress-apps -f infra/apps/compose.yml up -d --build
-Kafka y RabbitMQ deben levantarse antes de apps. Las URLs internas usan nombres de servicios Docker; desde el host se usan localhost y los puertos publicados.
-Los puertos se enlazan a 127.0.0.1 para desarrollo. En EC2 reemplace hosts y redes según las instancias, listeners EXTERNAL de Kafka con DNS/IP privados, y limite los Security Groups. No reutilice las credenciales locales. No hay aprovisionamiento automático de AWS API Gateway en estos Compose.
+```mermaid
+flowchart LR
+  SPA[Angular en app.dominio] -->|JWT y CORS| GW[API Gateway en api.dominio]
+  GW -->|X-Origin-Secret| Caddy[Caddy en origen.dominio]
+  Caddy --> BFF
+  BFF --> Apps[shipments / catalog / notify / rabbit-admin]
+  Apps --> Rabbit[2 nodos RabbitMQ]
+  Apps --> Oracle
+  Apps --> Redis
+```
 
-Oracle
-El stack Compose usa Oracle Free en la misma red y espera su healthcheck antes de arrancar las cuatro aplicaciones con persistencia. El perfil predeterminado es `prod`; el `application.yml` de cada servicio configura Oracle y Flyway. El script inicial crea `ruta_catalog`, `ruta_shipments`, `ruta_audit` y `ruta_report` en `FREEPDB1` con password `Rutaexpress123`. Se ejecuta únicamente cuando el volumen Oracle se inicializa. `DB_PASSWORD` cambia la contraseña de `SYSTEM` del contenedor; cambie también el script o las contraseñas de los usuarios si usa otro valor.
+## Acceso y roles
 
-Para usar una base Oracle cloud externa, defina `DB_URL=jdbc:oracle:thin:@//<host-cloud>:1521/<servicio>` en `infra/apps/.env`; mantenga `SPRING_PROFILES_ACTIVE=prod` y configure `SPRING_DATASOURCE_PASSWORD` para cada esquema. El compose seguirá esperando al contenedor Oracle local; para despliegues con base externa, use el compose del entorno correspondiente sin el servicio `oracle` ni esas dependencias. No exponga credenciales en Git.
+Solo Caddy publica 80/443. BFF y microservicios no publican puertos. Gestión RabbitMQ (15672/15673), Mailpit (8025) y Kafka UI (8090) se consultan por túnel SSH. API Gateway valida JWT, configura CORS y enruta `/api/admin/*` a `/api/bff/admin/*`; BFF y servicios vuelven a validar JWT y roles. Administración: solo Admin.
 
-RabbitMQ
-Las aplicaciones usan los nombres de host `rabbit1` y `rabbit2`. mq-admin prueba `RABBITMQ_MANAGEMENT_URLS=http://rabbit1:15672,http://rabbit2:15672` en orden, igual que el compose compartido.
+## Mensajes
 
-Persistencia y límites
-RabbitMQ tiene dos nodos con descubrimiento automático, cookie compartida y volúmenes separados. Las colas classic durables conservan datos en disco, pero no se replican automáticamente por estar en un clúster. Esta configuración cumple los dos nodos del caso y no promete continuidad de una cola cuando su nodo se cae. Alta disponibilidad de mensajes requiere planificar migración a quorum y preferiblemente tres nodos; dos réplicas quorum no toleran perder un nodo.
-start-zookeeper-mode.sh inicia el broker directamente en modo ZooKeeper, evitando el launcher KRaft por defecto de la imagen Apache.
-Kafka tiene tres brokers 3.9.2 y tres ZooKeeper 3.9. Las réplicas de tópicos son tres; min.insync.replicas=2. La configuración es PLAINTEXT para una red privada de desarrollo. Producción debe configurar TLS/SASL y credenciales de administradores con privilegios mínimos.
-Las políticas mq-admin limitan comandos y DLQ; expiración de DLQ es eliminación deliberada según su retención. No se reprocesan DLQ automáticamente ni se crea un ciclo entre DLQ y comandos.
+`ex.rutaexpress.cmd` direct entrega `capacity.reserve` y `capacity.release` a command. `ex.rutaexpress.events` topic entrega notificaciones y eventos de auditoría a notification y audit. Cada cola tiene DLQ con `x-death` y listener de logs; ACK manual, reintentos acotados y NACK sin reencolar. Las colas clásicas son durables, pero no se replican por estar en un clúster de dos nodos.
 
-Limpieza de recursos creados por estos comandos
-Detenga antes las aplicaciones ejecutadas con Gradle.
-docker compose -p rutaexpress-apps -f infra/apps/compose.yml down --volumes --rmi local
-docker compose -p rutaexpress-kafka -f infra/kafka/compose.yml down --volumes
-docker compose -p rutaexpress-mq -f infra/mq/compose.yml down --volumes
-docker network rm rutaexpress
-Los comandos down --volumes borran los datos locales de los stacks indicados; úselos solo cuando ya no necesite esos datos. Las imágenes descargadas compartidas no se borran con estos comandos. Elimine manualmente una imagen únicamente si fue creada o descargada para esta prueba y no la usa otro proyecto. No utilice prune global.
+## Variables y secretos
+
+Copiar `infra/.env.example` a `infra/.env` y completar los valores en EC2 con permisos 600. Nunca versionar el archivo real. La cookie se genera con `bash infra/scripts/init-secrets.sh` y no se reemplaza si ya existe.
+
+- `REGISTRY`, `IMAGE_TAG` y etiquetas específicas: imágenes de GHCR. El CI publica etiquetas `sha-<commit corto>`; usar ese prefijo completo al fijar una versión.
+- `SECURITY_ENABLED=true`, emisor y audiencia de Entra ID.
+- `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` propios, sin credenciales de desarrollo.
+- `ORACLE_ADMIN_PASSWORD` y una contraseña por esquema: `SHIPMENTS_DB_PASSWORD`, `CATALOG_DB_PASSWORD`, `AUDIT_DB_PASSWORD`, `REPORT_DB_PASSWORD`.
+- `APP_DOMAIN`, `ORIGIN_DOMAIN`, `ORIGIN_SECRET`, `ACME_EMAIL`, `FRONTEND_API_BASE_URL`, `MSAL_REDIRECT_URI`.
+- `KAFKA_ENABLED=false` por defecto. Para EP1 completa: true y `COMPOSE_PROFILES=ep1`, con memoria suficiente.
+
+Oracle crea usuarios en FREEPDB1 mediante `apps/oracle-init/001-users.sh` únicamente al inicializar un volumen vacío. Cambiar variables no cambia contraseñas de usuarios existentes. Para base gestionada, configurar DB_URL y retirar la dependencia de Oracle local mediante un override específico del entorno.
+
+## Construir y probar
+
+Las pruebas se ejecutan dentro de las imágenes en Actions. El job de integración usa Docker/Testcontainers para RabbitMQ, Redis y migraciones Oracle; no requiere instalar herramientas en el PC. El job compose valida las cuatro capas y los overrides de desarrollo.
+
+```sh
+docker compose --env-file infra/.env -f infra/apps/compose.yml config -q
+docker compose --env-file infra/.env -f infra/mq/compose.yml config -q
+docker compose --env-file infra/.env -f infra/kafka/compose.yml config -q
+docker compose --env-file infra/.env -f infra/edge/compose.yml config -q
+```
+
+## Ejecutar en EC2
+
+```sh
+bash infra/scripts/up.sh
+bash infra/scripts/status.sh
+docker compose --env-file infra/.env -f infra/mq/compose.yml exec rabbit1 rabbitmqctl cluster_status
+```
+
+Arranque: red compartida, cookie, RabbitMQ healthy, Kafka si EP1 está activa, datos/aplicaciones, frontend y Caddy. Compose aplica reinicio automático, límites de memoria y rotación de logs. Se recomienda EC2 de 16 GiB con Kafka; el presupuesto completo está en el plan. `bash infra/scripts/down.sh` detiene sin borrar volúmenes.
+
+Para Docker Desktop o Codespaces, `bash infra/scripts/up.sh --dev` usa los overrides que construyen imágenes y publican puertos locales; no usar esos overrides en EC2 público.
+
+## Decisiones y aceptación
+
+El archivo mq/definitions.json aplica políticas desde el arranque y rabbit-admin las reconcilia: trabajo (TTL 24 h, máximo 10.000, reject-publish), DLQ (TTL 7 días, máximo 10.000, drop-head). El acumulado de DLQ se reinicia con las estadísticas del nodo; no equivale a una métrica histórica persistente.
+
+Después del despliegue ejecutar las 14 pruebas de la sección 13.2 del plan y guardar HTTP, capturas y logs: JWT/CORS, cinco usuarios, capacidad asíncrona, tres consumidores, errores y DLQ, creación/eliminación, límites y TTL. CI verde valida imágenes y pruebas automatizadas; no certifica DNS, Entra ID, Gateway ni EC2.
+
+## Autores
+
+Equipo RutaExpress (repositorio Henisaa/Proyecto-cloud-native).

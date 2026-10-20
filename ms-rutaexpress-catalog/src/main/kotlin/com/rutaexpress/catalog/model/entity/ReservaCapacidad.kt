@@ -4,6 +4,10 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.PostLoad
+import jakarta.persistence.PostPersist
+import jakarta.persistence.Transient
+import org.springframework.data.domain.Persistable
 import java.time.Instant
 
 enum class EstadoReserva { ACTIVA, LIBERADA }
@@ -43,4 +47,16 @@ class ReservaCapacidad(
 
     @Column(name = "released_at")
     var liberadaEn: Instant? = null,
-)
+) : Persistable<String> {
+    // La clave UUID viene del envío, no la genera JPA. Un registro nuevo debe usar INSERT;
+    // merge podría actualizar la reserva que ganó otra transacción y descontar dos veces.
+    @Transient
+    private var nueva: Boolean = true
+
+    override fun getId(): String = shipmentId
+    override fun isNew(): Boolean = nueva
+
+    @PostLoad
+    @PostPersist
+    fun marcarPersistida() { nueva = false }
+}

@@ -216,10 +216,11 @@ class DefaultBffGatewayService(
     /** Los filtros ya vienen validados por lista blanca desde el controlador; el cliente codifica los valores. */
     override fun fetchShipments(filtros: Map<String, String>, token: String): Any = llamarGet("ms-rutaexpress-shipments") {
         shipmentsClient.get()
-            .uri(
-                "/api/shipments" + filtros.keys.joinToString("&", prefix = if (filtros.isEmpty()) "" else "?") { "$it={$it}" },
-                filtros,
-            )
+            .uri { uri ->
+                val destino = org.springframework.web.util.UriComponentsBuilder.fromUri(uri.path("/api/shipments").build())
+                filtros.keys.forEach { destino.queryParam(it, "{$it}") }
+                destino.encode().buildAndExpand(filtros).toUri()
+            }
             .header("Authorization", "Bearer $token")
             .retrieve()
             .body(Any::class.java) ?: emptyMap<String, Any>()
