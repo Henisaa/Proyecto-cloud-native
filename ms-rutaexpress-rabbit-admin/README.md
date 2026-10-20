@@ -1,47 +1,48 @@
-ms-rutaexpress-mq-admin
-Administración de RabbitMQ
+# ms-rutaexpress-rabbit-admin
 
-Funcionamiento
-Sin base de datos. Administra el clúster existente y declara la topología RutaExpress: `ex.rutaexpress.cmd` (direct), `ex.rutaexpress.events` (topic) y `ex.rutaexpress.dlx` (direct). Las colas `q.rutaexpress.command`, `q.rutaexpress.notification` y `q.rutaexpress.audit` tienen cada una su DLQ y bindings por routing key. Consulta RabbitMQ Management para el estado de los nodos, colas, mensajes pendientes, sin ACK y consumidores. Solo `ROLE_ADMIN` puede utilizar la API.
+## Propósito y arquitectura
 
-`POST /topology` reconcilia la topología fija y aplica retención mediante políticas actualizables. El borrado de colas y exchanges protegidos requiere `force=true`; una cola o exchange en uso puede seguir devolviendo 409. La política predeterminada da 24 horas a las colas de trabajo y siete días a las DLQ, con máximo de 10000 mensajes. Se rechaza TTL fuera de 1 segundo a 30 días y límites fuera de 1 a 1000000. `GET /alerts` muestra DLQ con mensajes según `MQ_ALERT_THRESHOLD` (por defecto 1). `rutaexpress.mq.dlq.depth` refleja el último muestreo; `MQ_POLL_INTERVAL_MS` permite cambiar el intervalo de sondeo. Cambiar retención puede expirar mensajes existentes.
+API de administración de RabbitMQ sin base de datos; lógica encapsulada en RabbitAdminService y monitoreo mediante Management API.
 
-Requisitos
-JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
+```mermaid
+flowchart LR
+  Gateway --> BFF
+  BFF --> Servicio[ms-rutaexpress-rabbit-admin]
+```
 
-Verificación y limpieza
-.\gradlew.bat test bootJar
-.\gradlew.bat clean
-.\gradlew.bat --stop
-Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
-No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
+## Endpoints y roles
 
-Ejecución local desde la raíz del repositorio
-Antes de arrancar, levante la infraestructura según infra/README.md. Usa localhost:5672,localhost:5673 y Management http://localhost:15672. Configure `RABBITMQ_ADDRESSES`, `RABBITMQ_MANAGEMENT_URLS`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` y `RABBITMQ_VHOST` si cambian. `RABBITMQ_MANAGEMENT_URLS` es una lista separada por comas; mq-admin prueba los nodos en orden. Después del arranque: `Invoke-RestMethod -Method Post -Uri http://localhost:8086/api/mq-admin/topology`.
+Prefijo interno `/api/mq-admin`: GET cluster, queues, alerts, metrics, exchanges, bindings, policies; POST queues/exchanges/bindings/topology y exchanges/{name}/messages; DELETE queues/{name}, exchanges/{name}, bindings; PUT retention. Todo exclusivo de Admin. El Gateway publica /api/admin/mq/* y el BFF retransmite.
 
-cd ms-rutaexpress-mq-admin
-$env:SECURITY_ENABLED="false"
-$env:SPRING_PROFILES_ACTIVE="local"
-.\gradlew.bat bootRun
+## Mensajes, idempotencia y DLQ
 
-La aplicación escucha en http://localhost:8086. Salud: /actuator/health. Swagger: /swagger-ui/index.html. Métricas: /actuator/prometheus.
+Declara tres exchanges y tres colas con sus DLQ. Reconciliación al arrancar con reintentos; políticas trabajo (TTL 24 h, 10.000, reject-publish) y DLQ (TTL 7 días, 10.000, drop-head). Publicaciones de prueba usan confirms y mandatory; rechazo por política devuelve 409 y el resultado distingue confirmed/routed.
 
-Endpoints
-| Método | Ruta | Cuerpo o parámetros | Respuestas principales |
-|---|---|---|---|
-| GET | `/api/mq-admin/cluster`, `/queues`, `/alerts`, `/metrics`, `/exchanges`, `/bindings` | — | 200, 503 |
-| POST | `/api/mq-admin/topology` | — | 200, 503 |
-| PUT | `/api/mq-admin/retention` | `{"commandTtlMs":86400000,"dlqTtlMs":604800000,"maxLength":10000}` | 200, 400, 503 |
-| POST | `/api/mq-admin/queues` | `{"name":"q.demo","durable":true,"ttlMs":86400000,"maxLength":10000,"overflow":"reject-publish","deadLetterExchange":"ex.rutaexpress.dlx","deadLetterRoutingKey":"demo"}` | 201, 400, 409, 503 |
-| DELETE | `/api/mq-admin/queues/{name}?force=false` | `force=true` para quitar una protección | 200, 404, 409, 503 |
-| POST | `/api/mq-admin/exchanges` | `{"name":"ex.demo","type":"topic","durable":true}` | 201, 400, 409, 503 |
-| DELETE | `/api/mq-admin/exchanges/{name}?force=false` | `force=true` para quitar una protección | 200, 404, 409, 503 |
-| POST | `/api/mq-admin/bindings` | `{"source":"ex.demo","destination":"q.demo","destinationType":"queue","routingKey":"demo.#"}` | 201, 400, 404, 409, 503 |
-| DELETE | `/api/mq-admin/bindings?source=ex.demo&destination=q.demo&destinationType=queue&routingKey=demo.%23&force=false` | Los parámetros identifican el binding | 200, 404, 409, 503 |
-| POST | `/api/mq-admin/exchanges/{name}/messages` | `{"routingKey":"notification.email.send","body":"{\"type\":\"demo\"}"}` | 200, 400, 404, 503 |
+## Variables de entorno
 
-Los nombres vacíos, tipos o parámetros inválidos responden 400 con `ProblemDetail`. Los recursos inexistentes responden 404; duplicados, recursos protegidos o conflictos del broker responden 409; la falta de conexión responde 503.
+Comunes: SECURITY_ENABLED, AZURE_AD_ISSUER_URI, AZURE_AD_AUDIENCE y PORT. En nube SECURITY_ENABLED=true. RABBITMQ_ADDRESSES/USERNAME/PASSWORD, RABBITMQ_MANAGEMENT_URLS, RABBITMQ_VHOST; MQ_COMMAND_TTL_MS, MQ_DLQ_TTL_MS, MQ_MAX_LENGTH, MQ_POLL_INTERVAL_MS, MQ_ALERT_THRESHOLD.
 
-Seguridad
-En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
-La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.
+## Construir y probar con Docker
+
+GitHub Actions ejecuta las pruebas dentro de la construcción. No instalar JDK ni Gradle en el PC.
+
+```sh
+docker build -t ms-rutaexpress-rabbit-admin:test ms-rutaexpress-rabbit-admin
+docker build --target reports --output type=local,dest=reports/ms-rutaexpress-rabbit-admin ms-rutaexpress-rabbit-admin
+```
+
+Las pruebas Testcontainers se ejecutan en un job separado del CI con RUN_DOCKER_TESTS=true; los reportes quedan como artefactos. Pruebas omitidas sin broker no certifican integración.
+
+## Ejecutar con Compose
+
+Configurar infra/.env y ejecutar bash infra/scripts/up.sh en EC2. Ver [infraestructura](../infra/README.md). Las imágenes se descargan de GHCR con etiqueta del commit; no se compila en EC2.
+
+## Decisiones de diseño
+
+Valida nombres, rangos y existencia del DLX. Borrar recursos protegidos exige force=true; incompatibilidad de argumentos se informa como 409. Métricas incluyen listos, sin confirmar, consumidores, profundidad DLQ, llegados acumulados y tasa. El acumulado depende de estadísticas del nodo y no equivale a una ventana histórica de una hora persistida.
+
+La aceptación real en nube y las 14 evidencias de la evaluación se verifican por separado del CI.
+
+## Autores
+
+Equipo RutaExpress (Henisaa/Proyecto-cloud-native).

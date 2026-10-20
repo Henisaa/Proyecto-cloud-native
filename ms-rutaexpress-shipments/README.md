@@ -1,49 +1,48 @@
-ms-rutaexpress-shipments
-Gestión de envíos y estados
+# ms-rutaexpress-shipments
 
-Funcionamiento
-Persiste envíos en Oracle. La máquina de estados permite CREADO, ACEPTADO, EN_BODEGA, EN_RUTA, ENTREGADO y CANCELADO, respetando sus transiciones. Al aceptar publica `capacity.reserve` en `ex.rutaexpress.cmd`; al cancelar publica `capacity.release`. La reserva es asíncrona y el estado se actualiza con el evento de resultado de catalog. `capacityStatus` puede ser NO_APLICA, PENDIENTE, RESERVADA, RECHAZADA o LIBERADA. Publica `shipment.status.<ESTADO>` y los eventos del timeline Kafka `shipments.events` y `audit.timeline`, con eventId compartido, identidad del usuario y fecha original. Las notificaciones usan `notification.email.send`, `notification.warehouse.ticket` y `notification.label.generate` en `ex.rutaexpress.events`. Consume `q.rutaexpress.audit` y su DLQ. Las publicaciones RabbitMQ esperan confirmación; si el broker no confirma, la API devuelve 503.
-La integración con brokers y capacidad no es una transacción distribuida ni un outbox; una caída entre la escritura de Oracle y el envío requiere reconciliación. No se promete entrega exactamente una vez.
+## Propósito y arquitectura
 
-Requisitos
-JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
+Microservicio principal: persiste envíos en Oracle y coordina capacidad, auditoría y notificaciones asíncronas.
 
-Verificación y limpieza
-.\gradlew.bat test bootJar
-.\gradlew.bat clean
-.\gradlew.bat --stop
-Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
-No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
+```mermaid
+flowchart LR
+  Gateway --> BFF
+  BFF --> Servicio[ms-rutaexpress-shipments]
+```
 
-Ejecución local desde la raíz del repositorio
-Antes de arrancar, levante la infraestructura según infra/README.md. Arranque catalog en 8081 y notify en 8082. El perfil local usa H2 en memoria. Para pruebas aisladas sin brokers, APP_KAFKA_ENABLED=false, APP_RABBIT_ENABLED=false y APP_CATALOGO_ENABLED=false.
+## Endpoints y roles
 
-cd ms-rutaexpress-shipments
-$env:SECURITY_ENABLED="false"
-$env:SPRING_PROFILES_ACTIVE="local"
-$env:RABBITMQ_USERNAME="rutaexpress"
-$env:RABBITMQ_PASSWORD="rutaexpress-local"
-$env:KAFKA_ENABLED="true"
-$env:RABBIT_ENABLED="true"
-$env:CATALOGO_ENABLED="true"
-$env:APP_KAFKA_ENABLED="true"
-$env:APP_RABBIT_ENABLED="true"
-$env:APP_CATALOGO_ENABLED="true"
-.\gradlew.bat bootRun
+`/api/shipments` GET y detalle: cuatro roles; Cliente solo propios. POST: Admin/Despachador/Cliente. PUT `/{id}/status` y POST `/{id}/capacity/retry`: Admin/Despachador. GET `/summary`: cuatro roles. GET `/{id}/audit`: Admin/Despachador/Auditor. Listado paginado (máximo 100) y filtros de estado, capacidad, fecha y seguimiento.
 
-La aplicación escucha en http://localhost:8085. Salud: /actuator/health. Swagger: /swagger-ui/index.html. Métricas: /actuator/prometheus.
+## Mensajes, idempotencia y DLQ
 
-Endpoints
-POST /api/shipments
-GET /api/shipments
-GET /api/shipments/{id}
-PUT /api/shipments/{id}/status
-GET /api/shipments?status=ACEPTADO&from=2026-10-01T00:00:00Z&to=2026-10-31T23:59:59Z
-Cambiar estado utiliza JSON: {"status":"ACEPTADO"}. Crear utiliza serviceId, zone, packagesCount, weightKg, volumeM3, recipientName, recipientEmail, originAddress y destinationAddress.
+Produce capacity.reserve/release en ex.rutaexpress.cmd (direct), shipment.status.* y notification.* en ex.rutaexpress.events (topic). Consume q.rutaexpress.audit (shipment.# y catalog.#). ACK manual tras persistir, reintentos acotados, NACK sin reencolar a q.rutaexpress.audit.dlq, logs y contador. eventId deduplica resultados; lastReserveCommandId descarta reservas anteriores. Liberaciones usan UUID determinista.
 
-Oracle
-Para Oracle defina SPRING_PROFILES_ACTIVE=prod, SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME y SPRING_DATASOURCE_PASSWORD antes de bootRun. Use un esquema separado por servicio con permisos de tablas y secuencias. Flyway ejecuta src/main/resources/db/migration. El perfil local H2 es solo para desarrollo.
+## Variables de entorno
 
-Seguridad
-En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
-La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.
+Comunes: SECURITY_ENABLED, AZURE_AD_ISSUER_URI, AZURE_AD_AUDIENCE y PORT. En nube SECURITY_ENABLED=true. CATALOGO_ENABLED, CATALOG_SERVICE_URL, NOTIFY_WAREHOUSE_EMAIL, KAFKA_ENABLED y KAFKA_BOOTSTRAP_SERVERS. Oracle: SPRING_DATASOURCE_URL/USERNAME/PASSWORD. Rabbit: RABBITMQ_ADDRESSES/USERNAME/PASSWORD, RABBIT_PREFETCH, RABBIT_RETRY_MAX_ATTEMPTS, RABBIT_RETRY_INITIAL_MS, RABBIT_DLQ_CONSUMER_ENABLED.
+
+## Construir y probar con Docker
+
+GitHub Actions ejecuta las pruebas dentro de la construcción. No instalar JDK ni Gradle en el PC.
+
+```sh
+docker build -t ms-rutaexpress-shipments:test ms-rutaexpress-shipments
+docker build --target reports --output type=local,dest=reports/ms-rutaexpress-shipments ms-rutaexpress-shipments
+```
+
+Las pruebas Testcontainers se ejecutan en un job separado del CI con RUN_DOCKER_TESTS=true; los reportes quedan como artefactos. Pruebas omitidas sin broker no certifican integración.
+
+## Ejecutar con Compose
+
+Configurar infra/.env y ejecutar bash infra/scripts/up.sh en EC2. Ver [infraestructura](../infra/README.md). Las imágenes se descargan de GHCR con etiqueta del commit; no se compila en EC2.
+
+## Decisiones de diseño
+
+Solo RESERVADA o NO_APLICA permiten pasar de ACEPTADO a EN_BODEGA. La reserva es asíncrona, no se espera a catalog. Se reconcilian reservas sin respuesta y cancelados con cupo cada minuto. LIBERACION_PENDIENTE conserva compensaciones pendientes. @Version impide pisar cambios; conflictos devuelven 409. Dueño por oid estable. V2 original, V3 event_id=100, V4 versión/dueño/comando. Kafka se publica después del commit. Outbox sigue pendiente según el plan.
+
+La aceptación real en nube y las 14 evidencias de la evaluación se verifican por separado del CI.
+
+## Autores
+
+Equipo RutaExpress (Henisaa/Proyecto-cloud-native).
