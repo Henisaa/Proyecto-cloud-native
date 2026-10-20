@@ -5,6 +5,6 @@
   "notify": { "tests": 27, "LINE": 79, "BRANCH": 53 },
   "rabbit-admin": { "tests": 37, "LINE": 65, "BRANCH": 43 },
   "audit": { "tests": 8, "LINE": 77, "BRANCH": 34 },
-  "report": { "tests": 5, "LINE": 50, "BRANCH": 12 },
+  "report": { "tests": 6, "LINE": 50, "BRANCH": 12 },
   "kafka-admin": { "tests": 11, "LINE": 53, "BRANCH": 40 }
 }

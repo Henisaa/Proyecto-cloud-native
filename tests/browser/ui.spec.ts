@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { service } from './helpers';
 
 test('navegación y guard según los cinco roles', async ({ page }) => {
+  await page.goto('/health');
   for (const role of ['ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR', 'NONE']) {
-    await page.addInitScript(role => sessionStorage.setItem('ci-role', role), role);
+    await page.evaluate(role => sessionStorage.setItem('ci-role', role), role);
     await page.goto('/admin/mq');
     if (role === 'ADMIN') await expect(page.getByRole('heading', { name: 'Administración de RabbitMQ' })).toBeVisible();
     else await expect(page).toHaveURL(/\/forbidden$/);
