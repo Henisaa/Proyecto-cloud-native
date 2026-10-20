@@ -90,6 +90,7 @@ object RutasGestion {
     fun enlacesDelVhost(vhost: String) = ruta("api", "bindings", vhost)
     fun enlacesDeOrigen(vhost: String, origen: String) = ruta("api", "exchanges", vhost, origen, "bindings", "source")
     fun politica(vhost: String, nombre: String) = ruta("api", "policies", vhost, nombre)
+    fun politicasDelVhost(vhost: String) = ruta("api", "policies", vhost)
 
     private fun codificar(valor: String): String =
         org.springframework.web.util.UriUtils.encodePathSegment(valor, Charsets.UTF_8)

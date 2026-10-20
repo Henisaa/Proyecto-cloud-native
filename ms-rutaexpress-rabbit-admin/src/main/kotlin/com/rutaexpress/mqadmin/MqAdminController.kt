@@ -38,6 +38,9 @@ class MqAdminController(
     @GetMapping("/bindings")
     fun bindings() = admin.enlaces()
 
+    @GetMapping("/policies")
+    fun policies() = admin.politicas()
+
     @PostMapping("/topology")
     fun reconcile() = admin.reconciliar()
 

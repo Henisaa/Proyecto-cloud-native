@@ -41,7 +41,23 @@ class MqAdminService(
         }
     }
 
-    fun cluster(): Any = cliente.obtener("/api/nodes", List::class.java) ?: emptyList<Any>()
+    /** Resumen por nodo: nombre, si corre, memoria y disco con sus alarmas, y tiempo activo. */
+    fun cluster(): List<Map<String, Any?>> =
+        (cliente.obtener("/api/nodes", List::class.java) ?: emptyList<Any>())
+            .filterIsInstance<Map<*, *>>()
+            .map {
+                mapOf(
+                    "name" to it["name"],
+                    "running" to (it["running"] == true),
+                    "memUsed" to it["mem_used"],
+                    "memLimit" to it["mem_limit"],
+                    "memAlarm" to (it["mem_alarm"] == true),
+                    "diskFree" to it["disk_free"],
+                    "diskFreeLimit" to it["disk_free_limit"],
+                    "diskFreeAlarm" to (it["disk_free_alarm"] == true),
+                    "uptimeMs" to it["uptime"],
+                )
+            }
 
     /** Estado de las colas de la topología fija. Una cola no declarada aparece con declared=false. */
     fun colas(): List<Map<String, Any?>> = topologia.colasDeMonitoreo().map { nombre ->
@@ -56,7 +72,25 @@ class MqAdminService(
             "unacknowledged" to numero(datos, "messages_unacknowledged"),
             "consumers" to numero(datos, "consumers"),
             "alert" to (nombre.endsWith(".dlq") && mensajes >= umbralAlerta),
+            "arrivedTotal" to llegados(datos),
         )
+    }
+
+    /**
+     * Mensajes que han llegado a la cola desde que arrancó el nodo: los que ya confirmó su consumidor más los que
+     * siguen dentro. Una DLQ consumida casi siempre muestra 0 mensajes, así que este acumulado es la métrica
+     * que realmente refleja los fallos. Las estadísticas se reinician con el nodo.
+     */
+    private fun llegados(datos: Map<*, *>?): Long {
+        val estadisticas = datos?.get("message_stats") as? Map<*, *>
+        return numero(estadisticas, "ack") + numero(datos, "messages")
+    }
+
+    /** Llegadas por segundo en la ventana reciente de estadísticas de RabbitMQ. */
+    private fun tasaLlegadas(datos: Map<*, *>?): Double {
+        val estadisticas = datos?.get("message_stats") as? Map<*, *>
+        val detalle = (estadisticas?.get("ack_details") ?: estadisticas?.get("publish_details")) as? Map<*, *>
+        return (detalle?.get("rate") as? Number)?.toDouble() ?: 0.0
     }
 
     fun alertas(): List<Map<String, Any?>> = colas().filter { it["alert"] == true }
@@ -72,8 +106,17 @@ class MqAdminService(
             "consumers" to todas.sumOf { numero(it, "consumers") },
             "dlqQueues" to dlq.size,
             "dlqMessages" to dlq.sumOf { numero(it, "messages") },
+            "dlqArrivedTotal" to dlq.sumOf { llegados(it) },
+            "dlqArrivedRate" to dlq.sumOf { tasaLlegadas(it) },
             "queues" to todas.map {
-                mapOf("name" to it["name"], "messages" to numero(it, "messages"), "consumers" to numero(it, "consumers"))
+                mapOf(
+                    "name" to it["name"],
+                    "messages" to numero(it, "messages"),
+                    "messagesReady" to numero(it, "messages_ready"),
+                    "messagesUnacknowledged" to numero(it, "messages_unacknowledged"),
+                    "consumers" to numero(it, "consumers"),
+                    "policy" to it["policy"],
+                )
             },
         )
     }

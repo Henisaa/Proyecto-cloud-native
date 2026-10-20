@@ -1,0 +1,31 @@
+{
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "policies": [
+    {
+      "vhost": "/",
+      "name": "rutaexpress.trabajo",
+      "pattern": "^(q\\.rutaexpress\\.command|q\\.rutaexpress\\.notification|q\\.rutaexpress\\.audit)$",
+      "apply-to": "queues",
+      "priority": 10,
+      "definition": {
+        "message-ttl": 86400000,
+        "max-length": 10000,
+        "overflow": "reject-publish"
+      }
+    },
+    {
+      "vhost": "/",
+      "name": "rutaexpress.dlq",
+      "pattern": "^(q\\.rutaexpress\\.command\\.dlq|q\\.rutaexpress\\.notification\\.dlq|q\\.rutaexpress\\.audit\\.dlq)$",
+      "apply-to": "queues",
+      "priority": 10,
+      "definition": {
+        "message-ttl": 604800000,
+        "max-length": 10000,
+        "overflow": "drop-head"
+      }
+    }
+  ]
+}

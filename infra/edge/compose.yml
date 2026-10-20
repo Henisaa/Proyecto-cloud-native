@@ -1,0 +1,56 @@
+# Entrada pública: Caddy (TLS automático) y el frontend. Es lo único con puertos 80/443 abiertos al exterior.
+#  - app.<dominio>    -> frontend (nginx sin privilegios).
+#  - origen.<dominio> -> BFF, solo si la petición trae la cabecera secreta que agrega el API Gateway.
+name: rutaexpress-edge
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  frontend:
+    image: ${REGISTRY:-ghcr.io/henisaa}/frontend-rutaexpress:${FRONTEND_TAG:-${IMAGE_TAG:-main}}
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    environment:
+      # El contenedor genera config.json con estos valores: la misma imagen sirve en cualquier entorno.
+      API_BASE_URL: ${FRONTEND_API_BASE_URL:?defina FRONTEND_API_BASE_URL (https://api.<dominio>)}
+      MSAL_CLIENT_ID: ${MSAL_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      MSAL_AUTHORITY: ${MSAL_AUTHORITY:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09}
+      MSAL_REDIRECT_URI: ${MSAL_REDIRECT_URI:?defina MSAL_REDIRECT_URI (https://app.<dominio>)}
+      MSAL_SCOPE: ${MSAL_SCOPE:-api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
+      ENVIRONMENT_NAME: ${ENVIRONMENT_NAME:-produccion}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?defina APP_DOMAIN (app.<dominio>)}
+      ORIGIN_DOMAIN: ${ORIGIN_DOMAIN:?defina ORIGIN_DOMAIN (origen.<dominio>)}
+      ORIGIN_SECRET: ${ORIGIN_SECRET:?defina ORIGIN_SECRET (cabecera secreta del API Gateway)}
+      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL}
+      ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # No recrear estos volúmenes: guardan los certificados y evitan el límite de emisión de Let's Encrypt.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  default:
+    external: true
+    name: rutaexpress

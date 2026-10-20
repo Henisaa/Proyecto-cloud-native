@@ -41,9 +41,11 @@ class RabbitAdminService(
     /** Declara la topología fija y aplica las políticas de retención por defecto (POST /api/mq-admin/topology). */
     fun reconciliar(): Map<String, Any> {
         val declaraciones: List<Declarable> = topologia.declaraciones()
-        declaraciones.filterIsInstance<Exchange>().forEach { admin.declareExchange(it) }
-        declaraciones.filterIsInstance<Queue>().forEach { admin.declareQueue(it) }
-        declaraciones.filterIsInstance<Binding>().forEach { admin.declareBinding(it) }
+        // Cada declaración pasa por enRabbit: si una cola base ya existe con otros argumentos, RabbitMQ responde 406
+        // y aquí se traduce a 409 con una explicación, no a un 503 "Broker no disponible".
+        declaraciones.filterIsInstance<Exchange>().forEach { e -> enRabbit("el exchange", e.name) { admin.declareExchange(e) } }
+        declaraciones.filterIsInstance<Queue>().forEach { q -> enRabbit("la cola", q.name) { admin.declareQueue(q) } }
+        declaraciones.filterIsInstance<Binding>().forEach { b -> enRabbit("el enlace", b.exchange) { admin.declareBinding(b) } }
         monitor.aplicarRetencion(RetentionRequest(ttlComandos, ttlDlq, maxLength))
         return mapOf(
             "exchanges" to topologia.nombresExchangesProtegidos().sorted(),
@@ -64,7 +66,14 @@ class RabbitAdminService(
             require(it in OVERFLOW) { "overflow debe ser reject-publish o drop-head" }
             argumentos["x-overflow"] = it
         }
-        solicitud.deadLetterExchange?.let { validarNombre("el exchange dead-letter", it); argumentos["x-dead-letter-exchange"] = it }
+        solicitud.deadLetterExchange?.let {
+            validarNombre("el exchange dead-letter", it)
+            // RabbitMQ acepta un DLX inexistente y los mensajes muertos se perderían en silencio: se exige que exista.
+            require(cliente.existe(RutasGestion.exchange(vhost, it))) {
+                "El exchange dead-letter '$it' no existe; créelo primero o quite deadLetterExchange"
+            }
+            argumentos["x-dead-letter-exchange"] = it
+        }
         solicitud.deadLetterRoutingKey?.let {
             validarClave(it)
             require(solicitud.deadLetterExchange != null) { "deadLetterRoutingKey requiere deadLetterExchange" }
@@ -161,8 +170,15 @@ class RabbitAdminService(
             rabbitTemplate.send(exchange, solicitud.routingKey, mensaje, correlacion)
             val confirmacion = correlacion.future.get(10, TimeUnit.SECONDS)
             if (!confirmacion.isAck) {
-                throw BrokerNoDisponibleException("RabbitMQ no confirmó el mensaje: ${confirmacion.reason}")
+                // Una confirmación negativa no es una caída del broker: es el broker rechazando el mensaje (por
+                // ejemplo, cola llena con reject-publish). Se informa como conflicto y con el motivo que da el broker.
+                throw ConflictoException(
+                    "El mensaje fue rechazado por la política de la cola de destino" +
+                        (confirmacion.reason?.let { ": $it" } ?: " (cola llena con overflow reject-publish o límite alcanzado)")
+                )
             }
+        } catch (ex: ConflictoException) {
+            throw ex
         } catch (ex: BrokerNoDisponibleException) {
             throw ex
         } catch (ex: Exception) {
@@ -179,6 +195,17 @@ class RabbitAdminService(
     fun exchanges(): List<Map<String, Any?>> = cliente.lista(RutasGestion.exchangesDelVhost(vhost))
         .filter { val nombre = it["name"] as? String ?: ""; nombre.isNotEmpty() && !nombre.startsWith("amq.") }
         .map { mapOf("name" to it["name"], "type" to it["type"], "durable" to it["durable"]) }
+
+    /** Políticas vigentes del vhost (retención y límites), tal como las aplica el broker. */
+    fun politicas(): List<Map<String, Any?>> = cliente.lista(RutasGestion.politicasDelVhost(vhost)).map {
+        mapOf(
+            "name" to it["name"],
+            "pattern" to it["pattern"],
+            "applyTo" to it["apply-to"],
+            "priority" to it["priority"],
+            "definition" to it["definition"],
+        )
+    }
 
     fun enlaces(): List<Map<String, Any?>> = cliente.lista(RutasGestion.enlacesDelVhost(vhost))
         .filter { (it["source"] as? String).orEmpty().isNotEmpty() }

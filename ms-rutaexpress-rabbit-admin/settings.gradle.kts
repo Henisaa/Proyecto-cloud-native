@@ -1,1 +1,1 @@
-rootProject.name = "ms-rutaexpress-mq-admin"
+rootProject.name = "ms-rutaexpress-rabbit-admin"
