@@ -1,7 +1,9 @@
 package com.rutaexpress.shipments
 
+import com.rutaexpress.shipments.dominio.EstadoCapacidad
 import com.rutaexpress.shipments.dominio.EstadoEnvio
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -40,5 +42,28 @@ class EstadoEnvioTests {
     fun `desde acepta minusculas y rechaza valores invalidos`() {
         assertTrue(EstadoEnvio.desde("aceptado") == EstadoEnvio.ACEPTADO)
         assertTrue(runCatching { EstadoEnvio.desde("VOLANDO") }.isFailure)
+    }
+
+    @Test
+    fun `aceptado solo ofrece en bodega con la capacidad reservada o sin integracion`() {
+        val conCupo = EstadoEnvio.ACEPTADO.transicionesPermitidas(EstadoCapacidad.RESERVADA)
+        assertEquals(listOf(EstadoEnvio.EN_BODEGA, EstadoEnvio.CANCELADO), conCupo)
+        assertTrue(EstadoEnvio.EN_BODEGA in EstadoEnvio.ACEPTADO.transicionesPermitidas(EstadoCapacidad.NO_APLICA))
+
+        for (capacidad in listOf(EstadoCapacidad.PENDIENTE, EstadoCapacidad.RECHAZADA, EstadoCapacidad.LIBERACION_PENDIENTE, EstadoCapacidad.LIBERADA)) {
+            assertEquals(
+                listOf(EstadoEnvio.CANCELADO),
+                EstadoEnvio.ACEPTADO.transicionesPermitidas(capacidad),
+                "con capacidad $capacidad solo se puede cancelar",
+            )
+        }
+    }
+
+    @Test
+    fun `la capacidad no afecta a las transiciones de otros estados`() {
+        assertEquals(
+            EstadoEnvio.EN_BODEGA.transicionesPermitidas(),
+            EstadoEnvio.EN_BODEGA.transicionesPermitidas(EstadoCapacidad.RECHAZADA),
+        )
     }
 }

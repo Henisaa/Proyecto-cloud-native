@@ -27,6 +27,10 @@ class KafkaProducerConfig(
         configProps[ProducerConfig.ACKS_CONFIG] = "all"
         configProps[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG] = true
         configProps[ProducerConfig.RETRIES_CONFIG] = 3
+        // delivery.timeout.ms >= linger.ms + request.timeout.ms, o el productor no arranca.
+        configProps[ProducerConfig.MAX_BLOCK_MS_CONFIG] = 3000
+        configProps[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 5000
+        configProps[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 10000
         configProps[JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS] = false
         return DefaultKafkaProducerFactory(configProps)
     }

@@ -30,13 +30,17 @@ class DeadLetterRegistro(registry: MeterRegistry) {
         val muerte = (propiedades.headers["x-death"] as? List<*>)?.firstOrNull() as? Map<*, *>
         contador.increment()
         log.error(
-            "Mensaje no entregado: motivo={} colaOrigen={} routingKeyOriginal={} messageId={} cuerpo={}",
+            "Mensaje no entregado: motivo={} colaOrigen={} routingKeyOriginal={} messageId={} extracto={}",
             muerte?.get("reason") ?: "desconocido",
             muerte?.get("queue") ?: "desconocida",
             muerte?.get("routing-keys") ?: propiedades.receivedRoutingKey,
             propiedades.messageId ?: "-",
-            String(message.body, Charsets.UTF_8).take(2000),
+            extractoEnmascarado(message.body),
         )
         channel.basicAck(propiedades.deliveryTag, false)
     }
+
+    /** Extracto corto sin correos: el log guarda lo necesario para diagnosticar, no datos personales completos. */
+    private fun extractoEnmascarado(cuerpo: ByteArray): String =
+        String(cuerpo, Charsets.UTF_8).take(300).replace(Regex("""[\w.+-]+@[\w-]+\.[\w.-]+"""), "***@***")
 }

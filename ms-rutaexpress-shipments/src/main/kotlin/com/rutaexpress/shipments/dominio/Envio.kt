@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 import org.hibernate.annotations.DynamicUpdate
 import java.math.BigDecimal
 import java.time.Instant
@@ -87,4 +88,17 @@ class Envio(
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now(),
+
+    /** commandId de la última reserva pedida: los resultados de comandos anteriores se descartan. */
+    @Column(name = "last_reserve_command_id", length = 36)
+    var lastReserveCommandId: String? = null,
+
+    /** oid del usuario de Entra ID que creó el envío (identificador estable; el correo puede cambiar). */
+    @Column(name = "owner_oid", length = 64)
+    var ownerOid: String? = null,
+
+    /** Bloqueo optimista: dos escrituras simultáneas sobre el mismo envío no se pisan (la segunda recibe 409). */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0,
 )

@@ -49,14 +49,15 @@ class SecurityConfig(
                         "/api-docs/**"
                     ).permitAll()
 
-                    // Actuator health and metrics
+                    // Actuator: solo las probes de salud son públicas; las métricas exigen el rol ADMIN
                     .requestMatchers(
                         "/actuator/health",
-                        "/actuator/info",
-                        "/actuator/prometheus"
+                        "/actuator/health/**",
+                        "/actuator/info"
                     ).permitAll()
 
                 if (securityEnabled) {
+                    auth.requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
                     // Protected catalog domain endpoints
                     auth.requestMatchers("/api/catalog/**").authenticated()
                     auth.anyRequest().authenticated()

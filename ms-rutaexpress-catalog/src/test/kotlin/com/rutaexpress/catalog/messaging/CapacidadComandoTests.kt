@@ -2,12 +2,15 @@ package com.rutaexpress.catalog.messaging
 
 import com.rabbitmq.client.Channel
 import com.rutaexpress.catalog.config.RabbitNombres
+import com.rutaexpress.catalog.model.entity.EstadoReserva
 import com.rutaexpress.catalog.model.entity.FleetCapacity
 import com.rutaexpress.catalog.model.entity.RegistroComandoCapacidad
+import com.rutaexpress.catalog.model.entity.ReservaCapacidad
 import com.rutaexpress.catalog.model.enums.VehicleType
 import com.rutaexpress.catalog.model.enums.ZoneType
 import com.rutaexpress.catalog.model.repository.FleetCapacityRepository
 import com.rutaexpress.catalog.model.repository.RegistroComandoCapacidadRepository
+import com.rutaexpress.catalog.model.repository.ReservaCapacidadRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -29,16 +32,18 @@ class CapacidadComandoTests {
     private val mapper: JsonMapper = JsonMapper.builder().findAndAddModules().build()
     private val nombres = RabbitNombres()
 
+    private val capacidades = mock<FleetCapacityRepository>()
+    private val registros = mock<RegistroComandoCapacidadRepository>()
+    private val reservas = mock<ReservaCapacidadRepository>()
+
     @Test
-    fun `reserva el cupo de la linea preferida y registra el resultado`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
+    fun `reserva el cupo de la linea preferida y guarda la reserva del envio`() {
         val linea = linea(VehicleType.VAN, usados = 0)
         whenever(registros.findById("cmd-1")).thenReturn(Optional.empty())
         whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
             .thenReturn(Optional.of(linea))
 
-        val resultado = procesador(capacidades, registros).procesar(reserva("cmd-1", vehicleType = "VAN", paquetes = 3))
+        val resultado = procesador().procesar(reserva("cmd-1", vehicleType = "VAN", paquetes = 3))
 
         assertThat(resultado.estado).isEqualTo(EstadoCapacidad.RESERVADA)
         assertThat(resultado.vehicleType).isEqualTo("VAN")
@@ -47,51 +52,71 @@ class CapacidadComandoTests {
         val registro = argumentCaptor<RegistroComandoCapacidad>()
         verify(registros).save(registro.capture())
         assertThat(registro.firstValue.resultado).isEqualTo("RESERVADA")
+        val reserva = argumentCaptor<ReservaCapacidad>()
+        verify(reservas).saveAndFlush(reserva.capture())
+        assertThat(reserva.firstValue.shipmentId).isEqualTo("RX-cmd-1")
+        assertThat(reserva.firstValue.capacityId).isEqualTo(1L)
+        assertThat(reserva.firstValue.paquetes).isEqualTo(3)
+        assertThat(reserva.firstValue.estado).isEqualTo(EstadoReserva.ACTIVA)
     }
 
     @Test
-    fun `sin capacidad responde RECHAZADA y no mueve el cupo`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
+    fun `sin capacidad responde RECHAZADA y no mueve el cupo ni crea reserva`() {
         val llena = linea(VehicleType.VAN, usados = 10)
         whenever(registros.findById("cmd-2")).thenReturn(Optional.empty())
         whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
             .thenReturn(Optional.of(llena))
-        whenever(capacidades.findAvailableCapacities(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(emptyList())
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(emptyList())
 
-        val resultado = procesador(capacidades, registros).procesar(reserva("cmd-2", vehicleType = "VAN", paquetes = 1))
+        val resultado = procesador().procesar(reserva("cmd-2", vehicleType = "VAN", paquetes = 1))
 
         assertThat(resultado.estado).isEqualTo(EstadoCapacidad.RECHAZADA)
+        assertThat(llena.currentBookedPackages).isEqualTo(10)
+        verify(reservas, never()).saveAndFlush(any<ReservaCapacidad>())
+    }
+
+    @Test
+    fun `si la linea preferida no alcanza usa la primera alternativa con cupo`() {
+        val llena = linea(VehicleType.VAN, usados = 10)
+        val alternativa = linea(VehicleType.TRUCK, usados = 0).also { it.id = 2L }
+        whenever(registros.findById("cmd-alt")).thenReturn(Optional.empty())
+        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
+            .thenReturn(Optional.of(llena))
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(listOf(alternativa))
+
+        val resultado = procesador().procesar(reserva("cmd-alt", vehicleType = "VAN", paquetes = 2))
+
+        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.RESERVADA)
+        assertThat(resultado.vehicleType).isEqualTo("TRUCK")
+        assertThat(alternativa.currentBookedPackages).isEqualTo(2)
         assertThat(llena.currentBookedPackages).isEqualTo(10)
     }
 
     @Test
     fun `un comando ya procesado devuelve el resultado guardado sin tocar la capacidad`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
         whenever(registros.findById("cmd-3")).thenReturn(
             Optional.of(RegistroComandoCapacidad("cmd-3", "RESERVAR", "RX-3", "RESERVADA", "VAN", 4, "Capacidad reservada"))
         )
 
-        val resultado = procesador(capacidades, registros).procesar(reserva("cmd-3", vehicleType = "VAN", paquetes = 1))
+        val resultado = procesador().procesar(reserva("cmd-3", vehicleType = "VAN", paquetes = 1))
 
         assertThat(resultado.estado).isEqualTo(EstadoCapacidad.RESERVADA)
         assertThat(resultado.capacidadRestante).isEqualTo(4)
         verifyNoInteractions(capacidades)
+        verifyNoInteractions(reservas)
         verify(registros, never()).save(any())
     }
 
     @Test
-    fun `otro commandId del mismo envío no vuelve a descontar el cupo reservado`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
+    fun `otro commandId del mismo envio devuelve la reserva existente sin volver a descontar`() {
         val linea = linea(VehicleType.VAN, usados = 3)
         whenever(registros.findById("cmd-new")).thenReturn(Optional.empty())
-        whenever(registros.findByShipmentIdOrderByProcesadoEnAsc("shipment-1")).thenReturn(
-            listOf(RegistroComandoCapacidad("cmd-old", "RESERVAR", "shipment-1", "RESERVADA", "VAN", 7, "Capacidad reservada")),
+        whenever(reservas.findLockedByShipmentId("shipment-1")).thenReturn(
+            Optional.of(ReservaCapacidad("shipment-1", 1L, 3, "VAN", EstadoReserva.ACTIVA, "cmd-old"))
         )
+        whenever(capacidades.findById(1L)).thenReturn(Optional.of(linea))
 
-        val resultado = procesador(capacidades, registros).procesar(
+        val resultado = procesador().procesar(
             reserva("cmd-new", vehicleType = "VAN", paquetes = 3).copy(shipmentId = "shipment-1"),
         )
 
@@ -100,34 +125,70 @@ class CapacidadComandoTests {
         val registro = argumentCaptor<RegistroComandoCapacidad>()
         verify(registros).save(registro.capture())
         assertThat(registro.firstValue.commandId).isEqualTo("cmd-new")
-        assertThat(registro.firstValue.shipmentId).isEqualTo("shipment-1")
+        verify(reservas, never()).saveAndFlush(any<ReservaCapacidad>())
+    }
+
+    @Test
+    fun `liberar descuenta en la linea que se reservo y marca la reserva liberada`() {
+        val reservada = linea(VehicleType.TRUCK, usados = 5).also { it.id = 7L }
+        val reserva = ReservaCapacidad("RX-cmd-4", 7L, 2, "TRUCK", EstadoReserva.ACTIVA, "cmd-r")
+        whenever(registros.findById("cmd-4")).thenReturn(Optional.empty())
+        whenever(reservas.findLockedByShipmentId("RX-cmd-4")).thenReturn(Optional.of(reserva))
+        whenever(capacidades.findLockedById(7L)).thenReturn(Optional.of(reservada))
+
+        // El comando dice VAN y 5 paquetes, pero se libera lo realmente reservado: 2 en la línea TRUCK.
+        val resultado = procesador().procesar(
+            reserva("cmd-4", vehicleType = "VAN", paquetes = 5, tipo = TipoComando.LIBERAR)
+        )
+
+        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.LIBERADA)
+        assertThat(reservada.currentBookedPackages).isEqualTo(3)
+        assertThat(reserva.estado).isEqualTo(EstadoReserva.LIBERADA)
+        assertThat(reserva.liberacionCommandId).isEqualTo("cmd-4")
+    }
+
+    @Test
+    fun `una segunda liberacion del mismo envio no vuelve a descontar`() {
+        val linea = linea(VehicleType.VAN, usados = 4)
+        val liberada = ReservaCapacidad("RX-cmd-5", 1L, 2, "VAN", EstadoReserva.LIBERADA, "cmd-r", "cmd-previo")
+        whenever(registros.findById("cmd-5")).thenReturn(Optional.empty())
+        whenever(reservas.findLockedByShipmentId("RX-cmd-5")).thenReturn(Optional.of(liberada))
+
+        val resultado = procesador().procesar(reserva("cmd-5", vehicleType = "VAN", paquetes = 2, tipo = TipoComando.LIBERAR))
+
+        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.LIBERADA)
+        assertThat(linea.currentBookedPackages).isEqualTo(4)
+        verify(capacidades, never()).findLockedById(any())
+    }
+
+    @Test
+    fun `liberar un envio sin reserva no cambia ningun contador`() {
+        whenever(registros.findById("cmd-6")).thenReturn(Optional.empty())
+
+        val resultado = procesador().procesar(reserva("cmd-6", vehicleType = "VAN", paquetes = 5, tipo = TipoComando.LIBERAR))
+
+        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.LIBERADA)
         verifyNoInteractions(capacidades)
     }
 
     @Test
     fun `liberar nunca deja el cupo en negativo`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
         val linea = linea(VehicleType.VAN, usados = 1)
-        whenever(registros.findById("cmd-4")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(linea))
+        whenever(registros.findById("cmd-4b")).thenReturn(Optional.empty())
+        whenever(reservas.findLockedByShipmentId("RX-cmd-4b"))
+            .thenReturn(Optional.of(ReservaCapacidad("RX-cmd-4b", 1L, 5, "VAN", EstadoReserva.ACTIVA, "cmd-r")))
+        whenever(capacidades.findLockedById(1L)).thenReturn(Optional.of(linea))
 
-        val resultado = procesador(capacidades, registros).procesar(
-            reserva("cmd-4", vehicleType = "VAN", paquetes = 5, tipo = TipoComando.LIBERAR)
-        )
+        procesador().procesar(reserva("cmd-4b", vehicleType = "VAN", paquetes = 5, tipo = TipoComando.LIBERAR))
 
-        assertThat(resultado.estado).isEqualTo(EstadoCapacidad.LIBERADA)
         assertThat(linea.currentBookedPackages).isZero()
     }
 
     @Test
     fun `un comando con zona desconocida es un error no recuperable para el consumidor`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
         whenever(registros.findById("cmd-5")).thenReturn(Optional.empty())
 
-        val consumidor = listener(procesador(capacidades, registros), publicadorQue(ok = true))
+        val consumidor = listener(procesador(), publicadorQue(ok = true))
         val canal = mock<Channel>()
         consumidor.onComando(mensaje(7, "capacity.reserve", reservaJson("cmd-5", zona = "MARTE")), canal)
 
@@ -137,15 +198,13 @@ class CapacidadComandoTests {
 
     @Test
     fun `procesa y publica el resultado antes de confirmar con ACK`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
         val publicador = publicadorQue(ok = true)
         whenever(registros.findById("cmd-6")).thenReturn(Optional.empty())
         whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
             .thenReturn(Optional.of(linea(VehicleType.VAN, usados = 0)))
         val canal = mock<Channel>()
 
-        listener(procesador(capacidades, registros), publicador)
+        listener(procesador(), publicador)
             .onComando(mensaje(8, "capacity.reserve", reservaJson("cmd-6", vehiculo = "VAN")), canal)
 
         verify(publicador).publicar(any())
@@ -155,23 +214,20 @@ class CapacidadComandoTests {
 
     @Test
     fun `si el broker nunca confirma el resultado el comando va a la DLQ tras los reintentos`() {
-        val capacidades = mock<FleetCapacityRepository>()
-        val registros = mock<RegistroComandoCapacidadRepository>()
         val publicador = publicadorQue(ok = false)
         whenever(registros.findById("cmd-7")).thenReturn(Optional.empty())
         whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
             .thenReturn(Optional.of(linea(VehicleType.VAN, usados = 0)))
         val canal = mock<Channel>()
 
-        listener(procesador(capacidades, registros), publicador, intentos = 3)
+        listener(procesador(), publicador, intentos = 3)
             .onComando(mensaje(9, "capacity.reserve", reservaJson("cmd-7", vehiculo = "VAN")), canal)
 
         verify(publicador, times(3)).publicar(any())
         verify(canal).basicNack(9, false, false)
     }
 
-    private fun procesador(capacidades: FleetCapacityRepository, registros: RegistroComandoCapacidadRepository) =
-        CapacidadComandoProcesador(capacidades, registros, mock<CacheManager>())
+    private fun procesador() = CapacidadComandoProcesador(capacidades, registros, reservas, mock<CacheManager>())
 
     private fun publicadorQue(ok: Boolean): CapacidadEventoPublicador {
         val publicador = mock<CapacidadEventoPublicador>()

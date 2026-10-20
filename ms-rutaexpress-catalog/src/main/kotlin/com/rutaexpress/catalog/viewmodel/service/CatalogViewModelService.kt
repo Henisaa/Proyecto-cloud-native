@@ -199,7 +199,8 @@ class CatalogViewModelService(
 
     @CacheEvict(value = ["catalog_service_details"], key = "#serviceId")
     fun updateCapacity(serviceId: Long, capacityId: Long, request: UpdateCapacityViewModel): CapacityDetailViewModel {
-        val capacity = capacityRepository.findById(capacityId)
+        // Lectura con bloqueo: una reserva concurrente no puede pisar esta edición ni al revés.
+        val capacity = capacityRepository.findLockedById(capacityId)
             .orElseThrow { NoSuchElementException("Capacity not found with ID: $capacityId") }
 
         if (capacity.service?.id != serviceId) {
@@ -207,11 +208,11 @@ class CatalogViewModelService(
         }
 
         request.maxDailyPackages?.let { capacity.maxDailyPackages = it }
-        request.currentBookedPackages?.let {
-            if (it > capacity.maxDailyPackages) {
-                throw IllegalArgumentException("Current booked packages cannot exceed max daily packages")
-            }
-            capacity.currentBookedPackages = it
+        request.currentBookedPackages?.let { capacity.currentBookedPackages = it }
+        if (capacity.currentBookedPackages > capacity.maxDailyPackages) {
+            throw IllegalArgumentException(
+                "El máximo diario (${capacity.maxDailyPackages}) no puede ser menor a lo ya reservado (${capacity.currentBookedPackages})"
+            )
         }
         request.maxWeightKg?.let { capacity.maxWeightKg = it }
         request.maxVolumeM3?.let { capacity.maxVolumeM3 = it }

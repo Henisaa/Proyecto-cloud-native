@@ -68,9 +68,9 @@ class MensajeriaTests {
         val plantilla = mock<RabbitTemplate>()
         confirmar(plantilla, ack = true)
 
-        val commandId = publicador(plantilla).solicitarReserva(envio(EstadoEnvio.ACEPTADO))
+        val commandId = publicador(plantilla).solicitarReserva(envio(EstadoEnvio.ACEPTADO), "cmd-1")
 
-        assertThat(commandId).isNotBlank()
+        assertThat(commandId).isEqualTo("cmd-1")
         verify(plantilla).convertAndSend(
             ArgumentMatchers.eq("ex.rutaexpress.cmd"),
             ArgumentMatchers.eq("capacity.reserve"),
@@ -110,7 +110,8 @@ class MensajeriaTests {
         val plantilla = mock<RabbitTemplate>()
         confirmar(plantilla, ack = true)
         val cancelado = envio(EstadoEnvio.CANCELADO).apply { capacityStatus = EstadoCapacidad.RESERVADA }
-        whenever(auditoria.aplicarResultadoCapacidad(eq(mapper.readTree(RESERVA_CAPACIDAD)), eq("catalog.capacity.reserved"))).thenReturn(cancelado)
+        whenever(auditoria.aplicarResultadoCapacidad(eq(mapper.readTree(RESERVA_CAPACIDAD)), eq("catalog.capacity.reserved")))
+            .thenReturn(ResultadoAplicado(AccionPosterior.COMPENSAR, cancelado, "cmd-9:resultado"))
         val canal = mock<Channel>()
 
         listener(auditoria, publicador(plantilla), intentos = 1)
@@ -131,6 +132,8 @@ class MensajeriaTests {
         val auditoria = mock<AuditoriaEnvioService>()
         val plantilla = mock<RabbitTemplate>()
         val canal = mock<Channel>()
+        whenever(auditoria.aplicarResultadoCapacidad(org.mockito.kotlin.any(), eq("catalog.capacity.rejected")))
+            .thenReturn(ResultadoAplicado(AccionPosterior.NINGUNA))
 
         listener(auditoria, publicador(plantilla), intentos = 1)
             .onEvento(mensaje(8, "catalog.capacity.rejected", """{"eventId":"cmd-10:resultado","payload":{"shipmentId":"s-2","result":"RECHAZADA"}}"""), canal)
