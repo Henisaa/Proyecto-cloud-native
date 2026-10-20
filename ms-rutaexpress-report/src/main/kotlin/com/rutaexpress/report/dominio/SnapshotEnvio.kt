@@ -5,6 +5,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import java.time.OffsetDateTime
+import java.math.BigDecimal
 
 @Entity
 @Table(name = "TB_REPORT_SHIPMENTS")
@@ -25,8 +26,8 @@ class SnapshotEnvio(
     @Column(name = "delivered_at")
     var deliveredAt: OffsetDateTime? = null,
 
-    @Column(name = "lead_time_minutes")
-    var leadTimeMinutes: Double? = null,
+    @Column(name = "lead_time_minutes", precision = 10, scale = 2)
+    var leadTimeMinutes: BigDecimal? = null,
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: OffsetDateTime = OffsetDateTime.now()
