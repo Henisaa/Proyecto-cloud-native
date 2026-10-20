@@ -27,10 +27,13 @@ def check_module(root, module, baseline):
         raise ValueError(f'{module}: failures/errors/skips are forbidden: {totals}')
     if totals['tests'] < baseline['tests']:
         raise ValueError(f'{module}: test count regressed: {totals["tests"]} < {baseline["tests"]}')
+    if len(cases) != totals['tests']:
+        raise ValueError(f'{module}: declared test count does not match executed cases')
     reports = list(root.glob('**/jacocoTestReport.xml'))
     if len(reports) != 1:
         raise ValueError(f'{module}: expected exactly one JaCoCo XML, got {len(reports)}')
-    counters = {c.get('type'): c for c in ET.parse(reports[0]).getroot().findall('counter')}
+    report = ET.parse(reports[0]).getroot()
+    counters = {c.get('type'): c for c in report.findall('counter')}
     coverage = {}
     for key in ['LINE', 'BRANCH']:
         if key not in counters:
@@ -39,6 +42,18 @@ def check_module(root, module, baseline):
         coverage[key] = 100 * covered / (covered + missed) if covered + missed else 100
         if coverage[key] < baseline[key]:
             raise ValueError(f'{module}: {key} coverage {coverage[key]:.2f}% < {baseline[key]}%')
+    critical_path = Path('ci/critical-coverage.json')
+    if critical_path.exists():
+        critical = json.loads(critical_path.read_text())
+        for cls in report.findall('package/class'):
+            if cls.get('name') in critical:
+                for counter in cls.findall('counter'):
+                    kind = counter.get('type')
+                    if kind in critical[cls.get('name')]:
+                        covered, missed = (int(counter.get(k)) for k in ['covered', 'missed'])
+                        percent = 100 * covered / (covered + missed) if covered + missed else 100
+                        if percent < critical[cls.get('name')][kind]:
+                            raise ValueError(f'{module}: critical class {cls.get("name")} {kind} regressed to {percent:.2f}%')
     return dict(module=module, **totals, coverage=coverage)
 
 

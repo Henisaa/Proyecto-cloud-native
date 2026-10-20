@@ -1,10 +1,10 @@
 {
-  "bff": { "tests": 30, "LINE": 1, "BRANCH": 1 },
-  "shipments": { "tests": 58, "LINE": 1, "BRANCH": 1 },
-  "catalog": { "tests": 35, "LINE": 1, "BRANCH": 1 },
-  "notify": { "tests": 27, "LINE": 1, "BRANCH": 1 },
-  "rabbit-admin": { "tests": 37, "LINE": 1, "BRANCH": 1 },
-  "audit": { "tests": 8, "LINE": 1, "BRANCH": 1 },
-  "report": { "tests": 5, "LINE": 1, "BRANCH": 1 },
-  "kafka-admin": { "tests": 4, "LINE": 1, "BRANCH": 1 }
+  "bff": { "tests": 30, "LINE": 53, "BRANCH": 24 },
+  "shipments": { "tests": 58, "LINE": 68, "BRANCH": 47 },
+  "catalog": { "tests": 35, "LINE": 74, "BRANCH": 42 },
+  "notify": { "tests": 27, "LINE": 79, "BRANCH": 53 },
+  "rabbit-admin": { "tests": 37, "LINE": 65, "BRANCH": 43 },
+  "audit": { "tests": 8, "LINE": 77, "BRANCH": 34 },
+  "report": { "tests": 5, "LINE": 50, "BRANCH": 12 },
+  "kafka-admin": { "tests": 11, "LINE": 53, "BRANCH": 40 }
 }

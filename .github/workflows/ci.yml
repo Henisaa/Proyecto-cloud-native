@@ -20,9 +20,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Test policy and script syntax
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python ci/policy.py
+          docker run --rm -e BASE_SHA -v "$PWD":/repo -w /repo python:3.12-alpine python ci/policy.py
           docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python -m unittest discover -s ci -v
           bash -n tests/system/run.sh
           for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
