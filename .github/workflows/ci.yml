@@ -29,6 +29,7 @@ jobs:
           docker run --rm -e BASE_SHA -v "$PWD":/repo -w /repo python:3.12-alpine sh -ec 'apk add --no-cache git > /dev/null; git config --global --add safe.directory /repo; python ci/policy.py'
           docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python -m unittest discover -s ci -v
           bash -n tests/system/run.sh
+          bash -n tests/system/mq-smoke.sh
           bash -n infra/mq/start-rabbit.sh
           for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
@@ -159,6 +160,8 @@ jobs:
           docker compose --env-file infra/.env -f infra/apps/compose.yml -f infra/apps/compose.dev.yml --profile ep1 config -q
           docker compose --env-file tests/system/ci.env -f tests/system/compose.yml config -q
           docker compose --env-file tests/system/ci.env -f infra/apps/compose.yml -f tests/system/apps.override.yml --profile ep1 config -q
+      - name: Fresh RabbitMQ cluster, credentials and restart
+        run: bash tests/system/mq-smoke.sh
 
   system:
     needs: [build, compose]
