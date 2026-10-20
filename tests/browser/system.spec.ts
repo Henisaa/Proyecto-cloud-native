@@ -87,6 +87,17 @@ test('flujo completo reserva, correo, auditoría, bodega, ruta y entrega', async
   }, { timeout: 60_000 }).toBeGreaterThan(0);
   for (const status of ['EN_BODEGA', 'EN_RUTA', 'ENTREGADO']) expect((await change(request, created.id, status, svc.accessToken)).status()).toBe(200);
   expect((await state(request, created.id, svc.accessToken)).allowedTransitions).toEqual([]);
+  await expect.poll(async () => {
+    const response = await request.get(`${API}/api/bff/shipments/${created.id}/timeline`, { headers: bearer(svc.accessToken) });
+    const timeline = await response.json();
+    expect(timeline.kafkaAvailable).toBe(true);
+    return timeline.events.filter((e: any) => e.source === 'KAFKA').length;
+  }, { timeout: 60_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => {
+    const response = await request.get(`${API}/api/bff/report/kpis?range=last24h`, { headers: bearer(svc.accessToken) });
+    expect(response.status()).toBe(200);
+    return (await response.json()).activeShipmentsByStatus.ENTREGADO || 0;
+  }, { timeout: 60_000 }).toBeGreaterThan(0);
 });
 
 test('JSON y datos inválidos no crean envíos ni devuelven 500', async ({ request }) => {
