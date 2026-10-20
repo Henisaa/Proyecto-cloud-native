@@ -27,7 +27,8 @@ test('sin token y con firma alterada: Gateway y BFF rechazan', async ({ request 
   }
 });
 
-for (const [name, options] of Object.entries({ expired: { expired: '1' }, issuer: { iss: 'https://wrong.invalid' }, audience: { aud: 'wrong-audience' } })) {
+const invalidTokens: Record<string, Record<string, string>> = { expired: { expired: '1' }, issuer: { iss: 'https://wrong.invalid' }, audience: { aud: 'wrong-audience' } };
+for (const [name, options] of Object.entries(invalidTokens)) {
   test(`JWT ${name} invalido se rechaza en cada capa`, async ({ request }) => {
     const { accessToken } = await session(request, 'ADMIN', options);
     for (const url of [`${API}/api/bff/shipments`, `${BFF}/api/bff/shipments`, `${CATALOG}/api/catalog/services`, `${SHIPMENTS}/api/shipments`]) {
