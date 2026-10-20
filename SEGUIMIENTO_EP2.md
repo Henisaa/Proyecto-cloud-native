@@ -25,6 +25,10 @@ Especificación: PLAN_CORRECCIONES_EP2.md versión 2 y los dos documentos de eva
 
 ## Verificación disponible
 
+Ampliación de CI: suite completa por push y PR, ocho módulos con JaCoCo y Testcontainers, 39 pruebas frontend y comprobación de todas sus rutas. Se aprobaron 212 pruebas backend en el commit e0a8224, incluida validación del modelo y persistencia decimal de Reportes sobre Oracle real. El stack integrado detectó y motivó la corrección del alta inicial del usuario RabbitMQ al cargar definiciones y del tipo Oracle de los minutos de entrega. La aprobación de esas suites aisladas no certifica todavía el recorrido integrado del mismo commit.
+
+El nuevo control exige además Playwright contra el stack real en cuatro proyectos de navegador/dispositivo, sin reintentos, y una prueba del clúster RabbitMQ desde volúmenes vacíos y tras reinicio. Cobertura, conteos mínimos, rechazos y límites de autenticación de CI se documentan en [ci/README.md](ci/README.md). La publicación GHCR depende del éxito global; no se publica una imagen por el mero hecho de compilar.
+
 Los reportes y resultados exactos se consultan en Actions por commit. Los primeros ciclos detectaron errores reales de compilación Kotlin, doble reserva concurrente, codificación de fechas y fixtures fuera del largo de columna; se corrigieron y se volvió a ejecutar CI. Las pruebas de frontend corren con Chromium dentro de Docker. También se comprueba la imagen nginx servida, config.json, fallback SPA, cabeceras y usuario no root.
 
 No se ejecutaron compilaciones, Gradle, npm ni instalación de herramientas en el PC. La colección Newman está preparada pero no ejecutada contra el Gateway de la evaluación. No hay evidencia de despliegue EC2 ni recorrido autenticado real en esta sesión.

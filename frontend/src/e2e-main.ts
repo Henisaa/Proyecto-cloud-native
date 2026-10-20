@@ -4,8 +4,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { MsalBroadcastService } from '@azure/msal-angular';
-import { InteractionStatus } from '@azure/msal-browser';
-import { of } from 'rxjs';
+import { EMPTY } from 'rxjs';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
 import { AuthService } from './app/core/auth.service';
@@ -31,7 +30,8 @@ async function main(): Promise<void> {
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withInterceptors([(request, next) => next(request.clone({ setHeaders: { Authorization: `Bearer ${session.accessToken}` } })), errorInterceptor])),
     { provide: AuthService, useValue: auth },
-    { provide: MsalBroadcastService, useValue: { inProgress$: of(InteractionStatus.None) } },
+    // No redirect callback runs in this fixture: keep requested deep links intact.
+    { provide: MsalBroadcastService, useValue: { inProgress$: EMPTY } },
   ] });
 }
 void main();
