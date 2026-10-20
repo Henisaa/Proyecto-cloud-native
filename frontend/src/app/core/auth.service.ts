@@ -2,8 +2,18 @@ import { Injectable, inject, signal } from '@angular/core';
 import { MsalBroadcastService, MsalService } from '@azure/msal-angular';
 import { AccountInfo, EventMessage, EventType, InteractionStatus } from '@azure/msal-browser';
 import { filter, firstValueFrom } from 'rxjs';
-import { environment } from '../../environments/environment';
-import { loginRequest } from './msal.config';
+import { runtimeConfig } from './app-config';
+import { crearLoginRequest } from './msal.config';
+import { normalizarRol, tieneAlgunRol } from './roles';
+
+/** Datos del access token para el diagnóstico de sesión (FE-18). Nunca incluye el token en sí. */
+export interface InfoToken {
+  audiencia: string;
+  emisor: string;
+  vence: string;
+  roles: string[];
+  scopes: string[];
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -13,29 +23,22 @@ export class AuthService {
   readonly account = signal<AccountInfo | null>(null);
   readonly error = signal<string | null>(null);
   readonly enProceso = signal<boolean>(false);
-  readonly tokenAud = signal<string | null>(null);
-  readonly tokenIss = signal<string | null>(null);
+  readonly infoToken = signal<InfoToken | null>(null);
 
   init(): void {
-    if (environment.demo) {
-      return;
-    }
-
-    this.msal
-      .handleRedirectObservable()
-      .subscribe({
-        next: (resultado) => {
-          if (resultado?.account) {
-            this.msal.instance.setActiveAccount(resultado.account);
-          }
-          this.refresh();
-        },
-        error: (err) => {
-          console.error('MSAL redirect error', err);
-          this.error.set(this.describirError(err));
-          this.enProceso.set(false);
-        },
-      });
+    this.msal.handleRedirectObservable().subscribe({
+      next: (resultado) => {
+        if (resultado?.account) {
+          this.msal.instance.setActiveAccount(resultado.account);
+        }
+        this.refresh();
+      },
+      error: (err) => {
+        console.error('MSAL redirect error', err);
+        this.error.set(this.describirError(err));
+        this.enProceso.set(false);
+      },
+    });
 
     this.broadcast.msalSubject$.subscribe((event: EventMessage) => {
       switch (event.eventType) {
@@ -70,24 +73,29 @@ export class AuthService {
     const account = active ?? this.msal.instance.getAllAccounts()[0] ?? null;
     if (account) {
       this.msal.instance.setActiveAccount(account);
-      void this.inspeccionarToken(account);
     }
     this.account.set(account);
   }
 
-  /** Decodifica el access token para mostrar aud/iss (diagnóstico de 401 en el backend). */
-  private async inspeccionarToken(account: AccountInfo): Promise<void> {
+  /** Lee audiencia, emisor, vencimiento, roles y scopes del access token, sin exponer el token. */
+  async inspeccionarToken(): Promise<void> {
+    const cuenta = this.cuentaActual();
+    if (!cuenta) return;
     try {
       const resultado = await firstValueFrom(
-        this.msal.acquireTokenSilent({
-          scopes: ['openid', 'profile', 'email', environment.msal.scope],
-          account,
-        })
+        this.msal.acquireTokenSilent({ scopes: ['openid', 'profile', 'email', runtimeConfig.scope], account: cuenta })
       );
-      const base64 = resultado.accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(atob(base64)) as Record<string, unknown>;
-      this.tokenAud.set(String(payload['aud'] ?? '—'));
-      this.tokenIss.set(String(payload['iss'] ?? '—'));
+      const carga = decodificarPayload(resultado.accessToken);
+      const exp = typeof carga['exp'] === 'number' ? new Date((carga['exp'] as number) * 1000).toLocaleString('es-CL') : '—';
+      const roles = Array.isArray(carga['roles']) ? (carga['roles'] as string[]) : [];
+      const scp = typeof carga['scp'] === 'string' ? (carga['scp'] as string).split(' ').filter((s) => s.length > 0) : [];
+      this.infoToken.set({
+        audiencia: String(carga['aud'] ?? '—'),
+        emisor: String(carga['iss'] ?? '—'),
+        vence: exp,
+        roles,
+        scopes: scp,
+      });
     } catch (err) {
       console.warn('No se pudo inspeccionar el access token', err);
     }
@@ -95,7 +103,7 @@ export class AuthService {
 
   /** Describe el error de MSAL de forma accionable (para mostrarlo en pantalla). */
   private describirError(err: unknown): string {
-    const e = err as { errorCode?: string; errorMessage?: string; message?: string; subError?: string };
+    const e = err as { errorCode?: string; errorMessage?: string; message?: string };
     const codigo = e?.errorCode ?? '';
     const mensaje = e?.errorMessage ?? e?.message ?? 'Error desconocido al autenticar';
     const texto = String(mensaje);
@@ -113,68 +121,64 @@ export class AuthService {
   }
 
   login(): void {
-    if (environment.demo) {
-      return;
-    }
     this.error.set(null);
-    this.msal.loginRedirect(loginRequest);
+    void this.msal.loginRedirect(crearLoginRequest());
   }
 
   logout(): void {
-    if (environment.demo) {
-      this.account.set(null);
-      return;
-    }
     const account = this.account() ?? undefined;
-    this.msal.logoutRedirect({ account, postLogoutRedirectUri: window.location.origin });
+    void this.msal.logoutRedirect({ account });
   }
 
   get isLoggedIn(): boolean {
     return this.account() !== null;
   }
 
+  /**
+   * Cuenta vigente: la del signal o, si aún no se hidrató (por ejemplo, al evaluar un guard tras recargar la página),
+   * la que ya está en el caché de MSAL.
+   */
+  private cuentaActual(): AccountInfo | null {
+    return this.account() ?? this.msal.instance.getActiveAccount() ?? this.msal.instance.getAllAccounts()[0] ?? null;
+  }
+
   /** Lectura sincrónica del caché de MSAL (útil en guards antes de que el signal se hidrate). */
   hasSession(): boolean {
-    if (environment.demo) {
-      return true;
-    }
     return this.msal.instance.getAllAccounts().length > 0;
   }
 
   get name(): string {
-    const account = this.account();
+    const account = this.cuentaActual();
     return account?.name ?? account?.username ?? 'Usuario';
   }
 
   get username(): string {
-    return this.account()?.username ?? '';
+    return this.cuentaActual()?.username ?? '';
   }
 
   get email(): string {
-    const claims = (this.account()?.idTokenClaims ?? {}) as Record<string, unknown>;
+    const claims = (this.cuentaActual()?.idTokenClaims ?? {}) as Record<string, unknown>;
     const claimEmail = claims['email'] ?? claims['preferred_username'];
     return typeof claimEmail === 'string' ? claimEmail : this.username;
   }
 
+  /** Roles tal como vienen en el token, ya normalizados (misma regla que el backend). */
   get roles(): string[] {
-    const claims = (this.account()?.idTokenClaims ?? {}) as Record<string, unknown>;
+    const claims = (this.cuentaActual()?.idTokenClaims ?? {}) as Record<string, unknown>;
     const roles = claims['roles'];
-    return Array.isArray(roles) ? (roles as string[]) : [];
+    return Array.isArray(roles) ? (roles as string[]).map(normalizarRol) : [];
   }
 
-  get scopes(): string[] {
-    const claims = (this.account()?.idTokenClaims ?? {}) as Record<string, unknown>;
-    const scp = claims['scp'] ?? claims['scope'];
-    if (typeof scp === 'string') return scp.split(' ').filter((s) => s.length > 0);
-    return Array.isArray(scp) ? (scp as string[]) : [];
+  hasRole(...requeridos: string[]): boolean {
+    return tieneAlgunRol(this.roles, requeridos);
   }
+}
 
-  hasRole(...roles: string[]): boolean {
-    const normalize = (role: string): string => {
-      const value = role.trim().replace(/^ROLE_/i, '').toLowerCase();
-      return value === 'operador del dominio' || value === 'operador' ? 'despachador' : value === 'cliente del dominio' ? 'cliente' : value;
-    };
-    const own = this.roles.map(normalize);
-    return roles.some((r) => own.includes(normalize(r)));
+function decodificarPayload(token: string): Record<string, unknown> {
+  const base64 = (token.split('.')[1] ?? '').replace(/-/g, '+').replace(/_/g, '/');
+  try {
+    return JSON.parse(atob(base64)) as Record<string, unknown>;
+  } catch {
+    return {};
   }
 }

@@ -37,6 +37,7 @@ interface BffGatewayService {
     fun fetchCatalogService(id: Long, token: String): Any
     fun updateCapacity(serviceId: Long, capacityId: Long, body: Map<String, Any?>, token: String): Any
     fun fetchKpis(range: String, token: String): Any
+    fun fetchTopServices(range: String, token: String): Any
     fun fetchTimeline(idEntidad: String, token: String): Any
     fun fetchShipments(filtros: Map<String, String>, token: String): Any
     fun fetchShipmentsSummary(token: String): Any
@@ -186,6 +187,14 @@ class DefaultBffGatewayService(
             .header("Authorization", "Bearer $token")
             .retrieve()
             .body(Any::class.java) ?: emptyMap<String, Any>()
+    }
+
+    override fun fetchTopServices(range: String, token: String): Any = llamarGet("ms-rutaexpress-report") {
+        reportClient.get()
+            .uri("/api/report/top-services?range={range}", range)
+            .header("Authorization", "Bearer $token")
+            .retrieve()
+            .body(Any::class.java) ?: emptyList<Any>()
     }
 
     override fun fetchTimeline(idEntidad: String, token: String): Any = llamarGet("ms-rutaexpress-audit") {

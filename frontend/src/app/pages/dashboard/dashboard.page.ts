@@ -1,249 +1,282 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { forkJoin, of, catchError } from 'rxjs';
+import { timer } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
-import { BffService, BrokerQueue, Envio } from '../../core/bff.service';
-import { FadeInDirective } from '../../shared/fade-in.directive';
-import { pillEstado, puntoEstado } from '../../shared/estado-ui';
+import { BffService } from '../../core/bff.service';
+import { interpretarError } from '../../core/http-error';
+import { Dashboard, EstadoServicios, MqMetricas, ResumenEnvios } from '../../core/models';
+import { esSoloCliente } from '../../core/roles';
+import { etiquetaCapacidad, pillCapacidad, pillEstado } from '../../shared/estado-ui';
+import { decimal, fechaHora, numero } from '../../shared/format';
+import { VistaEstadoComponent } from '../../shared/vista-estado.component';
 
+const ESTADOS_TARJETA = ['CREADO', 'ACEPTADO', 'EN_BODEGA', 'EN_RUTA', 'ENTREGADO', 'CANCELADO'];
+
+/** Panel por rol (FE-03): cada bloque tiene su propio estado de carga y de error y se refresca cada 30 s. */
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, FadeInDirective],
+  imports: [RouterLink, VistaEstadoComponent],
   template: `
-    <div class="space-y-6" appFadeIn appFadeInStagger=".metric-card">
-      <!-- HEADER -->
+    <div class="space-y-6">
       <header class="flex flex-col justify-between gap-4 border-b border-zinc-200/60 pb-6 sm:flex-row sm:items-end">
         <div>
-          <h1 class="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">Panel de operaciones</h1>
+          <h1 class="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">{{ titulo() }}</h1>
           <p class="mt-1 text-xs text-zinc-500 sm:text-sm">
-            Bienvenido, {{ auth.name }} · monitoreo de despacho, latencia de microservicios y flota activa.
+            Bienvenido, {{ auth.name }}.
+            @if (ultimaConsulta()) {
+              Actualizado a las {{ ultimaConsulta() }}.
+            }
           </p>
         </div>
-        <div class="flex items-center gap-2.5">
-          <a routerLink="/reports" class="btn-secondary">Ver KPIs</a>
-          <a routerLink="/shipments" class="btn-primary">+ Gestionar envíos</a>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button type="button" class="btn-secondary" (click)="pausado.set(!pausado())" [attr.aria-pressed]="pausado()">
+            {{ pausado() ? 'Reanudar actualización' : 'Pausar actualización' }}
+          </button>
+          <button type="button" class="btn-secondary" (click)="cargar()">Actualizar ahora</button>
+          @if (auth.hasRole('Admin', 'Despachador', 'Cliente')) {
+            <a routerLink="/shipments/new" class="btn-primary">+ Nuevo envío</a>
+          }
         </div>
       </header>
 
-      <!-- KPIs -->
-      <section class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="metric-card rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs transition-all hover:border-zinc-300 hover:shadow-xs">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Envíos totales</span>
-            <span class="h-2 w-2 rounded-full bg-zinc-200"></span>
-          </div>
-          <p class="mt-3 font-mono text-3xl font-bold tracking-tight text-zinc-900">{{ envios.length }}</p>
-          <p class="mt-1 text-[11px] text-zinc-400">Órdenes procesadas hoy</p>
-        </div>
-
-        <div class="metric-card rounded-2xl border border-blue-100 bg-white p-5 shadow-2xs transition-all hover:border-blue-300 hover:shadow-xs">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">En ruta</span>
-            <span class="relative flex h-2 w-2">
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
-              <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-600"></span>
-            </span>
-          </div>
-          <p class="mt-3 font-mono text-3xl font-bold tracking-tight text-blue-600">{{ contar('EN_RUTA') }}</p>
-          <p class="mt-1 text-[11px] font-medium text-blue-500">
-            {{ contar('EN_RUTA') }} vehículo(s) en tránsito
-          </p>
-        </div>
-
-        <div class="metric-card rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs transition-all hover:border-zinc-300 hover:shadow-xs">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">En bodega</span>
-            <span class="h-2 w-2 rounded-full bg-zinc-200"></span>
-          </div>
-          <p class="mt-3 font-mono text-3xl font-bold tracking-tight text-zinc-900">{{ contar('EN_BODEGA') }}</p>
-          <p class="mt-1 text-[11px] text-zinc-400">
-            {{ contar('EN_BODEGA') === 0 ? 'Almacén despejado' : 'En preparación de picking' }}
-          </p>
-        </div>
-
-        <div class="metric-card rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs transition-all hover:border-zinc-300 hover:shadow-xs">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Lead time prom.</span>
-            <span class="h-2 w-2 rounded-full bg-zinc-200"></span>
-          </div>
-          <p class="mt-3 font-mono text-3xl font-bold tracking-tight text-zinc-900">
-            {{ kpis?.['avgLeadTimeMinutes'] ?? '—' }}
-            <span class="font-sans text-xs font-medium text-zinc-400">min</span>
-          </p>
-          <p class="mt-1 text-[11px] font-medium text-emerald-600">Calculado desde Kafka (report)</p>
-        </div>
-      </section>
-
-      <!-- PANELES -->
-      <div class="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
-        <!-- BFF -->
-        <div class="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs sm:p-6">
-          <div>
-            <div class="flex items-center justify-between border-b border-zinc-100 pb-4">
-              <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Infraestructura · Backend (BFF)
-              </h2>
-              @if (status) {
-                <span class="badge border-emerald-200/70 bg-emerald-50 text-emerald-700">
-                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  {{ status['status'] }}
-                </span>
-              } @else {
-                <span class="badge border-zinc-200 bg-zinc-100 text-zinc-500">sin datos</span>
-              }
-            </div>
-
-            <div class="mt-4 divide-y divide-zinc-100 text-xs">
-              <div class="flex items-center justify-between py-2.5">
-                <span class="text-zinc-500">Gateway principal</span>
-                <span class="rounded bg-zinc-100 px-2 py-0.5 font-mono font-medium text-zinc-900">
-                  {{ status?.['service'] ?? 'ms-rutaexpress-bff' }}
-                </span>
-              </div>
-              @for (entry of downstream(); track entry[0]) {
-                <div class="flex items-center justify-between py-2.5">
-                  <span class="font-medium text-zinc-700">{{ entry[0] }}</span>
-                  <span class="font-mono text-[11px] text-zinc-400 transition hover:text-zinc-700">
-                    {{ entry[1] }}
-                  </span>
+      <!-- Envíos: todos los roles (un cliente solo ve los suyos) -->
+      <section aria-labelledby="titulo-envios" class="space-y-3">
+        <h2 id="titulo-envios" class="text-sm font-bold text-zinc-800">{{ soloCliente() ? 'Mis envíos' : 'Envíos' }}</h2>
+        <app-vista-estado [cargando]="cargandoEnvios()" [error]="errorEnvios()" (reintentar)="cargar()">
+          @if (resumen(); as r) {
+            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              @for (estado of estados; track estado) {
+                <div class="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-2xs">
+                  <span class="badge" [class]="pillEstado(estado)">{{ estado }}</span>
+                  <p class="mt-3 font-mono text-2xl font-bold text-zinc-900">{{ cuenta(r, estado) }}</p>
                 </div>
               }
             </div>
-          </div>
-
-          <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3 text-[11px] text-zinc-400">
-            <span>Cluster: Docker Internal (EC2)</span>
-            <span class="font-mono">aud: {{ auth.tokenAud() ?? '—' }}</span>
-          </div>
-        </div>
-
-        @if (auth.hasRole('Admin')) {
-          <section class="min-w-0 rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6" aria-labelledby="broker-heading" [attr.aria-busy]="brokerLoading">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="broker-heading" class="text-base font-semibold text-zinc-900">Mensajería</h2>
-              <button type="button" class="btn-secondary" (click)="loadBrokers()" [disabled]="brokerLoading">{{ brokerLoading ? 'Consultando…' : 'Actualizar mensajería' }}</button>
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span class="font-semibold text-zinc-700">Capacidad:</span>
+              @for (par of capacidades(); track par[0]) {
+                <span class="badge" [class]="pillCapacidad(par[0])">{{ etiquetaCapacidad(par[0]) }} · {{ par[1] }}</span>
+              }
+              @if (capacidades().length === 0) {
+                <span>sin reservas todavía</span>
+              }
             </div>
-            <p class="mt-2 text-sm text-zinc-600">Colas pendientes, consumidores activos y tópicos de eventos.</p>
-            @if (mqError) { <p class="mt-3 text-sm text-red-700" role="alert">{{ mqError }}</p> }
-            @if (!brokerLoading && !mqError && queues.length === 0) { <p class="mt-3 text-sm text-zinc-600">No hay colas declaradas. Configure la topología desde el administrador.</p> }
-            @if (queues.length > 0) {
-              <div class="mt-4 overflow-x-auto">
-                <table class="w-full text-left text-sm tabular-nums">
-                  <caption class="sr-only">Estado de las colas de notificaciones</caption>
-                  <thead class="border-b border-zinc-200 text-zinc-700"><tr><th scope="col" class="py-2 pr-4">Cola</th><th scope="col" class="pr-4">Mensajes</th><th scope="col" class="pr-4">Consumidores</th><th scope="col">Estado</th></tr></thead>
-                  <tbody>@for (queue of queues; track queue.name) {
-                    <tr class="border-b border-zinc-100"><th scope="row" class="py-2 pr-4 font-normal text-zinc-800">{{ queue.name }}</th><td class="pr-4">{{ queue.messages }}</td><td class="pr-4">{{ queue.consumers }}</td><td [class]="queue.alert ? 'text-red-700' : 'text-zinc-700'">{{ queue.alert ? 'Revisar mensajes fallidos' : 'Sin alerta DLQ' }}</td></tr>
-                  }</tbody>
-                </table>
+
+            <div class="card mt-3 overflow-x-auto !p-0">
+              <table class="w-full min-w-[640px] text-left text-xs">
+                <caption class="sr-only">Últimos envíos</caption>
+                <thead class="border-b border-zinc-100 text-[10px] uppercase tracking-wider text-zinc-400">
+                  <tr>
+                    <th scope="col" class="px-4 py-3">Seguimiento</th>
+                    <th scope="col" class="px-4 py-3">Estado</th>
+                    <th scope="col" class="px-4 py-3">Capacidad</th>
+                    <th scope="col" class="px-4 py-3">Destino</th>
+                    <th scope="col" class="px-4 py-3">Actualizado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (e of r.recent; track e.id) {
+                    <tr class="border-b border-zinc-50 last:border-0">
+                      <td class="px-4 py-3 font-mono font-semibold">
+                        <a [routerLink]="['/shipments', e.id]" class="text-blue-700 hover:underline">{{ e.trackingCode }}</a>
+                      </td>
+                      <td class="px-4 py-3"><span class="badge" [class]="pillEstado(e.status)">{{ e.status }}</span></td>
+                      <td class="px-4 py-3"><span class="badge" [class]="pillCapacidad(e.capacityStatus)">{{ etiquetaCapacidad(e.capacityStatus) }}</span></td>
+                      <td class="px-4 py-3 text-zinc-600">{{ e.destinationAddress }}</td>
+                      <td class="px-4 py-3 text-zinc-500">{{ fechaHora(e.updatedAt) }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-zinc-400">Aún no hay envíos.</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </app-vista-estado>
+      </section>
+
+      @if (auth.hasRole('Admin')) {
+        <section aria-labelledby="titulo-kpis" class="space-y-3">
+          <h2 id="titulo-kpis" class="text-sm font-bold text-zinc-800">Indicadores (últimas 24 horas)</h2>
+          <app-vista-estado [cargando]="cargandoBase()" [error]="errorKpis()" (reintentar)="cargar()">
+            @if (panel()?.reportOverview?.data; as k) {
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="card"><p class="label">Envíos totales</p><p class="font-mono text-2xl font-bold">{{ numero(k.totalShipments) }}</p></div>
+                <div class="card"><p class="label">Envíos por hora</p><p class="font-mono text-2xl font-bold">{{ decimal(k.shipmentsPerHour) }}</p></div>
+                <div class="card"><p class="label">Lead time promedio</p><p class="font-mono text-2xl font-bold">{{ decimal(k.avgLeadTimeMinutes) }} min</p></div>
               </div>
             }
-            <h3 class="mt-5 font-semibold text-zinc-900">Tópicos de eventos</h3>
-            @if (kafkaError) { <p class="mt-2 text-sm text-red-700" role="alert">{{ kafkaError }}</p> }
-            @if (!brokerLoading && !kafkaError && topics.length === 0) { <p class="mt-2 text-sm text-zinc-600">No hay tópicos declarados. Configure la topología desde el administrador.</p> }
-            <ul class="mt-2 space-y-1 break-words text-sm text-zinc-700">@for (topic of topics; track topic) { <li>{{ topic }}</li> }</ul>
-            @if (brokerUpdated) { <p class="mt-4 text-xs text-zinc-600" aria-live="polite">Última consulta: {{ brokerUpdated }}</p> }
-          </section>
-        }
+          </app-vista-estado>
+        </section>
 
-        <!-- ÚLTIMOS ENVÍOS -->
-        <div class="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-2xs sm:p-6">
-          <div>
-            <div class="flex items-center justify-between border-b border-zinc-100 pb-4">
-              <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Últimos despachos</h2>
-              <a routerLink="/shipments" class="text-xs font-medium text-blue-600 transition hover:text-blue-700">
-                Ver historial →
-              </a>
-            </div>
-
-            @if (envios.length === 0) {
-              <p class="mt-4 text-xs text-zinc-400">Aún no hay envíos registrados.</p>
-            } @else {
-              <ul class="mt-3 divide-y divide-zinc-100 text-xs">
-                @for (envio of envios.slice(0, 5); track envio.id) {
-                  <li class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition-colors hover:bg-zinc-50/70">
-                    <div class="min-w-0 space-y-0.5 pr-3">
-                      <p class="font-mono font-semibold" [class]="envio.status === 'EN_RUTA' ? 'text-blue-600' : 'text-zinc-900'">
-                        {{ envio.trackingCode }}
-                      </p>
-                      <p class="truncate text-[11px] text-zinc-500">{{ envio.destinationAddress }}</p>
-                    </div>
-                    <span class="badge shrink-0" [class]="pill(envio.status)">
-                      <span class="h-1.5 w-1.5 rounded-full" [class]="punto(envio.status)"></span>
-                      {{ envio.status }}
-                    </span>
-                  </li>
-                }
-              </ul>
+        <section aria-labelledby="titulo-broker" class="space-y-3">
+          <h2 id="titulo-broker" class="text-sm font-bold text-zinc-800">Mensajería (RabbitMQ)</h2>
+          <app-vista-estado [cargando]="cargandoBroker()" [error]="errorBroker()" (reintentar)="cargar()">
+            @if (broker(); as b) {
+              <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div class="card"><p class="label">Colas activas</p><p class="font-mono text-2xl font-bold">{{ numero(b.activeQueues) }}</p></div>
+                <div class="card"><p class="label">Mensajes listos</p><p class="font-mono text-2xl font-bold">{{ numero(b.messagesReady) }}</p></div>
+                <div class="card"><p class="label">Consumidores</p><p class="font-mono text-2xl font-bold">{{ numero(b.consumers) }}</p></div>
+                <div class="card"><p class="label">En DLQ ahora</p><p class="font-mono text-2xl font-bold">{{ numero(b.dlqMessages) }}</p></div>
+                <div class="card"><p class="label">Llegados a DLQ</p><p class="font-mono text-2xl font-bold text-rose-600">{{ numero(b.dlqArrivedTotal) }}</p></div>
+              </div>
+              <p class="text-[11px] text-zinc-400">
+                Una DLQ que se consume casi siempre está vacía: el acumulado de llegados es la métrica de fallos.
+                <a routerLink="/admin/mq" class="font-semibold text-blue-700 hover:underline">Administrar RabbitMQ</a>
+              </p>
             }
-          </div>
+          </app-vista-estado>
+        </section>
 
-          <div class="mt-4 border-t border-zinc-100 pt-3 text-right">
-            <span class="text-[11px] text-zinc-400">Datos en vivo desde el BFF</span>
-          </div>
-        </div>
-      </div>
+        <section aria-labelledby="titulo-servicios" class="space-y-3">
+          <h2 id="titulo-servicios" class="text-sm font-bold text-zinc-800">Servicios</h2>
+          <app-vista-estado [cargando]="cargandoServicios()" [error]="errorServicios()" (reintentar)="cargar()">
+            @if (servicios(); as s) {
+              <div class="flex flex-wrap gap-2">
+                @for (par of listaServicios(); track par[0]) {
+                  <span class="badge" [class]="par[1] === 'UP' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'">
+                    {{ par[0] }} · {{ par[1] }}
+                  </span>
+                }
+              </div>
+              @if (s.status !== 'UP') {
+                <p class="text-xs text-rose-600">El BFF reporta un estado distinto de UP.</p>
+              }
+            }
+          </app-vista-estado>
+        </section>
+      }
+
+      @if (auth.hasRole('Admin', 'Auditor') && panel()?.auditOverview; as bloque) {
+        <section aria-labelledby="titulo-audit" class="space-y-3">
+          <h2 id="titulo-audit" class="text-sm font-bold text-zinc-800">Auditoría reciente</h2>
+          @if (bloque.available) {
+            <ul class="card divide-y divide-zinc-100 !p-0 text-xs">
+              @for (ev of bloque.data ?? []; track $index) {
+                <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                  <span class="font-semibold text-zinc-700">{{ ev.tipoEvento }}</span>
+                  <span class="text-zinc-500">{{ ev.usuarioResponsable ?? 'sistema' }} · {{ fechaHora(ev.fechaEvento) }}</span>
+                </li>
+              } @empty {
+                <li class="px-4 py-6 text-center text-zinc-400">Sin eventos recientes.</li>
+              }
+            </ul>
+          } @else {
+            <p class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+              La auditoría (Kafka) no está disponible. La línea de tiempo de cada envío sigue mostrando los eventos de RabbitMQ.
+            </p>
+          }
+        </section>
+      }
     </div>
   `,
 })
 export class DashboardPage implements OnInit {
   readonly auth = inject(AuthService);
   private readonly bff = inject(BffService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  status: Record<string, any> | null = null;
-  kpis: Record<string, any> | null = null;
-  envios: Envio[] = [];
+  readonly estados = ESTADOS_TARJETA;
+  readonly pausado = signal(false);
+  readonly ultimaConsulta = signal<string | null>(null);
 
-  queues: BrokerQueue[] = [];
-  topics: string[] = [];
-  brokerLoading = false;
-  mqError = '';
-  kafkaError = '';
-  brokerUpdated = '';
+  readonly panel = signal<Dashboard | null>(null);
+  readonly cargandoBase = signal(true);
+  readonly errorBase = signal<string | null>(null);
 
-  loadBrokers(): void {
-    if (!this.auth.hasRole('Admin') || this.brokerLoading) return;
-    this.brokerLoading = true;
-    this.mqError = '';
-    this.kafkaError = '';
-    forkJoin({
-      queues: this.bff.mqQueues().pipe(catchError(() => { this.mqError = 'No se pudo consultar RabbitMQ. Compruebe el servicio y vuelva a actualizar.'; return of([] as BrokerQueue[]); })),
-      topics: this.bff.kafkaTopics().pipe(catchError(() => { this.kafkaError = 'No se pudo consultar Kafka. Compruebe el servicio y vuelva a actualizar.'; return of([] as string[]); })),
-    }).subscribe(({ queues, topics }) => {
-      this.queues = queues;
-      this.topics = topics;
-      this.brokerLoading = false;
-      this.brokerUpdated = new Date().toLocaleTimeString();
-    });
+  readonly broker = signal<MqMetricas | null>(null);
+  readonly cargandoBroker = signal(true);
+  readonly errorBroker = signal<string | null>(null);
+
+  readonly servicios = signal<EstadoServicios | null>(null);
+  readonly cargandoServicios = signal(true);
+  readonly errorServicios = signal<string | null>(null);
+
+  readonly soloCliente = computed(() => esSoloCliente(this.auth.roles));
+  readonly resumen = computed<ResumenEnvios | null>(() => this.panel()?.shipmentsOverview?.data ?? null);
+  readonly cargandoEnvios = computed(() => this.cargandoBase() && !this.panel());
+  readonly errorEnvios = computed(() => {
+    const bloque = this.panel()?.shipmentsOverview;
+    if (bloque && !bloque.available) return bloque.message ?? 'Los envíos no están disponibles';
+    return this.errorBase();
+  });
+  readonly errorKpis = computed(() => {
+    const bloque = this.panel()?.reportOverview;
+    return bloque && !bloque.available ? 'Los reportes no están disponibles (la EP1 puede estar apagada).' : null;
+  });
+  readonly capacidades = computed<[string, number][]>(() =>
+    Object.entries(this.resumen()?.byCapacity ?? {}).filter(([clave, valor]) => clave !== 'NO_APLICA' && valor > 0)
+  );
+  readonly listaServicios = computed<[string, string][]>(() => Object.entries(this.servicios()?.services ?? {}));
+
+  readonly titulo = computed(() => {
+    if (this.auth.hasRole('Admin')) return 'Panel de administración';
+    if (this.auth.hasRole('Despachador')) return 'Panel de operación';
+    if (this.auth.hasRole('Auditor')) return 'Panel de auditoría';
+    return 'Mis envíos';
+  });
+
+  cuenta(resumen: ResumenEnvios, estado: string): string {
+    return numero(resumen.byStatus[estado] ?? 0);
   }
+
+  readonly pillEstado = pillEstado;
+  readonly pillCapacidad = pillCapacidad;
+  readonly etiquetaCapacidad = etiquetaCapacidad;
+  readonly fechaHora = fechaHora;
+  readonly numero = numero;
+  readonly decimal = decimal;
 
   ngOnInit(): void {
-    this.loadBrokers();
-    forkJoin({
-      status: this.bff.status().pipe(catchError(() => of(null))),
-      kpis: this.auth.hasRole('Admin') ? this.bff.reportKpis().pipe(catchError(() => of(null))) : of(null),
-      envios: this.bff.listarEnvios().pipe(catchError(() => of([] as Envio[]))),
-    }).subscribe(({ status, kpis, envios }) => {
-      this.status = status as Record<string, any> | null;
-      this.kpis = kpis as Record<string, any> | null;
-      this.envios = envios as Envio[];
+    // Cada 30 s (o al pulsar "Actualizar ahora"), salvo que el usuario haya pausado la actualización.
+    timer(0, 30_000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (!this.pausado()) this.cargar();
+      });
+  }
+
+  /** Carga cada bloque por separado: un servicio caído solo deja ese bloque en error. */
+  cargar(): void {
+    this.bff.dashboard().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (datos) => {
+        this.panel.set(datos);
+        this.errorBase.set(null);
+        this.cargandoBase.set(false);
+        this.ultimaConsulta.set(new Date().toLocaleTimeString('es-CL'));
+      },
+      error: (err: unknown) => {
+        this.errorBase.set(interpretarError(err).mensaje);
+        this.cargandoBase.set(false);
+      },
     });
-  }
 
-  contar(status: string): number {
-    return this.envios.filter((e) => e.status === status).length;
-  }
-
-  downstream(): [string, string][] {
-    const services = (this.status?.['downstreamServices'] ?? {}) as Record<string, string>;
-    return Object.entries(services);
-  }
-
-  pill(status: string): string {
-    return pillEstado(status);
-  }
-
-  punto(status: string): string {
-    return puntoEstado(status);
+    if (this.auth.hasRole('Admin')) {
+      this.bff.mqMetricas(true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (m) => {
+          this.broker.set(m);
+          this.errorBroker.set(null);
+          this.cargandoBroker.set(false);
+        },
+        error: (err: unknown) => {
+          this.errorBroker.set(interpretarError(err).mensaje);
+          this.cargandoBroker.set(false);
+        },
+      });
+      this.bff.estadoServicios().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (s) => {
+          this.servicios.set(s);
+          this.errorServicios.set(null);
+          this.cargandoServicios.set(false);
+        },
+        error: (err: unknown) => {
+          this.errorServicios.set(interpretarError(err).mensaje);
+          this.cargandoServicios.set(false);
+        },
+      });
+    }
   }
 }
+

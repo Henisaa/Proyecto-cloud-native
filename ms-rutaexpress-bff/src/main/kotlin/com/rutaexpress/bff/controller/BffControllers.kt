@@ -83,6 +83,14 @@ class BffController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping("/report/top-services")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Servicios más usados (retransmite a ms-rutaexpress-report, exclusivo ADMIN)")
+    fun getTopServices(
+        @RequestParam(defaultValue = "last7d") range: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> = ResponseEntity.ok(bffService.fetchTopServices(range, jwt?.tokenValue ?: ""))
+
     @GetMapping("/audit/timeline/{idEntidad}")
     @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @Operation(summary = "Consultar trazabilidad de envío (retransmite a ms-rutaexpress-audit, ADMIN y AUDITOR)")

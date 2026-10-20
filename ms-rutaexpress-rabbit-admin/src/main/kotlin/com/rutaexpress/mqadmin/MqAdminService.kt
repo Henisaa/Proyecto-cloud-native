@@ -116,6 +116,8 @@ class MqAdminService(
                     "messagesUnacknowledged" to numero(it, "messages_unacknowledged"),
                     "consumers" to numero(it, "consumers"),
                     "policy" to it["policy"],
+                    "durable" to it["durable"],
+                    "deadLetterExchange" to ((it["arguments"] as? Map<*, *>)?.get("x-dead-letter-exchange") ?: (it["effective_policy_definition"] as? Map<*, *>)?.get("dead-letter-exchange")),
                 )
             },
         )
