@@ -1,75 +1,71 @@
-{
-  "services": {
-    "rabbit1": {
-      "image": "rabbitmq:4-management",
-      "hostname": "rabbit1",
-      "environment": {
-        "RABBITMQ_DEFAULT_USER": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_DEFAULT_PASS": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "RABBITMQ_ERLANG_COOKIE": "${RABBITMQ_ERLANG_COOKIE:-rutaexpress-local-cookie}"
-      },
-      "ports": [
-        "127.0.0.1:5672:5672",
-        "127.0.0.1:15672:15672"
-      ],
-      "volumes": [
-        "rabbit1:/var/lib/rabbitmq",
-        "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "rabbitmq-diagnostics",
-          "-q",
-          "ping"
-        ],
-        "interval": "10s",
-        "timeout": "5s",
-        "retries": 20
-      }
-    },
-    "rabbit2": {
-      "image": "rabbitmq:4-management",
-      "hostname": "rabbit2",
-      "environment": {
-        "RABBITMQ_DEFAULT_USER": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_DEFAULT_PASS": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "RABBITMQ_ERLANG_COOKIE": "${RABBITMQ_ERLANG_COOKIE:-rutaexpress-local-cookie}"
-      },
-      "ports": [
-        "127.0.0.1:5673:5672",
-        "127.0.0.1:15673:15672"
-      ],
-      "volumes": [
-        "rabbit2:/var/lib/rabbitmq",
-        "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "rabbitmq-diagnostics",
-          "-q",
-          "ping"
-        ],
-        "interval": "10s",
-        "timeout": "5s",
-        "retries": 20
-      },
-      "depends_on": {
-        "rabbit1": {
-          "condition": "service_healthy"
-        }
-      }
-    }
-  },
-  "volumes": {
-    "rabbit1": null,
-    "rabbit2": null
-  },
-  "networks": {
-    "default": {
-      "external": true,
-      "name": "rutaexpress"
-    }
-  }
-}
+# Clúster RabbitMQ de dos nodos (rabbit1 y rabbit2). Requiere la red externa "rutaexpress" y el secreto de la cookie:
+#   docker network create rutaexpress
+#   ./infra/scripts/init-secrets.sh
+# El Management UI queda en 127.0.0.1: se abre con un túnel SSH. Los puertos AMQP no se publican (red interna).
+name: rutaexpress-mq
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-rabbit: &rabbit
+  image: rabbitmq:4-management
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 768m
+  environment:
+    RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?defina RABBITMQ_USERNAME en infra/.env}
+    RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD en infra/.env}
+  # La cookie de Erlang llega como secreto (archivo), no como variable de entorno: se copia con los permisos
+  # que exige Erlang (600, dueño rabbitmq) antes de iniciar el servidor.
+  secrets:
+    - erlang_cookie
+  entrypoint:
+    - /bin/sh
+    - -c
+    - install -m 600 -o rabbitmq -g rabbitmq /run/secrets/erlang_cookie /var/lib/rabbitmq/.erlang.cookie && exec docker-entrypoint.sh rabbitmq-server
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+    interval: 10s
+    timeout: 5s
+    retries: 20
+    start_period: 30s
+
+services:
+  rabbit1:
+    <<: *rabbit
+    hostname: rabbit1
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbit1:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+
+  rabbit2:
+    <<: *rabbit
+    hostname: rabbit2
+    ports:
+      - "127.0.0.1:15673:15672"
+    volumes:
+      - rabbit2:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./definitions.json:/etc/rabbitmq/definitions.json:ro
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+
+secrets:
+  erlang_cookie:
+    file: ../secrets/erlang.cookie
+
+volumes:
+  rabbit1:
+  rabbit2:
+
+networks:
+  default:
+    external: true
+    name: rutaexpress

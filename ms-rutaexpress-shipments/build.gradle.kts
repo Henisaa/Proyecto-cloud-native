@@ -56,6 +56,8 @@ dependencies {
 	testImplementation("org.mockito.kotlin:mockito-kotlin:6.2.2")
 	testImplementation("org.springframework.security:spring-security-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+	testImplementation("org.testcontainers:testcontainers-oracle-free")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -72,4 +74,8 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+	archiveFileName.set("app.jar")
 }

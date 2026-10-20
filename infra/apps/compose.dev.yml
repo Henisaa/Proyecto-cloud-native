@@ -1,0 +1,31 @@
+# Solo para Docker Desktop o Codespaces: construye las imágenes desde el monorepo (con sus pruebas) y publica puertos
+# en 127.0.0.1. Nunca se usa en el EC2, que descarga las imágenes ya construidas por el CI.
+#   docker compose --env-file infra/.env -f infra/apps/compose.yml -f infra/apps/compose.dev.yml up -d --build
+services:
+  bff:
+    build: { context: ../../ms-rutaexpress-bff }
+    ports: ["127.0.0.1:8080:8080"]
+  shipments:
+    build: { context: ../../ms-rutaexpress-shipments }
+    ports: ["127.0.0.1:8085:8085"]
+  catalog:
+    build: { context: ../../ms-rutaexpress-catalog }
+    ports: ["127.0.0.1:8081:8081"]
+  notify:
+    build: { context: ../../ms-rutaexpress-notify }
+    ports: ["127.0.0.1:8082:8082"]
+  rabbit-admin:
+    build: { context: ../../ms-rutaexpress-rabbit-admin }
+    ports: ["127.0.0.1:8086:8086"]
+  audit:
+    build: { context: ../../ms-rutaexpress-audit }
+  report:
+    build: { context: ../../ms-rutaexpress-report }
+  kafka-admin:
+    build: { context: ../../ms-rutaexpress-kafka-admin }
+  oracle:
+    ports: ["127.0.0.1:1521:1521"]
+  redis:
+    ports: ["127.0.0.1:6379:6379"]
+  mailpit:
+    ports: ["127.0.0.1:1025:1025"]

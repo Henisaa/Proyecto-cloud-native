@@ -2,3 +2,8 @@ build
 .gradle
 .kotlin
 .git
+.idea
+*.iml
+out
+.env
+*.log

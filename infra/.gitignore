@@ -1,0 +1,9 @@
+# Secretos y entorno real: solo se versiona .env.example
+.env
+.env.*
+!.env.example
+secrets/*
+!secrets/.gitkeep
+*.cookie
+*.pem
+*.key

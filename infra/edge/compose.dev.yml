@@ -1,0 +1,5 @@
+# Solo para Docker Desktop o Codespaces: construye el frontend y lo publica en http://localhost:4200 (sin Caddy).
+services:
+  frontend:
+    build: { context: ../../frontend }
+    ports: ["127.0.0.1:4200:8080"]

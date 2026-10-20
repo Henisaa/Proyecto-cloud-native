@@ -1,5 +1,6 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-gradlew text eol=lf
-
+# Los scripts, Dockerfiles y compose deben conservar LF aunque se editen en Windows.
 *.sh text eol=lf
+Dockerfile text eol=lf
+gradlew text eol=lf
+*.yml text eol=lf
+Caddyfile text eol=lf
