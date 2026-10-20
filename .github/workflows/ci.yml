@@ -29,6 +29,7 @@ jobs:
           docker run --rm -e BASE_SHA -v "$PWD":/repo -w /repo python:3.12-alpine sh -ec 'apk add --no-cache git > /dev/null; git config --global --add safe.directory /repo; python ci/policy.py'
           docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python -m unittest discover -s ci -v
           bash -n tests/system/run.sh
+          bash -n infra/mq/start-rabbit.sh
           for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
 

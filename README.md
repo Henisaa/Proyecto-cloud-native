@@ -39,7 +39,7 @@ Kotlin 2.3.21, JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, Oracl
 
 ## Construcción, pruebas y ejecución
 
-GitHub Actions construye las imágenes Docker, ejecuta sus pruebas y publica en GHCR con etiqueta `sha-<commit corto>`. El frontend ejecuta Karma/Chromium y build de producción dentro de Docker; el CI comprueba también el contenedor servido. Las integraciones usan Testcontainers (broker, Redis y migraciones Oracle). No instalar JDK, Gradle ni Node en el PC.
+GitHub Actions ejecuta la suite completa en cada push y PR: nueve compilaciones Docker, ocho suites backend con Testcontainers y cobertura, Karma/Chromium, smoke nginx y stack integrado con Playwright en cuatro navegadores/dispositivos. Solo publica las imágenes candidatas en GHCR con etiqueta `sha-<commit corto>` después de aprobar el control global. Fallos, omisiones, pruebas inestables y regresiones de cobertura bloquean la publicación. Alcance, artefactos y límites: [ci/README.md](ci/README.md). No instalar JDK, Gradle ni Node en el PC.
 
 En EC2, configurar `infra/.env` a partir de su ejemplo y ejecutar:
 
