@@ -3,6 +3,9 @@ package com.rutaexpress.shipments.controlador
 import com.rutaexpress.shipments.dominio.CambiarEstadoRequest
 import com.rutaexpress.shipments.dominio.CrearEnvioRequest
 import com.rutaexpress.shipments.dominio.EnvioResponse
+import com.rutaexpress.shipments.dominio.PaginaResponse
+import com.rutaexpress.shipments.dominio.RegistroAuditoriaResponse
+import com.rutaexpress.shipments.dominio.ResumenEnviosResponse
 import com.rutaexpress.shipments.servicio.EnvioServicio
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -39,19 +42,33 @@ class EnvioControlador(
         @AuthenticationPrincipal jwt: Jwt?
     ): EnvioResponse = servicio.crear(request, jwt?.tokenValue)
 
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @Operation(summary = "Conteos por estado y por capacidad, y los últimos envíos (un cliente solo ve los suyos)")
+    fun resumen(): ResumenEnviosResponse = servicio.resumen()
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
-    @Operation(summary = "Obtener un envío por id")
+    @Operation(summary = "Obtener un envío por id (un cliente solo ve los suyos)")
     fun obtener(@PathVariable id: String): EnvioResponse = servicio.obtener(id)
+
+    @GetMapping("/{id}/audit")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'AUDITOR')")
+    @Operation(summary = "Línea de tiempo del envío según los eventos de RabbitMQ")
+    fun auditoria(@PathVariable id: String): List<RegistroAuditoriaResponse> = servicio.auditoria(id)
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
-    @Operation(summary = "Listar envíos con filtros opcionales de estado y fechas de creación")
+    @Operation(summary = "Listar envíos paginados, con filtros de estado, capacidad, fechas y código de seguimiento")
     fun listar(
         @RequestParam(required = false) status: String?,
+        @RequestParam(required = false) capacity: String?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) from: Instant?,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?
-    ): List<EnvioResponse> = servicio.listar(status, from, to)
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) to: Instant?,
+        @RequestParam(required = false) q: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): PaginaResponse<EnvioResponse> = servicio.listar(status, capacity, from, to, q, page, size)
 
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
@@ -61,4 +78,9 @@ class EnvioControlador(
         @Valid @RequestBody request: CambiarEstadoRequest,
         @AuthenticationPrincipal jwt: Jwt?
     ): EnvioResponse = servicio.cambiarEstado(id, request.status, jwt?.tokenValue)
+
+    @PostMapping("/{id}/capacity/retry")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
+    @Operation(summary = "Reintentar la reserva de capacidad de un envío ACEPTADO con capacidad RECHAZADA")
+    fun reintentarReserva(@PathVariable id: String): EnvioResponse = servicio.reintentarReserva(id)
 }

@@ -115,10 +115,8 @@ management:
         include: health,info,prometheus,metrics
   endpoint:
     health:
-      show-details: always
-  metrics:
-    export:
-      prometheus:
+      show-details: when-authorized
+      probes:
         enabled: true
 
 springdoc:

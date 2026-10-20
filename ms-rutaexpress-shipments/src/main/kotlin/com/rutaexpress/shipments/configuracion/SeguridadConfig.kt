@@ -54,6 +54,7 @@ class SeguridadConfig(
                     ).permitAll()
                     .requestMatchers(
                         "/actuator/health",
+                        "/actuator/health/**",
                         "/actuator/info"
                     ).permitAll()
 
@@ -130,7 +131,8 @@ class AzureRolesConverter : Converter<Jwt, AbstractAuthenticationToken> {
                 .forEach { authorities.add(SimpleGrantedAuthority("SCOPE_$it")) }
         }
 
-        return JwtAuthenticationToken(jwt, authorities, jwt.subject ?: "usuario")
+        // El nombre del actor es legible (correo o nombre), no el sub opaco del token.
+        return JwtAuthenticationToken(jwt, authorities, Actor.nombreLegible(jwt.claims, jwt.subject))
     }
 }
 

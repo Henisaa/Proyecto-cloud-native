@@ -12,7 +12,7 @@ import org.springframework.kafka.core.ProducerFactory
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 
 @Configuration
-@ConditionalOnProperty(name = ["spring.kafka.enabled"], havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(name = ["app.kafka.enabled"], havingValue = "true", matchIfMissing = true)
 class KafkaProducerConfig(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private val bootstrapServers: String
@@ -27,6 +27,10 @@ class KafkaProducerConfig(
         configProps[ProducerConfig.ACKS_CONFIG] = "all"
         configProps[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG] = true
         configProps[ProducerConfig.RETRIES_CONFIG] = 3
+        // delivery.timeout.ms >= linger.ms + request.timeout.ms, o el productor no arranca.
+        configProps[ProducerConfig.MAX_BLOCK_MS_CONFIG] = 3000
+        configProps[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 5000
+        configProps[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 10000
         configProps[JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS] = false
         return DefaultKafkaProducerFactory(configProps)
     }

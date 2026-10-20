@@ -52,7 +52,12 @@ class FleetCapacity(
     var createdAt: LocalDateTime = LocalDateTime.now(),
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: LocalDateTime = LocalDateTime.now()
+    var updatedAt: LocalDateTime = LocalDateTime.now(),
+
+    /** Bloqueo optimista: una edición administrativa concurrente con una reserva recibe un conflicto. */
+    @Version
+    @Column(name = "version", nullable = false)
+    var version: Long = 0
 ) {
     @PreUpdate
     fun onUpdate() {
