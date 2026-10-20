@@ -5,5 +5,6 @@ WORKDIR /app
 COPY tests/browser/package.json ./
 RUN npm install --ignore-scripts --no-audit --no-fund
 COPY tests/browser/ ./
+RUN npx tsc --noEmit
 ENV CI=true
 CMD ["npx", "playwright", "test"]

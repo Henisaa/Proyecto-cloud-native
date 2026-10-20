@@ -23,6 +23,7 @@ jobs:
       - name: Test policy and script syntax
         run: |
           docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python ci/policy.py
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python -m unittest discover -s ci -v
           bash -n tests/system/run.sh
           for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
@@ -98,10 +99,17 @@ jobs:
         service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin]
     steps:
       - uses: actions/checkout@v4
+      - name: Gradle cache identity
+        id: gradle-cache
+        env:
+          MODULE: ${{ matrix.service }}
+        run: |
+          identity="$(sha256sum "$MODULE/build.gradle.kts" "$MODULE/settings.gradle.kts" "$MODULE/gradle/wrapper/gradle-wrapper.properties" | sha256sum | cut -d ' ' -f 1)"
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: .ci-gradle
-          key: strict-gradle-${{ runner.os }}-${{ matrix.service }}-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          key: strict-gradle-${{ runner.os }}-${{ matrix.service }}-${{ steps.gradle-cache.outputs.identity }}
           restore-keys: strict-gradle-${{ runner.os }}-${{ matrix.service }}-
       - name: Complete tests, real dependencies, no test-result cache
         run: |
@@ -112,7 +120,7 @@ jobs:
             --add-host=host.docker.internal:host-gateway \
             -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal -e RUN_DOCKER_TESTS=true \
             eclipse-temurin:21-jdk \
-            sh -c 'chmod +x gradlew && ./gradlew --no-daemon --rerun-tasks clean test jacocoTestReport'
+            sh -c 'chmod +x gradlew && ./gradlew --no-daemon --refresh-dependencies dependencies --configuration testRuntimeClasspath && ./gradlew --no-daemon --rerun-tasks clean test jacocoTestReport'
       - name: Reject skipped, missing and regressing tests
         run: |
           module="${{ matrix.service }}"
