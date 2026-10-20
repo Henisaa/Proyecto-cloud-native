@@ -1,0 +1,460 @@
+{
+    "variable":  [
+                     {
+                         "key":  "base_url",
+                         "value":  "https://api.ejemplo.cl"
+                     },
+                     {
+                         "key":  "invalid_token",
+                         "value":  "token-invalido"
+                     },
+                     {
+                         "key":  "run_id",
+                         "value":  "demo"
+                     },
+                     {
+                         "key":  "service_id",
+                         "value":  "1"
+                     }
+                 ],
+    "info":  {
+                 "name":  "RutaExpress EP2 - aceptacion HTTP",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "item":  [
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{base_url}}/api/bff/shipments/summary",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "01 Sin token",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{base_url}}/api/bff/shipments/summary",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{invalid_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "02 Token invalido",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 401\u0027, function () { pm.response.to.have.status(401); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "GET",
+                                     "url":  "{{base_url}}/api/bff/shipments/summary",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{dispatcher_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "03 Rol autorizado",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"name\":\"q.ep2.prohibida\",\"durable\":true}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/admin/mq/queues",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{client_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "04 Cliente no administra",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 403\u0027, function () { pm.response.to.have.status(403); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"serviceId\":{{service_id}},\"zone\":\"URBAN_CENTER\",\"packagesCount\":1,\"weightKg\":1.5,\"volumeM3\":0.01,\"recipientName\":\"Prueba EP2\",\"recipientEmail\":\"cliente@example.com\",\"originAddress\":\"Origen de prueba\",\"destinationAddress\":\"Destino de prueba\"}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/bff/shipments",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{dispatcher_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "05 Crear envio valido",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 201\u0027, function () { pm.response.to.have.status(201); });",
+                                                                   "if (pm.response.code === 201) pm.collectionVariables.set(\u0027shipment_id\u0027, pm.response.json().id);"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"status\":\"EN_RUTA\"}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "PUT",
+                                     "url":  "{{base_url}}/api/bff/shipments/{{shipment_id}}/status",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{dispatcher_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "06 Transicion invalida",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 409\u0027, function () { pm.response.to.have.status(409); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"status\":\"ACEPTADO\"}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "PUT",
+                                     "url":  "{{base_url}}/api/bff/shipments/{{shipment_id}}/status",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{dispatcher_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "07 Aceptar y pedir reserva asincrona",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });",
+                                                                   "pm.test(\u0027Reserva pendiente\u0027, function () { pm.expect(pm.response.json().capacityStatus).to.eql(\u0027PENDIENTE\u0027); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"name\":\"ex.ep2.{{run_id}}\",\"type\":\"topic\",\"durable\":true}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/admin/mq/exchanges",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "08 Crear exchange",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 201\u0027, function () { pm.response.to.have.status(201); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"name\":\"q.ep2.{{run_id}}\",\"durable\":true,\"ttlMs\":10000,\"maxLength\":5,\"overflow\":\"reject-publish\"}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/admin/mq/queues",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "09 Crear cola",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 201\u0027, function () { pm.response.to.have.status(201); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"source\":\"ex.ep2.{{run_id}}\",\"destination\":\"q.ep2.{{run_id}}\",\"destinationType\":\"queue\",\"routingKey\":\"demo.#\"}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/admin/mq/bindings",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "10 Crear binding",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 201\u0027, function () { pm.response.to.have.status(201); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "body":  {
+                                                  "raw":  "{\"name\":\"amq.ep2\",\"durable\":true}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              },
+                                                  "mode":  "raw"
+                                              },
+                                     "method":  "POST",
+                                     "url":  "{{base_url}}/api/admin/mq/queues",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "11 Nombre reservado invalido",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 400\u0027, function () { pm.response.to.have.status(400); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "DELETE",
+                                     "url":  "{{base_url}}/api/admin/mq/queues/q.ep2.{{run_id}}",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "12 Eliminar cola",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 },
+                 {
+                     "request":  {
+                                     "method":  "DELETE",
+                                     "url":  "{{base_url}}/api/admin/mq/exchanges/ex.ep2.{{run_id}}",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{admin_token}}"
+                                                    }
+                                                ]
+                                 },
+                     "name":  "13 Eliminar exchange",
+                     "event":  [
+                                   {
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\u0027HTTP 200\u0027, function () { pm.response.to.have.status(200); });"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  },
+                                       "listen":  "test"
+                                   }
+                               ]
+                 }
+             ]
+}

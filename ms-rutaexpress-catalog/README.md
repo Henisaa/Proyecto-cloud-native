@@ -1,50 +1,48 @@
-ms-rutaexpress-catalog
-Servicios, tarifas y capacidad de flota
+# ms-rutaexpress-catalog
 
-Funcionamiento
-Persiste servicios, tarifas y capacidad en Oracle con JPA y Flyway. Permite consultar y administrar servicios y tarifas, y verificar disponibilidad. Usa caché Caffeine y publica cambios en Kafka `catalog.events`. Las operaciones de administración requieren Admin; las consultas permiten los roles del dominio indicados por cada endpoint.
+## Propósito y arquitectura
 
-RabbitMQ
-Consume comandos desde `q.rutaexpress.command`, enlazada a `ex.rutaexpress.cmd` con `capacity.reserve` y `capacity.release`. `CapacidadComandoProcesador` bloquea la línea de capacidad con `PESSIMISTIC_WRITE`, registra cada commandId en `tb_capacity_commands` (migración Flyway V2) y evita repetir reservas de un envío ya reservado. Publica `catalog.capacity.reserved`, `catalog.capacity.rejected` o `catalog.capacity.released` en `ex.rutaexpress.events`. Los rechazos no recuperables y los errores que agotan los reintentos van a `q.rutaexpress.command.dlq` sin requeue; `DeadLetterRegistro` los confirma y deja constancia en logs. `RABBIT_PREFETCH` define el QoS, `RABBIT_RETRY_MAX_ATTEMPTS` limita los reintentos, `RABBIT_RETRY_INITIAL_MS` define su espera inicial y `RABBIT_DLQ_CONSUMER_ENABLED=false` permite inspeccionar mensajes en Management UI.
+Catálogo de servicios, tarifas y capacidades por zona/vehículo; persistencia Oracle, Flyway y caché.
 
-Requisitos
-JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.
+```mermaid
+flowchart LR
+  Gateway --> BFF
+  BFF --> Servicio[ms-rutaexpress-catalog]
+```
 
-Verificación y limpieza
-.\gradlew.bat test bootJar
-.\gradlew.bat clean
-.\gradlew.bat --stop
-Remove-Item -LiteralPath .gradle,.kotlin -Recurse -Force -ErrorAction SilentlyContinue
-No elimine gradle/wrapper: contiene los archivos versionados necesarios para compilar.
+## Endpoints y roles
 
-Ejecución local desde la raíz del repositorio
-Antes de arrancar, levante la infraestructura según infra/README.md. El perfil local usa H2 en memoria y migraciones. La publicación Kafka puede desactivarse con APP_KAFKA_ENABLED=false y SPRING_KAFKA_ENABLED=false.
+`/api/catalog/services`: consultas por los roles autorizados del dominio. Edición, capacidades y tarifas según @PreAuthorize de CatalogViewController; escritura administrativa solo Admin. El BFF restringe la vista de capacidades a Admin/Despachador y permite a Cliente solo servicios.
 
-cd ms-rutaexpress-catalog
-$env:SECURITY_ENABLED="false"
-$env:SPRING_PROFILES_ACTIVE="local"
-$env:APP_KAFKA_ENABLED="true"
-$env:SPRING_KAFKA_ENABLED="true"
-.\gradlew.bat bootRun
+## Mensajes, idempotencia y DLQ
 
-La aplicación escucha en http://localhost:8081. Salud: /actuator/health. Swagger: /swagger-ui/index.html. Métricas: /actuator/prometheus.
+Consume q.rutaexpress.command desde ex.rutaexpress.cmd (direct): capacity.reserve/release. Produce catalog.capacity.reserved/rejected/released en ex.rutaexpress.events (topic), con eventId commandId:resultado. ACK después del resultado confirmado; errores transitorios reintentan y luego NACK a command.dlq; errores inválidos no reencolan. Reserva única por shipmentId y registro por commandId; liberación usa la línea y paquetes guardados.
 
-Endpoints
-GET, POST /api/catalog/services
-GET, PUT, DELETE /api/catalog/services/{id}
-PATCH /api/catalog/services/{id}/status
-GET, POST /api/catalog/services/{id}/capacities
-PUT /api/catalog/services/{id}/capacities/{capacityId}
-GET, POST /api/catalog/services/{id}/tariffs
-PUT /api/catalog/services/{id}/tariffs/{tariffId}
-POST /api/catalog/services/{id}/capacity/check
-POST /api/catalog/services/{id}/capacity/reserve
-POST /api/catalog/services/{id}/capacity/release
-Estas operaciones aceptan la zona, el tipo de vehículo y la cantidad de paquetes; check recibe peso y volumen.
+## Variables de entorno
 
-Oracle
-Para Oracle defina SPRING_PROFILES_ACTIVE=prod, SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME y SPRING_DATASOURCE_PASSWORD antes de bootRun. Use un esquema separado por servicio con permisos de tablas y secuencias. Flyway ejecuta src/main/resources/db/migration. El perfil local H2 es solo para desarrollo.
+Comunes: SECURITY_ENABLED, AZURE_AD_ISSUER_URI, AZURE_AD_AUDIENCE y PORT. En nube SECURITY_ENABLED=true. SPRING_DATASOURCE_URL/USERNAME/PASSWORD; RABBITMQ_ADDRESSES/USERNAME/PASSWORD; RABBIT_PREFETCH, RABBIT_RETRY_MAX_ATTEMPTS, RABBIT_RETRY_INITIAL_MS, RABBIT_DLQ_CONSUMER_ENABLED; KAFKA_ENABLED, KAFKA_BOOTSTRAP_SERVERS.
 
-Seguridad
-En despliegue seguro, SECURITY_ENABLED=true. Configure AZURE_AD_ISSUER_URI con el tenant corporativo y AZURE_AD_AUDIENCE con el identificador de la API. AZURE_AD_CLIENT_ID es el GUID de la API cuando se utiliza el validador automático de Spring. Se valida firma, issuer, audiencia y vigencia. Roles reconocidos: Admin, Despachador, Cliente y Auditor. Operador del dominio y Cliente del dominio se normalizan a Despachador y Cliente.
-La desactivación de seguridad se utiliza solamente en desarrollo local. No despliegue ese modo detrás de un Gateway público.
+## Construir y probar con Docker
+
+GitHub Actions ejecuta las pruebas dentro de la construcción. No instalar JDK ni Gradle en el PC.
+
+```sh
+docker build -t ms-rutaexpress-catalog:test ms-rutaexpress-catalog
+docker build --target reports --output type=local,dest=reports/ms-rutaexpress-catalog ms-rutaexpress-catalog
+```
+
+Las pruebas Testcontainers se ejecutan en un job separado del CI con RUN_DOCKER_TESTS=true; los reportes quedan como artefactos. Pruebas omitidas sin broker no certifican integración.
+
+## Ejecutar con Compose
+
+Configurar infra/.env y ejecutar bash infra/scripts/up.sh en EC2. Ver [infraestructura](../infra/README.md). Las imágenes se descargan de GHCR con etiqueta del commit; no se compila en EC2.
+
+## Decisiones de diseño
+
+Una reserva nueva usa persist/INSERT para que la clave única revierta al perdedor de una carrera. Bloqueos de candidatas en orden de id; liberación bloquea la reserva. @Version y bloqueo protegen la edición del máximo, que no puede bajar de lo reservado. Caché invalidada tras commit. Tarifas cargadas por lotes, sin producto cartesiano entre colecciones. La capacidad diaria todavía requiere definir su renovación por fecha (P3-07).
+
+La aceptación real en nube y las 14 evidencias de la evaluación se verifican por separado del CI.
+
+## Autores
+
+Equipo RutaExpress (Henisaa/Proyecto-cloud-native).
