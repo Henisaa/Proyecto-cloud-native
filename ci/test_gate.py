@@ -39,6 +39,18 @@ class GateTests(unittest.TestCase):
             result = check_module(Path(d), 'example', {'tests': 2, 'LINE': 50, 'BRANCH': 50})
             self.assertEqual(result['coverage']['LINE'], 80)
 
+    def test_critical_class_cannot_disappear_from_report(self):
+        with tempfile.TemporaryDirectory() as d, self.assertRaisesRegex(ValueError, 'missing critical'):
+            self.fixture(Path(d))
+            check_module(Path(d), 'catalog', {'tests': 2, 'LINE': 50, 'BRANCH': 50})
+
+    def test_duplicate_cases_fail(self):
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(ValueError):
+            self.fixture(Path(d))
+            path = Path(d) / 'TEST-example.xml'
+            path.write_text(path.read_text().replace('name="two"', 'name="one"'))
+            check_module(Path(d), 'example', {'tests': 2, 'LINE': 50, 'BRANCH': 50})
+
 
 if __name__ == '__main__':
     unittest.main()

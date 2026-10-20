@@ -45,8 +45,16 @@ def check_module(root, module, baseline):
     critical_path = Path('ci/critical-coverage.json')
     if critical_path.exists():
         critical = json.loads(critical_path.read_text())
+        namespace = 'mqadmin' if module == 'rabbit-admin' else module
+        required = {name for name in critical if name.startswith(f'com/rutaexpress/{namespace}/')}
+        present = {cls.get('name') for cls in report.findall('package/class')}
+        if required - present:
+            raise ValueError(f'{module}: missing critical coverage classes: {sorted(required - present)}')
         for cls in report.findall('package/class'):
             if cls.get('name') in critical:
+                reported = {counter.get('type') for counter in cls.findall('counter')}
+                if set(critical[cls.get('name')]) - reported:
+                    raise ValueError(f'{module}: missing critical coverage counters for {cls.get("name")}')
                 for counter in cls.findall('counter'):
                     kind = counter.get('type')
                     if kind in critical[cls.get('name')]:
