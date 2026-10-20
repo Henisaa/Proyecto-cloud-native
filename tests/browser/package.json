@@ -1,0 +1,6 @@
+{
+  "name": "rutaexpress-system-tests",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": { "@playwright/test": "1.56.1" }
+}

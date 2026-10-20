@@ -70,7 +70,33 @@
                                                                                                                              "optimization":  false,
                                                                                                                              "extractLicenses":  false,
                                                                                                                              "sourceMap":  true
-                                                                                                                         }
+                                                                                                                         },
+                                                                                                         "e2e":  {
+                                                                                                                     "budgets":  [
+                                                                                                                                     {
+                                                                                                                                         "type":  "initial",
+                                                                                                                                         "maximumWarning":  "1MB",
+                                                                                                                                         "maximumError":  "2MB"
+                                                                                                                                     },
+                                                                                                                                     {
+                                                                                                                                         "type":  "anyComponentStyle",
+                                                                                                                                         "maximumWarning":  "4kB",
+                                                                                                                                         "maximumError":  "8kB"
+                                                                                                                                     }
+                                                                                                                                 ],
+                                                                                                                     "outputHashing":  "all",
+                                                                                                                     "optimization":  {
+                                                                                                                                          "styles":  {
+                                                                                                                                                         "inlineCritical":  false,
+                                                                                                                                                         "minify":  true
+                                                                                                                                                     },
+                                                                                                                                          "fonts":  true,
+                                                                                                                                          "scripts":  true
+                                                                                                                                      },
+                                                                                                                     "browser":  "src/e2e-main.ts",
+                                                                                                                     "tsConfig":  "tsconfig.e2e.json",
+                                                                                                                     "outputPath":  "dist/e2e"
+                                                                                                                 }
                                                                                                      },
                                                                                   "defaultConfiguration":  "production"
                                                                               },

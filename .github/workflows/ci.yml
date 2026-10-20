@@ -1,94 +1,44 @@
 name: CI
 
-# Aquí se compila y se prueba (nada se instala en el PC). Cada servicio se construye con su Dockerfile:
-# si una prueba falla, la imagen no se construye. En main y en etiquetas v* las imágenes se publican en GHCR.
 on:
-  pull_request:
   push:
-    branches: [main, 'ep2-*']
-    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
+# A later commit never turns an unfinished verification into a green check.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  # Solo se construyen los servicios cuya carpeta cambió (ahorra minutos de Actions).
-  changes:
+  policy:
     runs-on: ubuntu-latest
-    outputs:
-      services: ${{ steps.detect.outputs.services }}
-      integration: ${{ steps.detect.outputs.integration }}
-      compose: ${{ steps.detect.outputs.compose }}
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: detect
-        env:
-          EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
+      - name: Test policy and script syntax
         run: |
-          all='ms-rutaexpress-bff ms-rutaexpress-shipments ms-rutaexpress-catalog ms-rutaexpress-notify ms-rutaexpress-rabbit-admin ms-rutaexpress-audit ms-rutaexpress-report ms-rutaexpress-kafka-admin frontend'
-          integration_all='ms-rutaexpress-shipments ms-rutaexpress-catalog ms-rutaexpress-notify ms-rutaexpress-rabbit-admin'
-          base=""
-          [ "$EVENT" = "pull_request" ] && base="$PR_BASE"
-          [ "$EVENT" = "push" ] && base="$PUSH_BEFORE"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || [ "${GITHUB_REF_TYPE}" = "tag" ] || ! git cat-file -e "$base" 2>/dev/null; then
-            changed_all=1
-          else
-            files="$(git diff --name-only "$base" HEAD)"
-            changed_all=0
-            echo "$files" | grep -q '^.github/workflows/ci.yml$' && changed_all=1
-          fi
-          pick() { for d in $1; do if [ "$changed_all" = 1 ] || echo "$files" | grep -q "^$d/"; then echo "$d"; fi; done | jq -R . | jq -sc .; }
-          echo "services=$(pick "$all")" >> "$GITHUB_OUTPUT"
-          echo "integration=$(pick "$integration_all")" >> "$GITHUB_OUTPUT"
-          if [ "$changed_all" = 1 ] || echo "$files" | grep -q '^infra/'; then echo "compose=true" >> "$GITHUB_OUTPUT"; else echo "compose=false" >> "$GITHUB_OUTPUT"; fi
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python ci/policy.py
+          bash -n tests/system/run.sh
+          for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
+          docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
 
-  # Construye la imagen (que ejecuta las pruebas dentro de la construcción) y, en main/etiquetas, la publica.
   build:
-    needs: changes
-    if: needs.changes.outputs.services != '[]'
+    needs: policy
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        service: ${{ fromJson(needs.changes.outputs.services) }}
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin, frontend]
     steps:
       - uses: actions/checkout@v4
-      - name: Nombre de imagen en minúsculas
-        id: image
-        run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          name="${{ matrix.service }}"
-          [ "$name" = "frontend" ] && name="frontend-rutaexpress"
-          echo "name=ghcr.io/${owner}/${name}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
-      - name: Iniciar sesión en GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          tags: |
-            type=sha,format=short
-            type=raw,value=main,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-      # Primero las pruebas, para poder subir sus reportes como artefacto (usa la caché, la imagen final no las repite).
-      - name: Compilar y probar (reportes)
+      - name: Test and export reports inside Docker
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
@@ -96,93 +46,201 @@ jobs:
           outputs: type=local,dest=reports
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-      - name: Subir reportes de pruebas
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: reportes-${{ matrix.service }}
+          name: build-reports-${{ matrix.service }}
           path: reports
-          if-no-files-found: ignore
-      - name: Construir imagen final
+          if-no-files-found: error
+          retention-days: 7
+      - name: Build candidate image, without publishing
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VCS_REF=${{ github.sha }}
-            VERSION=${{ steps.meta.outputs.version }}
+          target: runtime
+          load: true
+          tags: rutaexpress-ci/${{ matrix.service }}:test
+          build-args: VCS_REF=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-
-      - name: Verificar frontend servido y configuración de entorno
-        if: matrix.service == 'frontend' && github.event_name != 'pull_request'
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+      - name: Production frontend runtime and authentication entrypoint
+        if: matrix.service == 'frontend'
         run: |
-          image="$(printf '%s\n' "$IMAGE_TAGS" | head -n 1)"
           docker run -d --name frontend-smoke -p 127.0.0.1:18080:8080 \
-            -e API_BASE_URL=https://api.ejemplo.cl \
-            -e MSAL_CLIENT_ID=prueba-ci \
+            -e API_BASE_URL=https://api.ejemplo.cl -e MSAL_CLIENT_ID=ci \
             -e MSAL_AUTHORITY=https://login.microsoftonline.com/organizations \
             -e MSAL_REDIRECT_URI=https://app.ejemplo.cl \
-            -e MSAL_SCOPE=api://prueba/access_as_user "$image"
+            -e MSAL_SCOPE=api://ci/access_as_user rutaexpress-ci/frontend:test
           trap 'docker logs frontend-smoke; docker rm -f frontend-smoke' EXIT
-          curl --retry 10 --retry-all-errors --retry-delay 2 -fsS http://127.0.0.1:18080/health
-          curl -fsS http://127.0.0.1:18080/shipments/s-1 | grep -q '<app-root>'
-          curl -fsS http://127.0.0.1:18080/config.json | jq -e '.clientId == "prueba-ci" and .apiBaseUrl == "https://api.ejemplo.cl"'
+          curl --retry 15 --retry-all-errors --retry-delay 2 -fsS http://127.0.0.1:18080/health
+          curl -fsS http://127.0.0.1:18080/shipments/example | grep -q '<app-root>'
+          curl -fsS http://127.0.0.1:18080/config.json | jq -e '.clientId == "ci"'
           curl -fsSI http://127.0.0.1:18080/ | grep -qi "frame-ancestors 'none'"
-          curl -fsSI http://127.0.0.1:18080/config.json | grep -qi 'cache-control: no-store'
           test "$(docker exec frontend-smoke id -u)" != 0
+          docker exec frontend-smoke sh -c '! grep -r "CI issuer unavailable" /usr/share/nginx/html --include="*.js"'
+      - name: Export candidate
+        run: docker save -o image.tar rutaexpress-ci/${{ matrix.service }}:test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+          path: image.tar
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 3
 
-  # Pruebas que necesitan Docker (Testcontainers): RabbitMQ real, Oracle Free con todas las migraciones Flyway y Redis.
-  # Se ejecutan dentro de un contenedor con JDK 21 que usa el socket de Docker del runner.
-  integration:
-    needs: changes
-    if: needs.changes.outputs.integration != '[]'
+  tests:
+    needs: policy
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        service: ${{ fromJson(needs.changes.outputs.integration) }}
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin]
     steps:
       - uses: actions/checkout@v4
-      - name: Pruebas de integración (${{ matrix.service }})
+      - uses: actions/cache@v4
+        with:
+          path: .ci-gradle
+          key: strict-gradle-${{ runner.os }}-${{ matrix.service }}-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          restore-keys: strict-gradle-${{ runner.os }}-${{ matrix.service }}-
+      - name: Complete tests, real dependencies, no test-result cache
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$PWD/${{ matrix.service }}":/app -w /app \
+            -v "$PWD/.ci-gradle":/root/.gradle \
             --add-host=host.docker.internal:host-gateway \
-            -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-            -e RUN_DOCKER_TESTS=true \
+            -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal -e RUN_DOCKER_TESTS=true \
             eclipse-temurin:21-jdk \
-            sh -c "chmod +x gradlew && ./gradlew --no-daemon test"
-      - name: Reportes de integración
+            sh -c 'chmod +x gradlew && ./gradlew --no-daemon --rerun-tasks clean test jacocoTestReport'
+      - name: Reject skipped, missing and regressing tests
+        run: |
+          module="${{ matrix.service }}"
+          module="${module#ms-rutaexpress-}"
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine \
+            python ci/gate.py "${{ matrix.service }}/build" --module "$module"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}/build/test-results
+            ${{ matrix.service }}/build/reports
+          if-no-files-found: error
+          retention-days: 7
+
+  compose:
+    needs: policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate every production and CI compose
+        run: |
+          cp infra/.env.example infra/.env
+          mkdir -p infra/secrets
+          echo ci-disposable-cookie > infra/secrets/erlang.cookie
+          for dir in mq apps kafka edge; do
+            docker compose --env-file infra/.env -f "infra/$dir/compose.yml" config -q
+          done
+          docker compose --env-file infra/.env -f infra/apps/compose.yml -f infra/apps/compose.dev.yml --profile ep1 config -q
+          docker compose --env-file tests/system/ci.env -f tests/system/compose.yml config -q
+          docker compose --env-file tests/system/ci.env -f infra/apps/compose.yml -f tests/system/apps.override.yml --profile ep1 config -q
+
+  system:
+    needs: [build, compose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: images
+      - name: Load the exact candidate images
+        run: |
+          for image in images/*/image.tar; do docker load -i "$image"; rm -f "$image"; done
+      - uses: docker/setup-buildx-action@v3
+      - name: Build isolated browser frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: e2e
+          load: true
+          tags: rutaexpress-ci/frontend-e2e:test
+          cache-from: type=gha,scope=frontend
+      - name: Build browser runner
+        run: docker build -f tests/browser/Dockerfile -t rutaexpress-ci/browser-tests:test .
+      - name: Real stack, signed JWT, four browsers, concurrency and failure scenarios
+        run: bash tests/system/run.sh
+      - name: Reports, browser traces and service logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integracion-${{ matrix.service }}
-          path: |
-            ${{ matrix.service }}/build/reports/tests
-            ${{ matrix.service }}/build/test-results
+          name: system-reports
+          path: work/system-reports
+          if-no-files-found: error
+          retention-days: 7
 
-  # Valida la sintaxis de los compose con valores de ejemplo.
-  compose:
-    needs: changes
-    if: needs.changes.outputs.compose == 'true'
+  quality-gate:
+    if: always()
+    needs: [policy, build, tests, compose, system]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Validar compose
+      - name: Every required job must succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
         run: |
-          cd infra
-          cp .env.example .env
-          mkdir -p secrets && echo cookie-de-prueba > secrets/erlang.cookie
-          for dir in mq apps kafka edge; do
-            docker compose --env-file .env -f "$dir/compose.yml" config -q
-          done
-          docker compose --env-file .env -f apps/compose.yml --profile ep1 config -q
-          docker compose --env-file .env -f apps/compose.yml -f apps/compose.dev.yml config -q
-          docker compose --env-file .env -f mq/compose.yml -f mq/compose.dev.yml config -q
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tests-*
+          path: verification
+      - uses: actions/download-artifact@v4
+        with:
+          name: system-reports
+          path: verification/system
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-reports-frontend
+          path: verification/frontend
+      - name: Verify complete suite and coverage floors
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python ci/gate.py verification
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin, frontend]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish only the verified candidate
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          docker load -i image.tar
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          name="$SERVICE"
+          if [ "$name" = frontend ]; then name=frontend-rutaexpress; fi
+          image="ghcr.io/$owner/$name"
+          tag="sha-${GITHUB_SHA:0:7}"
+          docker tag "rutaexpress-ci/$SERVICE:test" "$image:$tag"
+          docker push "$image:$tag"
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            docker tag "rutaexpress-ci/$SERVICE:test" "$image:main"
+            docker push "$image:main"
+          fi
