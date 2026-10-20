@@ -35,7 +35,7 @@ class CapacidadConcurrenciaTests {
     @Test
     fun `dos reservas simultaneas del mismo envio descuentan una sola vez`() {
         val (servicioId, capacidadId) = crearLinea("SRV-CONC-RES")
-        val envio = "ENVIO-" + UUID.randomUUID()
+        val envio = UUID.randomUUID().toString()
 
         ejecutarEnParalelo(
             { reintentando { procesador.procesar(comando(servicioId, envio, TipoComando.RESERVAR, 3)) } },
@@ -49,8 +49,8 @@ class CapacidadConcurrenciaTests {
     @Test
     fun `dos liberaciones simultaneas del mismo envio descuentan una sola vez`() {
         val (servicioId, capacidadId) = crearLinea("SRV-CONC-REL")
-        val envioA = "ENVIO-A-" + UUID.randomUUID()
-        val envioB = "ENVIO-B-" + UUID.randomUUID()
+        val envioA = UUID.randomUUID().toString()
+        val envioB = UUID.randomUUID().toString()
         procesador.procesar(comando(servicioId, envioA, TipoComando.RESERVAR, 3))
         procesador.procesar(comando(servicioId, envioB, TipoComando.RESERVAR, 2))
         assertThat(capacidades.findById(capacidadId).get().currentBookedPackages).isEqualTo(5)

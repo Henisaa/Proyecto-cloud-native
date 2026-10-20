@@ -26,7 +26,7 @@ data class Actor(
             val autenticacion = SecurityContextHolder.getContext().authentication
                 ?: return Actor("LOCAL", null, null, emptySet())
             val roles = autenticacion.authorities
-                .map { it.authority }
+                .mapNotNull { it.authority }
                 .filter { it.startsWith("ROLE_") }
                 .map { it.removePrefix("ROLE_") }
                 .toSet()

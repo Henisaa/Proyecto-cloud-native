@@ -1,4 +1,10 @@
 {
+  "/api/admin": {
+    "target": "http://localhost:8080",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": { "^/api/admin": "/api/bff/admin" }
+  },
   "/api": {
     "target": "http://localhost:8080",
     "secure": false,
