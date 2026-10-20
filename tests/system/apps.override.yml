@@ -1,0 +1,52 @@
+x-ci: &ci
+  mem_limit: 384m
+x-env: &env
+  JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=55 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+services:
+  bff:
+    <<: *ci
+    environment:
+      <<: *env
+      HTTP_CONNECT_TIMEOUT_MS: 500
+      HTTP_READ_TIMEOUT_MS: 1500
+    ports: [127.0.0.1:18080:8080]
+  catalog:
+    <<: *ci
+    environment:
+      <<: *env
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 4
+    ports: [127.0.0.1:18081:8081]
+  shipments:
+    <<: *ci
+    environment:
+      <<: *env
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 4
+      APP_RECONCILIATION_MIN_AGE_SECONDS: 3
+      APP_RECONCILIATION_INTERVAL_MS: 2000
+      APP_RECONCILIATION_INITIAL_DELAY_MS: 2000
+    ports: [127.0.0.1:18085:8085]
+  notify:
+    <<: *ci
+    environment:
+      <<: *env
+  rabbit-admin:
+    <<: *ci
+    environment:
+      <<: *env
+    ports: [127.0.0.1:18086:8086]
+  audit:
+    <<: *ci
+    environment:
+      <<: *env
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+  report:
+    <<: *ci
+    environment:
+      <<: *env
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
+  kafka-admin:
+    <<: *ci
+    environment:
+      <<: *env
+  oracle:
+    mem_limit: 2560m

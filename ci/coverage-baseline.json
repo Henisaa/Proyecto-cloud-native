@@ -1,0 +1,10 @@
+{
+  "bff": { "tests": 30, "LINE": 1, "BRANCH": 1 },
+  "shipments": { "tests": 58, "LINE": 1, "BRANCH": 1 },
+  "catalog": { "tests": 35, "LINE": 1, "BRANCH": 1 },
+  "notify": { "tests": 27, "LINE": 1, "BRANCH": 1 },
+  "rabbit-admin": { "tests": 37, "LINE": 1, "BRANCH": 1 },
+  "audit": { "tests": 8, "LINE": 1, "BRANCH": 1 },
+  "report": { "tests": 5, "LINE": 1, "BRANCH": 1 },
+  "kafka-admin": { "tests": 4, "LINE": 1, "BRANCH": 1 }
+}
