@@ -1,0 +1,158 @@
+name: CI
+
+# Aquí se compila y se prueba (nada se instala en el PC). Cada servicio se construye con su Dockerfile:
+# si una prueba falla, la imagen no se construye. En main y en etiquetas v* las imágenes se publican en GHCR.
+on:
+  pull_request:
+  push:
+    branches: [main, 'ep2-*']
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Solo se construyen los servicios cuya carpeta cambió (ahorra minutos de Actions).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      integration: ${{ steps.detect.outputs.integration }}
+      compose: ${{ steps.detect.outputs.compose }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          all='ms-rutaexpress-bff ms-rutaexpress-shipments ms-rutaexpress-catalog ms-rutaexpress-notify ms-rutaexpress-rabbit-admin ms-rutaexpress-audit ms-rutaexpress-report ms-rutaexpress-kafka-admin frontend'
+          integration_all='ms-rutaexpress-shipments ms-rutaexpress-catalog ms-rutaexpress-notify ms-rutaexpress-rabbit-admin'
+          base=""
+          [ "$EVENT" = "pull_request" ] && base="$PR_BASE"
+          [ "$EVENT" = "push" ] && base="$PUSH_BEFORE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || [ "${GITHUB_REF_TYPE}" = "tag" ] || ! git cat-file -e "$base" 2>/dev/null; then
+            changed_all=1
+          else
+            files="$(git diff --name-only "$base" HEAD)"
+            changed_all=0
+            echo "$files" | grep -q '^.github/workflows/ci.yml$' && changed_all=1
+          fi
+          pick() { for d in $1; do if [ "$changed_all" = 1 ] || echo "$files" | grep -q "^$d/"; then echo "$d"; fi; done | jq -R . | jq -sc .; }
+          echo "services=$(pick "$all")" >> "$GITHUB_OUTPUT"
+          echo "integration=$(pick "$integration_all")" >> "$GITHUB_OUTPUT"
+          if [ "$changed_all" = 1 ] || echo "$files" | grep -q '^infra/'; then echo "compose=true" >> "$GITHUB_OUTPUT"; else echo "compose=false" >> "$GITHUB_OUTPUT"; fi
+
+  # Construye la imagen (que ejecuta las pruebas dentro de la construcción) y, en main/etiquetas, la publica.
+  build:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nombre de imagen en minúsculas
+        id: image
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          name="${{ matrix.service }}"
+          [ "$name" = "frontend" ] && name="frontend-rutaexpress"
+          echo "name=ghcr.io/${owner}/${name}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Iniciar sesión en GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=main,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+      # Primero las pruebas, para poder subir sus reportes como artefacto (usa la caché, la imagen final no las repite).
+      - name: Compilar y probar (reportes)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          target: reports
+          outputs: type=local,dest=reports
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Subir reportes de pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-${{ matrix.service }}
+          path: reports
+          if-no-files-found: ignore
+      - name: Construir imagen final
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # Pruebas que necesitan Docker (Testcontainers): RabbitMQ real, Oracle Free con todas las migraciones Flyway y Redis.
+  # Se ejecutan dentro de un contenedor con JDK 21 que usa el socket de Docker del runner.
+  integration:
+    needs: changes
+    if: needs.changes.outputs.integration != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.integration) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas de integración (${{ matrix.service }})
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/${{ matrix.service }}":/app -w /app \
+            --add-host=host.docker.internal:host-gateway \
+            -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+            -e RUN_DOCKER_TESTS=true \
+            eclipse-temurin:21-jdk \
+            sh -c "chmod +x gradlew && ./gradlew --no-daemon test"
+
+  # Valida la sintaxis de los compose con valores de ejemplo.
+  compose:
+    needs: changes
+    if: needs.changes.outputs.compose == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar compose
+        run: |
+          cd infra
+          cp .env.example .env
+          mkdir -p secrets && echo cookie-de-prueba > secrets/erlang.cookie
+          for dir in mq apps kafka edge; do
+            docker compose --env-file .env -f "$dir/compose.yml" config -q
+          done
+          docker compose --env-file .env -f apps/compose.yml --profile ep1 config -q
+          docker compose --env-file .env -f apps/compose.yml -f apps/compose.dev.yml config -q
+          docker compose --env-file .env -f mq/compose.yml -f mq/compose.dev.yml config -q
