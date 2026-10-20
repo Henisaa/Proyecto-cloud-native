@@ -150,14 +150,10 @@ class CapacidadComandoProcesador(
      * sola consulta ordenada por id, así dos comandos concurrentes no se bloquean entre sí en orden distinto.
      */
     private fun seleccionarLinea(comando: ComandoCapacidad, zona: ZoneType): FleetCapacity? {
-        val preferida = comando.vehicleType?.let { tipo ->
-            capacidades.findLockedByServiceIdAndZoneAndVehicleType(comando.serviceId, zona, VehicleType.valueOf(tipo))
-                .orElse(null)
-                ?.takeIf { cabe(it, comando) }
-        }
-        return preferida ?: capacidades
-            .findLockedAvailable(comando.serviceId, zona, comando.weightKg, comando.volumeM3)
-            .firstOrNull { cabe(it, comando) }
+        val preferida = comando.vehicleType?.let { VehicleType.valueOf(it) }
+        val candidatas = capacidades.findLockedAvailable(comando.serviceId, zona, comando.weightKg, comando.volumeM3)
+        return candidatas.firstOrNull { it.vehicleType == preferida && cabe(it, comando) }
+            ?: candidatas.firstOrNull { cabe(it, comando) }
     }
 
     private fun cabe(linea: FleetCapacity, comando: ComandoCapacidad): Boolean =

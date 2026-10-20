@@ -40,8 +40,8 @@ class CapacidadComandoTests {
     fun `reserva el cupo de la linea preferida y guarda la reserva del envio`() {
         val linea = linea(VehicleType.VAN, usados = 0)
         whenever(registros.findById("cmd-1")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(linea))
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1))
+            .thenReturn(listOf(linea))
 
         val resultado = procesador().procesar(reserva("cmd-1", vehicleType = "VAN", paquetes = 3))
 
@@ -64,9 +64,8 @@ class CapacidadComandoTests {
     fun `sin capacidad responde RECHAZADA y no mueve el cupo ni crea reserva`() {
         val llena = linea(VehicleType.VAN, usados = 10)
         whenever(registros.findById("cmd-2")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(llena))
-        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(emptyList())
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1))
+            .thenReturn(listOf(llena))
 
         val resultado = procesador().procesar(reserva("cmd-2", vehicleType = "VAN", paquetes = 1))
 
@@ -80,9 +79,7 @@ class CapacidadComandoTests {
         val llena = linea(VehicleType.VAN, usados = 10)
         val alternativa = linea(VehicleType.TRUCK, usados = 0).also { it.id = 2L }
         whenever(registros.findById("cmd-alt")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(llena))
-        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(listOf(alternativa))
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1)).thenReturn(listOf(llena, alternativa))
 
         val resultado = procesador().procesar(reserva("cmd-alt", vehicleType = "VAN", paquetes = 2))
 
@@ -200,8 +197,8 @@ class CapacidadComandoTests {
     fun `procesa y publica el resultado antes de confirmar con ACK`() {
         val publicador = publicadorQue(ok = true)
         whenever(registros.findById("cmd-6")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(linea(VehicleType.VAN, usados = 0)))
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1))
+            .thenReturn(listOf(linea(VehicleType.VAN, usados = 0)))
         val canal = mock<Channel>()
 
         listener(procesador(), publicador)
@@ -216,8 +213,8 @@ class CapacidadComandoTests {
     fun `si el broker nunca confirma el resultado el comando va a la DLQ tras los reintentos`() {
         val publicador = publicadorQue(ok = false)
         whenever(registros.findById("cmd-7")).thenReturn(Optional.empty())
-        whenever(capacidades.findLockedByServiceIdAndZoneAndVehicleType(1L, ZoneType.URBAN_CENTER, VehicleType.VAN))
-            .thenReturn(Optional.of(linea(VehicleType.VAN, usados = 0)))
+        whenever(capacidades.findLockedAvailable(1L, ZoneType.URBAN_CENTER, 2.0, 0.1))
+            .thenReturn(listOf(linea(VehicleType.VAN, usados = 0)))
         val canal = mock<Channel>()
 
         listener(procesador(), publicador, intentos = 3)

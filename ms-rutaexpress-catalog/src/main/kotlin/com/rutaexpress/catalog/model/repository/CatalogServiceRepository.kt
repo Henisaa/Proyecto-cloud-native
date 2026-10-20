@@ -25,7 +25,6 @@ interface CatalogServiceRepository : JpaRepository<CatalogService, Long> {
     @Query("""
         SELECT DISTINCT s FROM CatalogService s 
         LEFT JOIN FETCH s.capacities c 
-        LEFT JOIN FETCH s.tariffs t 
         WHERE s.id = :id
     """)
     fun findByIdWithDetails(@Param("id") id: Long): Optional<CatalogService>
@@ -33,7 +32,6 @@ interface CatalogServiceRepository : JpaRepository<CatalogService, Long> {
     @Query("""
         SELECT DISTINCT s FROM CatalogService s 
         LEFT JOIN FETCH s.capacities c 
-        LEFT JOIN FETCH s.tariffs t 
         WHERE (:category IS NULL OR s.category = :category) 
           AND (:status IS NULL OR s.status = :status)
           AND (:active IS NULL OR s.active = :active)
