@@ -115,5 +115,11 @@ data class ErrorResponseViewModel(
     val message: String,
     val path: String,
     val timestamp: LocalDateTime = LocalDateTime.now(),
-    val validationErrors: Map<String, String>? = null
+    val validationErrors: Map<String, String>? = null,
+    val type: String = "about:blank",
+    val title: String = error,
+    val detail: String = message,
+    val instance: String = path,
+    val errors: Map<String, String>? = validationErrors,
+    val correlationId: String = UUID.randomUUID().toString(),
 )

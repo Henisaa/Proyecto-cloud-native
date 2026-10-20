@@ -30,6 +30,17 @@ private val testMapper = tools.jackson.databind.json.JsonMapper.builder().findAn
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CatalogViewControllerTests {
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `JSON invalido responde ProblemDetail con identificador de correlacion`() {
+        mockMvc.perform(post("/api/catalog/services").contentType(MediaType.APPLICATION_JSON).content("{"))
+            .andExpect(status().isBadRequest)
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type").value("about:blank"))
+            .andExpect(jsonPath("$.instance").value("/api/catalog/services"))
+            .andExpect(jsonPath("$.detail").isNotEmpty)
+            .andExpect(jsonPath("$.correlationId").isNotEmpty)
+    }
 
     @Autowired
     private lateinit var mockMvc: MockMvc

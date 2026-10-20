@@ -20,6 +20,16 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @ActiveProfiles("test")
 @WithMockUser(roles = ["DESPACHADOR"])
 class EnvioControladorTests {
+    @Test
+    fun `JSON invalido responde ProblemDetail sin exponer excepciones`() {
+        mockMvc.perform(post("/api/shipments").contentType(MediaType.APPLICATION_JSON).content("{"))
+            .andExpect(status().isBadRequest)
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type").value("about:blank"))
+            .andExpect(jsonPath("$.instance").value("/api/shipments"))
+            .andExpect(jsonPath("$.detail").isNotEmpty)
+            .andExpect(jsonPath("$.correlationId").isNotEmpty)
+    }
 
     @Autowired
     private lateinit var mockMvc: MockMvc

@@ -189,5 +189,9 @@ data class ErrorResponse(
     val path: String? = null,
     val timestamp: Instant = Instant.now(),
     val validationErrors: Map<String, String>? = null,
-    val correlationId: String? = null,
+    val correlationId: String = java.util.UUID.randomUUID().toString(),
+    val type: String = "about:blank",
+    val title: String = error,
+    val instance: String? = path,
+    val errors: Map<String, String>? = validationErrors,
 )

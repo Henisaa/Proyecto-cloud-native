@@ -26,7 +26,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Resource not found",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(IllegalArgumentException::class)
@@ -41,7 +41,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Invalid request argument",
             path = request.requestURI
         )
-        return ResponseEntity.status(status).body(error)
+        return ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(IllegalStateException::class)
@@ -53,7 +53,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "State conflict occurred",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
+        return ResponseEntity.status(HttpStatus.CONFLICT).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException::class)
@@ -65,7 +65,7 @@ class GlobalExceptionHandler {
             message = "Malformed or unreadable JSON request body",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
@@ -85,7 +85,7 @@ class GlobalExceptionHandler {
             path = request.requestURI,
             validationErrors = fieldErrors
         )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(AccessDeniedException::class)
@@ -97,7 +97,7 @@ class GlobalExceptionHandler {
             message = "Access denied: insufficient permissions or required role missing",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(AuthenticationException::class)
@@ -109,7 +109,7 @@ class GlobalExceptionHandler {
             message = "Authentication required or invalid JWT token",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error)
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException::class)
@@ -149,7 +149,7 @@ class GlobalExceptionHandler {
     }
 
     private fun respond(status: HttpStatus, message: String, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> =
-        ResponseEntity.status(status).body(
+        ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(
             ErrorResponseViewModel(
                 status = status.value(),
                 error = status.reasonPhrase,

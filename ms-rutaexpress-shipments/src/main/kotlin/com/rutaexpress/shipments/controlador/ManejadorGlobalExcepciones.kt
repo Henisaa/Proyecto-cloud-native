@@ -96,7 +96,7 @@ class ManejadorGlobalExcepciones {
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun validacion(ex: MethodArgumentNotValidException, request: HttpServletRequest): ResponseEntity<ErrorResponse> {
         val errores = ex.bindingResult.fieldErrors.associate { it.field to (it.defaultMessage ?: "inválido") }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(
             ErrorResponse(
                 status = 400,
                 error = "Bad Request",
@@ -111,7 +111,7 @@ class ManejadorGlobalExcepciones {
     fun generico(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponse> {
         val correlacion = UUID.randomUUID().toString()
         log.error("Error inesperado [{}] en {}: {}", correlacion, request.requestURI, ex.message, ex)
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(
             ErrorResponse(
                 status = 500,
                 error = "Internal Server Error",
@@ -127,7 +127,7 @@ class ManejadorGlobalExcepciones {
         error: String,
         mensaje: String?,
         request: HttpServletRequest
-    ): ResponseEntity<ErrorResponse> = ResponseEntity.status(status).body(
+    ): ResponseEntity<ErrorResponse> = ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(
         ErrorResponse(
             status = status.value(),
             error = error,
