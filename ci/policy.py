@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import os
 
 workflow = Path('.github/workflows/ci.yml').read_text()
 assert 'paths:' not in workflow and 'branches:' not in workflow, 'Every push must run the full pipeline'
@@ -20,4 +21,16 @@ assert len(baseline) == 8
 assert all(v['LINE'] > 0 and v['BRANCH'] > 0 and v['tests'] > 0 for v in baseline.values())
 assert 'e2e-main' not in Path('frontend/src/main.ts').read_text()
 assert 'e2e' not in Path('frontend/tsconfig.app.json').read_text()
+base_sha = os.environ.get('BASE_SHA', '')
+if base_sha and set(base_sha) != {'0'}:
+    for file in ['ci/coverage-baseline.json', 'ci/frontend-baseline.json', 'ci/critical-coverage.json']:
+        previous = subprocess.run(['git', 'show', f'{base_sha}:{file}'], capture_output=True, text=True)
+        if previous.returncode == 0:
+            before, after = json.loads(previous.stdout), json.loads(Path(file).read_text())
+            def ratchet(old, new, key=''):
+                for name, value in old.items():
+                    assert name in new, f'Cannot remove coverage floor {key}/{name}'
+                    if isinstance(value, dict): ratchet(value, new[name], f'{key}/{name}')
+                    else: assert new[name] >= value, f'Cannot lower quality floor {key}/{name}'
+            ratchet(before, after)
 print('Full-suite and no-skip policies passed')
