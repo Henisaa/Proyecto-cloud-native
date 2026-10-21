@@ -30,7 +30,8 @@ class Envio(
     @Column(name = "service_id", nullable = false)
     var serviceId: Long = 0,
 
-    @Column(name = "service_code", length = 30)
+    /** Mismo largo que catalog_services.code (V5__ampliar_service_code.sql). */
+    @Column(name = "service_code", length = 50)
     var serviceCode: String? = null,
 
     @Column(name = "service_type", length = 30)
