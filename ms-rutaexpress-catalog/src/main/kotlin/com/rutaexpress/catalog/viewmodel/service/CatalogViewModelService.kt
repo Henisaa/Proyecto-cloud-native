@@ -261,13 +261,12 @@ class CatalogViewModelService(
             volumeM3 = request.volumeM3
         )
 
-        val candidate = if (request.vehicleType != null) {
-            availableCapacities.find { it.vehicleType == request.vehicleType }
-        } else {
-            availableCapacities.firstOrNull()
-        }
+        // Misma regla que la reserva asíncrona: cualquier línea (del vehículo pedido, si se indica) con cupo suficiente.
+        val candidate = availableCapacities
+            .filter { request.vehicleType == null || it.vehicleType == request.vehicleType }
+            .firstOrNull { it.availablePackages >= request.packagesCount }
 
-        return if (candidate != null && candidate.availablePackages >= request.packagesCount) {
+        return if (candidate != null) {
             CapacityCheckResultViewModel(
                 serviceId = serviceId,
                 serviceCode = service.code,
