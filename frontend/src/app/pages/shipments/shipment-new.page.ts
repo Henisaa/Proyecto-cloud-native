@@ -169,6 +169,8 @@ export class ShipmentNewPage implements OnInit {
     if (this.enviando()) return;
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      // Foco al primer campo con error: el teclado sigue el formulario sin tener que buscar el mensaje.
+      document.querySelector<HTMLElement>('form [formcontrolname].ng-invalid')?.focus();
       return;
     }
     const v = this.form.getRawValue();
