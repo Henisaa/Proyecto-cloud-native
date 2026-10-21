@@ -25,11 +25,11 @@ class FlywayOracleTests {
         val resultado = flyway.migrate()
 
         assertThat(resultado.success).isTrue()
-        assertThat(flyway.info().current().version.version).isEqualTo("4")
+        assertThat(flyway.info().current().version.version).isEqualTo("5")
     }
 
     @Test
-    fun `aplica V3 y V4 sobre una base que ya tenia la V2 original`() {
+    fun `aplica V3, V4 y V5 sobre una base que ya tenia la V2 original`() {
         configuracion().load().clean()
         configuracion().target("2").load().migrate()
 
@@ -37,8 +37,8 @@ class FlywayOracleTests {
         val resultado = completo.migrate()
 
         assertThat(resultado.success).isTrue()
-        assertThat(resultado.migrationsExecuted).isEqualTo(2)
-        assertThat(completo.info().current().version.version).isEqualTo("4")
+        assertThat(resultado.migrationsExecuted).isEqualTo(3)
+        assertThat(completo.info().current().version.version).isEqualTo("5")
     }
 
     private fun configuracion(): FluentConfiguration = Flyway.configure()
