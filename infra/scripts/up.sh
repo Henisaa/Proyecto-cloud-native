@@ -12,7 +12,7 @@ DEV=()
 dc() { local dir=$1; shift; local files=(-f "$dir/compose.yml"); [ ${#DEV[@]} -gt 0 ] && [ -f "$dir/compose.dev.yml" ] && files+=(-f "$dir/compose.dev.yml"); docker compose --env-file .env "${files[@]}" "$@"; }
 
 docker network inspect rutaexpress >/dev/null 2>&1 || docker network create rutaexpress
-./scripts/init-secrets.sh
+bash ./scripts/init-secrets.sh
 
 dc mq up -d --wait rabbit1 rabbit2
 
