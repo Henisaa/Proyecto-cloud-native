@@ -1,5 +1,10 @@
 # Solo para Docker Desktop o Codespaces: construye el frontend y lo publica en http://localhost:4200 (sin Caddy).
+# Sin API Gateway local, el frontend llama directo al BFF publicado por infra/apps/compose.dev.yml.
 services:
   frontend:
     build: { context: ../../frontend }
     ports: ["127.0.0.1:4200:8080"]
+    environment:
+      API_BASE_URL: ${FRONTEND_DEV_API_BASE_URL:-http://localhost:8080}
+      MSAL_REDIRECT_URI: ${MSAL_DEV_REDIRECT_URI:-http://localhost:4200}
+      ENVIRONMENT_NAME: desarrollo
