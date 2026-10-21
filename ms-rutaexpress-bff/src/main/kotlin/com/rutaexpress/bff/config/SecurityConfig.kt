@@ -27,6 +27,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import java.time.Instant
 
 @Configuration
@@ -39,6 +42,9 @@ class SecurityConfig(
     private val expectedAudience: String,
     @Value("\${app.security.enabled:true}")
     private val securityEnabled: Boolean,
+    /** Orígenes del frontend separados por coma. Vacío (nube): el API Gateway resuelve CORS. */
+    @Value("\${rutaexpress.cors.allowed-origins:}")
+    private val corsAllowedOrigins: String,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -46,7 +52,7 @@ class SecurityConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
             .csrf { it.disable() }
-            .cors { }
+            .cors { it.configurationSource(fuenteCors()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { exceptions ->
                 exceptions
@@ -68,7 +74,8 @@ class SecurityConfig(
                     // Autorización granular por roles de negocio de Azure AD
                     auth
                         .requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
-                        .requestMatchers("/api/bff/admin/**").hasRole("ADMIN")
+                        // /api/admin/** es la ruta pública de administración (frontend y API Gateway)
+                        .requestMatchers("/api/bff/admin/**", "/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/status").hasRole("ADMIN")
                         .requestMatchers("/api/bff/report/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/audit/**").hasAnyRole("ADMIN", "AUDITOR")
@@ -92,6 +99,26 @@ class SecurityConfig(
         }
 
         return http.build()
+    }
+
+    /**
+     * CORS propio solo para el modo local (sin API Gateway): CORS_ALLOWED_ORIGINS=http://localhost:4200.
+     * Sin orígenes no se registra ninguna configuración y el BFF no agrega cabeceras CORS (comportamiento en la nube).
+     */
+    private fun fuenteCors(): CorsConfigurationSource {
+        val fuente = UrlBasedCorsConfigurationSource()
+        val origenes = corsAllowedOrigins.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (origenes.isNotEmpty()) {
+            val configuracion = CorsConfiguration()
+            configuracion.allowedOrigins = origenes
+            configuracion.allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            configuracion.allowedHeaders = listOf("Authorization", "Content-Type")
+            configuracion.exposedHeaders = listOf("Location")
+            configuracion.allowCredentials = false
+            configuracion.setMaxAge(3600L)
+            fuente.registerCorsConfiguration("/api/**", configuracion)
+        }
+        return fuente
     }
 
     @Bean
