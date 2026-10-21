@@ -72,6 +72,9 @@ spring:
 
 # Configuración personalizada de la aplicación RutaExpress
 app:
+  # @PreAuthorize sigue el mismo interruptor que el filtro JWT (igual que BFF y shipments).
+  method-security:
+    enabled: ${SECURITY_ENABLED:true}
   security:
     enabled: ${SECURITY_ENABLED:true}
     azure:
