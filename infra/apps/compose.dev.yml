@@ -5,6 +5,9 @@ services:
   bff:
     build: { context: ../../ms-rutaexpress-bff }
     ports: ["127.0.0.1:8080:8080"]
+    environment:
+      # Sin API Gateway local: el BFF responde el preflight CORS del frontend servido en http://localhost:4200.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
   shipments:
     build: { context: ../../ms-rutaexpress-shipments }
     ports: ["127.0.0.1:8085:8085"]
