@@ -1,5 +1,6 @@
 package com.rutaexpress.shipments.configuracion
 
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.config.TopicBuilder
 import org.springframework.kafka.core.ProducerFactory
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 
@@ -37,4 +39,14 @@ class KafkaProducerConfig(
 
     @Bean
     fun kafkaTemplate(): KafkaTemplate<String, Any> = KafkaTemplate(producerFactory())
+
+    /**
+     * Tópicos que publica shipments. El broker no los crea al publicar y nada más los provisiona: KafkaAdmin
+     * los crea al arrancar si faltan, así los eventos llegan a audit tanto en CI como en el EC2.
+     */
+    @Bean
+    fun shipmentsEventsTopic(): NewTopic = TopicBuilder.name("shipments.events").partitions(3).replicas(3).build()
+
+    @Bean
+    fun auditTimelineTopic(): NewTopic = TopicBuilder.name("audit.timeline").partitions(3).replicas(3).build()
 }
