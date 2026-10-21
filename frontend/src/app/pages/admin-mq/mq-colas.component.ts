@@ -20,7 +20,7 @@ type FilaCola = MqMetricas['queues'][number] & { protegida: boolean };
   template: `
     <div class="space-y-6">
       <app-vista-estado [cargando]="cargando()" [error]="error()" [vacio]="filas().length === 0" mensajeVacio="No hay colas." (reintentar)="cargar()">
-        <div class="card overflow-x-auto !p-0">
+        <div class="card relative overflow-x-auto !p-0">
           <table class="w-full min-w-[840px] text-left text-xs">
             <caption class="sr-only">Colas del vhost</caption>
             <thead class="border-b border-zinc-100 text-[10px] uppercase tracking-wider text-zinc-400">
