@@ -1,0 +1,15 @@
+# Solo para el Dockerfile de la raíz (imagen todo en uno). Los demás builds usan su propio .dockerignore.
+*
+!render/
+!frontend/
+!ms-rutaexpress-bff/
+!ms-rutaexpress-shipments/
+!ms-rutaexpress-catalog/
+!ms-rutaexpress-notify/
+!ms-rutaexpress-rabbit-admin/
+**/node_modules
+**/dist
+**/.angular
+**/build
+**/.gradle
+**/.kotlin
