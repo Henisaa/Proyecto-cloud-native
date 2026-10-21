@@ -58,11 +58,11 @@ MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y c
 
 ## Estado de la EP2
 
-[PLAN_CORRECCIONES_EP2.md](PLAN_CORRECCIONES_EP2.md) es la especificación de trabajo. CI verde certifica exclusivamente las comprobaciones automatizadas del commit correspondiente: no prueba el tenant, DNS, Gateway ni EC2. El cierre requiere las 14 pruebas de aceptación reales, recorrido de los cuatro roles y usuario sin rol, y repositorios separados tras integrar main. No se afirma que esas etapas externas estén completadas.
+[PLAN_MAESTRO_IMPLEMENTACION_EP2.md](PLAN_MAESTRO_IMPLEMENTACION_EP2.md) es la especificación vigente: auditoría contra los dos documentos de la evaluación, bugs con su corrección y checklist de implementación. CI verde certifica solo las comprobaciones automatizadas de su commit: no prueba el tenant, DNS, Gateway ni EC2.
 
-Detalle de implementación y pendientes: [SEGUIMIENTO_EP2.md](SEGUIMIENTO_EP2.md).
+Modo local (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
 
-La migración V2 de shipments conserva su definición original; V3 amplía event_id a 100 y V4 agrega versión, dueño e identificador de reserva. No editar migraciones publicadas.
+La migración V2 de shipments conserva su definición original; V3 amplía event_id a 100, V4 agrega versión, dueño e identificador de reserva y V5 amplía service_code a 50 (igual que el código de catalog). No editar migraciones publicadas.
 
 ## Autores
 
