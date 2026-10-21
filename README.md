@@ -62,6 +62,8 @@ MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y c
 
 Modo local (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
 
+Despliegue en una VPS (Azure, AWS EC2 u otra Linux): `bash deploy-vps.sh` instala Docker si falta y levanta el clúster RabbitMQ de dos nodos, Oracle, Redis, Mailpit y los cinco microservicios EP2 (sin frontend) con sus puertos publicados en `http://<ip>:<puerto>`. Configuración en `infra/vps/.env` (se genera la primera vez) y servicios en `infra/vps/compose.yml`.
+
 La migración V2 de shipments conserva su definición original; V3 amplía event_id a 100, V4 agrega versión, dueño e identificador de reserva y V5 amplía service_code a 50 (igual que el código de catalog). No editar migraciones publicadas.
 
 ## Autores
