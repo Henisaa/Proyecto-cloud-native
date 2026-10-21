@@ -17,7 +17,7 @@ import java.net.http.HttpClient
 import java.time.Duration
 
 /**
- * Administración (solo ADMIN). Responde en /api/bff/admin/* y también en /api/admin/*, la ruta que usa el frontend
+ * Administración (solo ADMIN). Responde en /api/bff/admin (y subrutas) y también en /api/admin, la ruta que usa el frontend
  * y que exige la guía en el API Gateway: funciona con o sin reescritura de ruta en el Gateway y en modo local.
  */
 @RestController
