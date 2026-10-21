@@ -1,0 +1,236 @@
+# Despliegue completo en una sola VPS (Azure VM, AWS EC2 u otra), sin frontend. Lo usa deploy-vps.sh de la raíz:
+#   clúster RabbitMQ de dos nodos, Oracle Free, Redis, Mailpit y los microservicios EP2 construidos desde el repo.
+# Puertos públicos (http://<ip-de-la-vps>:<puerto>): microservicios, Management UI de cada nodo y Mailpit.
+# Oracle solo en 127.0.0.1 (túnel SSH); Redis y AMQP no se publican.
+# Cada puerto público se cambia con su variable en infra/vps/.env (BFF_PORT, CATALOG_PORT, ...).
+name: rutaexpress-vps
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-spring: &spring
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 768m
+
+x-auth: &auth
+  SECURITY_ENABLED: ${SECURITY_ENABLED:-true}
+  AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:?defina AZURE_AD_ISSUER_URI en infra/vps/.env}
+  AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:?defina AZURE_AD_AUDIENCE en infra/vps/.env}
+
+x-rabbit-env: &rabbit-env
+  RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?defina RABBITMQ_USERNAME en infra/vps/.env}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD en infra/vps/.env}
+  RABBIT_PREFETCH: ${RABBIT_PREFETCH:-10}
+  RABBIT_RETRY_MAX_ATTEMPTS: ${RABBIT_RETRY_MAX_ATTEMPTS:-3}
+  RABBIT_RETRY_INITIAL_MS: ${RABBIT_RETRY_INITIAL_MS:-500}
+  RABBIT_DLQ_CONSUMER_ENABLED: ${RABBIT_DLQ_CONSUMER_ENABLED:-true}
+
+x-rabbit: &rabbit
+  image: rabbitmq:4-management
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 768m
+  environment:
+    RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?defina RABBITMQ_USERNAME en infra/vps/.env}
+    RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD en infra/vps/.env}
+  # Misma configuración del clúster que infra/mq: cookie como secreto, políticas de retención al arrancar.
+  secrets:
+    - erlang_cookie
+  entrypoint: [bash, /opt/rutaexpress/start-rabbit.sh]
+  healthcheck:
+    test: ["CMD-SHELL", "gosu rabbitmq rabbitmq-diagnostics -q ping && gosu rabbitmq rabbitmqctl authenticate_user \"$$RABBITMQ_DEFAULT_USER\" \"$$RABBITMQ_DEFAULT_PASS\" >/dev/null 2>&1"]
+    interval: 10s
+    timeout: 5s
+    retries: 20
+    start_period: 30s
+
+services:
+  # ---------------------------------------------------------------- Clúster RabbitMQ
+  rabbit1:
+    <<: *rabbit
+    hostname: rabbit1
+    ports:
+      - "${RABBIT1_UI_PORT:-15672}:15672"
+    volumes:
+      - rabbit1:/var/lib/rabbitmq
+      - ../mq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ../mq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ../mq/start-rabbit.sh:/opt/rutaexpress/start-rabbit.sh:ro
+
+  rabbit2:
+    <<: *rabbit
+    hostname: rabbit2
+    ports:
+      - "${RABBIT2_UI_PORT:-15673}:15672"
+    volumes:
+      - rabbit2:/var/lib/rabbitmq
+      - ../mq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ../mq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ../mq/start-rabbit.sh:/opt/rutaexpress/start-rabbit.sh:ro
+    # service_started y no service_healthy: al reiniciar el clúster completo (--down y de nuevo arriba, o reinicio
+    # de la VPS), rabbit1 no queda sano hasta que vuelve rabbit2; esperar su salud los dejaría bloqueados.
+    depends_on:
+      rabbit1:
+        condition: service_started
+
+  # ---------------------------------------------------------------- Datos
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 3g
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_ADMIN_PASSWORD:?defina ORACLE_ADMIN_PASSWORD en infra/vps/.env}
+      SHIPMENTS_DB_PASSWORD: ${SHIPMENTS_DB_PASSWORD:?defina SHIPMENTS_DB_PASSWORD en infra/vps/.env}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?defina CATALOG_DB_PASSWORD en infra/vps/.env}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?defina AUDIT_DB_PASSWORD en infra/vps/.env}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?defina REPORT_DB_PASSWORD en infra/vps/.env}
+    ports:
+      - "127.0.0.1:${ORACLE_PORT:-1521}:1521"
+    volumes:
+      - oracle:/opt/oracle/oradata
+      # Crea los usuarios de aplicación en FREEPDB1; solo corre con el volumen vacío (primer arranque).
+      - ../apps/oracle-init/001-users.sh:/container-entrypoint-initdb.d/001-users.sh:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    environment:
+      # La interfaz web pide el mismo usuario y clave que RabbitMQ.
+      MP_UI_AUTH: "${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}"
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+  # ---------------------------------------------------------------- Microservicios EP2 (imágenes de deploy-vps.sh)
+  bff:
+    <<: *spring
+    image: rutaexpress/ms-rutaexpress-bff:local
+    environment:
+      <<: *auth
+      PORT: "8080"
+      CATALOG_SERVICE_URL: http://catalog:8081
+      NOTIFY_SERVICE_URL: http://notify:8082
+      SHIPMENTS_SERVICE_URL: http://shipments:8085
+      MQ_ADMIN_SERVICE_URL: http://rabbit-admin:8086
+      # Origen del frontend (Vercel u otro) que llama al BFF directo; vacío si un API Gateway resuelve CORS.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+    ports:
+      - "${BFF_PORT:-8080}:8080"
+
+  shipments:
+    <<: *spring
+    image: rutaexpress/ms-rutaexpress-shipments:local
+    environment:
+      <<: [*auth, *rabbit-env]
+      PORT: "8085"
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_shipments
+      SPRING_DATASOURCE_PASSWORD: ${SHIPMENTS_DB_PASSWORD:?defina SHIPMENTS_DB_PASSWORD en infra/vps/.env}
+      CATALOGO_ENABLED: "true"
+      CATALOG_SERVICE_URL: http://catalog:8081
+      NOTIFY_WAREHOUSE_EMAIL: ${NOTIFY_WAREHOUSE_EMAIL:-bodega@rutaexpress.local}
+      KAFKA_ENABLED: "false"
+    ports:
+      - "${SHIPMENTS_PORT:-8085}:8085"
+    depends_on:
+      oracle:
+        condition: service_healthy
+      rabbit1:
+        condition: service_healthy
+
+  catalog:
+    <<: *spring
+    image: rutaexpress/ms-rutaexpress-catalog:local
+    environment:
+      <<: [*auth, *rabbit-env]
+      PORT: "8081"
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_catalog
+      SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:?defina CATALOG_DB_PASSWORD en infra/vps/.env}
+      KAFKA_ENABLED: "false"
+    ports:
+      - "${CATALOG_PORT:-8081}:8081"
+    depends_on:
+      oracle:
+        condition: service_healthy
+      rabbit1:
+        condition: service_healthy
+
+  notify:
+    <<: *spring
+    image: rutaexpress/ms-rutaexpress-notify:local
+    environment:
+      <<: [*auth, *rabbit-env]
+      PORT: "8082"
+      REDIS_HOST: redis
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
+      NOTIFY_FROM: ${NOTIFY_FROM:-no-reply@rutaexpress.local}
+    ports:
+      - "${NOTIFY_PORT:-8082}:8082"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbit1:
+        condition: service_healthy
+
+  rabbit-admin:
+    <<: *spring
+    mem_limit: 512m
+    image: rutaexpress/ms-rutaexpress-rabbit-admin:local
+    environment:
+      <<: [*auth, *rabbit-env]
+      PORT: "8086"
+      RABBITMQ_MANAGEMENT_URLS: http://rabbit1:15672,http://rabbit2:15672
+      MQ_COMMAND_TTL_MS: ${MQ_COMMAND_TTL_MS:-86400000}
+      MQ_DLQ_TTL_MS: ${MQ_DLQ_TTL_MS:-604800000}
+      MQ_MAX_LENGTH: ${MQ_MAX_LENGTH:-10000}
+      MQ_ALERT_THRESHOLD: ${MQ_ALERT_THRESHOLD:-1}
+    ports:
+      - "${RABBIT_ADMIN_PORT:-8086}:8086"
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+
+secrets:
+  erlang_cookie:
+    file: ../secrets/erlang.cookie
+
+volumes:
+  rabbit1:
+  rabbit2:
+  oracle:
+  redis:
