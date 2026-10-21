@@ -12,7 +12,6 @@ services:
     ports: [127.0.0.1:18080:8080]
   catalog:
     <<: *ci
-    mem_limit: 512m
     environment:
       <<: *env
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 4
