@@ -39,7 +39,7 @@ type FilaCola = MqMetricas['queues'][number] & { protegida: boolean };
               @for (c of filas(); track c.name) {
                 <tr class="border-b border-zinc-50 last:border-0">
                   <td class="px-4 py-3 font-mono font-semibold">
-                    {{ c.name }}
+                    <span>{{ c.name }}</span>
                     @if (c.protegida) { <span class="badge ml-1 border-amber-200 bg-amber-50 text-amber-700">protegida</span> }
                   </td>
                   <td class="px-4 py-3">{{ c.durable === false ? 'No' : 'Sí' }}</td>
