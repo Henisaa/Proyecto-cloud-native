@@ -21,17 +21,22 @@ x-auth: &auth
   AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:?defina AZURE_AD_ISSUER_URI en infra/vps/.env}
   AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:?defina AZURE_AD_AUDIENCE en infra/vps/.env}
 
+# Swagger/OpenAPI de los servicios Spring. En la nube, SWAGGER_ENABLED=false.
+x-swagger: &swagger
+  SPRINGDOC_APIDOCS_ENABLED: ${SWAGGER_ENABLED:-true}
+  SPRINGDOC_SWAGGERUI_ENABLED: ${SWAGGER_ENABLED:-true}
+
 x-rabbit-env: &rabbit-env
   RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
   RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?defina RABBITMQ_USERNAME en infra/vps/.env}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD en infra/vps/.env}
-  RABBIT_PREFETCH: ${RABBIT_PREFETCH:-10}
+  RABBIT_PREFETCH: ${RABBIT_PREFETCH:-5}
   RABBIT_RETRY_MAX_ATTEMPTS: ${RABBIT_RETRY_MAX_ATTEMPTS:-3}
   RABBIT_RETRY_INITIAL_MS: ${RABBIT_RETRY_INITIAL_MS:-500}
   RABBIT_DLQ_CONSUMER_ENABLED: ${RABBIT_DLQ_CONSUMER_ENABLED:-true}
 
 x-rabbit: &rabbit
-  image: rabbitmq:4-management
+  image: rabbitmq:4.4-management
   restart: unless-stopped
   logging: *logging
   mem_limit: 768m
@@ -133,7 +138,7 @@ services:
     <<: *spring
     image: rutaexpress/ms-rutaexpress-bff:local
     environment:
-      <<: *auth
+      <<: [*auth, *swagger]
       PORT: "8080"
       CATALOG_SERVICE_URL: http://catalog:8081
       NOTIFY_SERVICE_URL: http://notify:8082
@@ -148,7 +153,7 @@ services:
     <<: *spring
     image: rutaexpress/ms-rutaexpress-shipments:local
     environment:
-      <<: [*auth, *rabbit-env]
+      <<: [*auth, *rabbit-env, *swagger]
       PORT: "8085"
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
@@ -170,7 +175,7 @@ services:
     <<: *spring
     image: rutaexpress/ms-rutaexpress-catalog:local
     environment:
-      <<: [*auth, *rabbit-env]
+      <<: [*auth, *rabbit-env, *swagger]
       PORT: "8081"
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
@@ -212,7 +217,7 @@ services:
     mem_limit: 512m
     image: rutaexpress/ms-rutaexpress-rabbit-admin:local
     environment:
-      <<: [*auth, *rabbit-env]
+      <<: [*auth, *rabbit-env, *swagger]
       PORT: "8086"
       RABBITMQ_MANAGEMENT_URLS: http://rabbit1:15672,http://rabbit2:15672
       MQ_COMMAND_TTL_MS: ${MQ_COMMAND_TTL_MS:-86400000}

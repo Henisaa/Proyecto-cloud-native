@@ -119,7 +119,7 @@ class RabbitMqIntegrationTests {
     companion object {
         @Container
         @JvmStatic
-        val rabbit = RabbitMQContainer("rabbitmq:4-management")
+        val rabbit = RabbitMQContainer("rabbitmq:4.4-management")
 
         @JvmStatic
         @DynamicPropertySource
