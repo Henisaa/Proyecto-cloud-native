@@ -62,7 +62,9 @@ class DefaultBffGatewayService(
     @Value("\${rutaexpress.services.report-url}") private val reportUrl: String,
     @Value("\${rutaexpress.services.shipments-url:http://localhost:8085}") private val shipmentsUrl: String,
     @Value("\${rutaexpress.services.mq-admin-url:http://localhost:8086}") private val mqAdminUrl: String,
-    @Value("\${rutaexpress.services.kafka-admin-url:http://localhost:8087}") private val kafkaAdminUrl: String
+    @Value("\${rutaexpress.services.kafka-admin-url:}") private val kafkaAdminUrl: String,
+    @Value("\${app.security.enabled:true}") private val seguridadActiva: Boolean,
+    @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri:}") private val issuerUri: String,
 ) : BffGatewayService {
     private val logger = LoggerFactory.getLogger(DefaultBffGatewayService::class.java)
 
@@ -181,7 +183,7 @@ class DefaultBffGatewayService(
             if (result is Map<*, *>) result["data"] ?: result else result
         }
 
-    override fun fetchKpis(range: String, token: String): Any = llamarGet("ms-rutaexpress-report") {
+    override fun fetchKpis(range: String, token: String): Any = desplegado("ms-rutaexpress-report", reportUrl) {
         reportClient.get()
             .uri("/api/report/kpis?range={range}", range)
             .header("Authorization", "Bearer $token")
@@ -189,7 +191,7 @@ class DefaultBffGatewayService(
             .body(Any::class.java) ?: emptyMap<String, Any>()
     }
 
-    override fun fetchTopServices(range: String, token: String): Any = llamarGet("ms-rutaexpress-report") {
+    override fun fetchTopServices(range: String, token: String): Any = desplegado("ms-rutaexpress-report", reportUrl) {
         reportClient.get()
             .uri("/api/report/top-services?range={range}", range)
             .header("Authorization", "Bearer $token")
@@ -197,7 +199,7 @@ class DefaultBffGatewayService(
             .body(Any::class.java) ?: emptyList<Any>()
     }
 
-    override fun fetchTimeline(idEntidad: String, token: String): Any = llamarGet("ms-rutaexpress-audit") {
+    override fun fetchTimeline(idEntidad: String, token: String): Any = desplegado("ms-rutaexpress-audit", auditUrl) {
         auditClient.get()
             .uri("/api/audit/entidad/{idEntidad}", idEntidad)
             .header("Authorization", "Bearer $token")
@@ -205,7 +207,7 @@ class DefaultBffGatewayService(
             .body(Any::class.java) ?: emptyList<Any>()
     }
 
-    private fun fetchAuditSummary(token: String): Any = llamarGet("ms-rutaexpress-audit") {
+    private fun fetchAuditSummary(token: String): Any = desplegado("ms-rutaexpress-audit", auditUrl) {
         auditClient.get()
             .uri("/api/audit?page=0&size=10")
             .header("Authorization", "Bearer $token")
@@ -317,7 +319,10 @@ class DefaultBffGatewayService(
             .body(Any::class.java) ?: emptyMap<String, Any>()
     }
 
-    /** Solo nombre y UP/DOWN según el health real de cada servicio; nunca las URLs internas. */
+    /**
+     * Solo nombre y UP/DOWN según el health real de cada servicio; nunca las URLs internas. Un servicio sin URL
+     * configurada no se informa: este stack no lo despliega.
+     */
     override fun getStatus(): GatewayHealthDto {
         val servicios = linkedMapOf(
             "shipments" to shipmentsUrl,
@@ -329,8 +334,8 @@ class DefaultBffGatewayService(
             "kafka-admin" to kafkaAdminUrl,
         )
         return GatewayHealthDto(
-            azureIdaasConfigured = true,
-            services = servicios.mapValues { (_, url) -> estadoDe(url) },
+            azureIdaasConfigured = seguridadActiva && issuerUri.isNotBlank(),
+            services = servicios.filterValues { it.isNotBlank() }.mapValues { (_, url) -> estadoDe(url) },
         )
     }
 
@@ -340,6 +345,11 @@ class DefaultBffGatewayService(
     } catch (e: RestClientException) {
         "DOWN"
     }
+
+    /** Un servicio que este stack no despliega (URL vacía) no se consulta: se informa como no disponible. */
+    private fun <T : Any> desplegado(servicio: String, url: String, accion: () -> T): T =
+        if (url.isBlank()) throw DownstreamException(HttpStatus.SERVICE_UNAVAILABLE, null, servicio)
+        else llamarGet(servicio, accion)
 
     /** GET con un reintento si falla la conexión o se agota el tiempo (solo lecturas: son idempotentes). */
     private fun <T : Any> llamarGet(servicio: String, accion: () -> T): T = llamar(servicio) {

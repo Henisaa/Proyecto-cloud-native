@@ -29,7 +29,7 @@ class BrokerAdminController(
 ) {
     private fun client(url: String) = RestClient.builder().baseUrl(url)
         .requestFactory(JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()).apply { setReadTimeout(Duration.ofSeconds(15)) }).build()
-    private val kafka = client(kafkaUrl)
+    private val kafka: RestClient? = kafkaUrl.takeIf { it.isNotBlank() }?.let { client(it) }
     @GetMapping("/mq/{resource}")
     fun mq(@PathVariable("resource") resource: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> {
         requireResource(resource, setOf("cluster", "queues", "alerts", "metrics", "exchanges", "bindings", "policies"))
@@ -110,12 +110,15 @@ class BrokerAdminController(
     @GetMapping("/kafka/{resource}")
     fun kafka(@PathVariable resource: String, @AuthenticationPrincipal jwt: Jwt?): Any {
         requireResource(resource, setOf("cluster", "topics"))
-        return get(kafka, "/api/kafka-admin/$resource", jwt)
+        return get(kafkaDisponible(), "/api/kafka-admin/$resource", jwt)
     }
     @GetMapping("/kafka/topics/{name}")
-    fun topic(@PathVariable name: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafka, "/api/kafka-admin/topics/{name}", jwt, name)
+    fun topic(@PathVariable name: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/topics/{name}", jwt, name)
     @GetMapping("/kafka/groups/{group}/lag")
-    fun lag(@PathVariable group: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafka, "/api/kafka-admin/groups/{group}/lag", jwt, group)
+    fun lag(@PathVariable group: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
+    private fun kafkaDisponible(): RestClient = kafka
+        ?: throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Administrador de Kafka no desplegado")
+
     private fun requireResource(value: String, allowed: Set<String>) {
         if(value !in allowed) throw ResponseStatusException(HttpStatus.NOT_FOUND, "Recurso desconocido")
     }

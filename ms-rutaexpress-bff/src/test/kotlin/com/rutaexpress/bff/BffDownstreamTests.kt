@@ -20,7 +20,7 @@ class BffDownstreamTests {
     private val builder = RestClient.builder().baseUrl("http://catalog")
     private val server = MockRestServiceServer.bindTo(builder).build()
     private val client = builder.build()
-    private val gateway = DefaultBffGatewayService(client, client, client, client, client, "", "", "", "", "", "", "")
+    private val gateway = DefaultBffGatewayService(client, client, client, client, client, "", "", "http://catalog", "http://catalog", "", "", "", false, "")
 
     @Test
     fun `entrega lista del catalogo y conserva Bearer`() {
@@ -115,5 +115,15 @@ class BffDownstreamTests {
         val eventos = linea["events"] as List<*>
         assertThat(eventos).hasSize(1)
         assertThat((eventos[0] as Map<*, *>)["actor"]).isEqualTo("ana@rutaexpress.cl")
+    }
+
+    @Test
+    fun `el estado omite los servicios sin URL y no informa Azure sin seguridad`() {
+        val sinDesplegar = DefaultBffGatewayService(client, client, client, client, client, "", "", "", "", "", "", "", false, "")
+
+        val estado = sinDesplegar.getStatus()
+
+        assertThat(estado.azureIdaasConfigured).isFalse()
+        assertThat(estado.services).isEmpty()
     }
 }
