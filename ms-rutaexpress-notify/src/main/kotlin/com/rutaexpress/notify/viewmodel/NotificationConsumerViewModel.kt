@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component
 import tools.jackson.core.JacksonException
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.json.JsonMapper
-import java.nio.charset.StandardCharsets
 
 /**
  * Consumidor del dominio de notificaciones. Una cola (q.rutaexpress.notification) recibe tres tipos de mensaje,
@@ -25,6 +24,8 @@ import java.nio.charset.StandardCharsets
  *    NACK sin requeue de inmediato, sin reintentos.
  *  - Error recuperable (SMTP, Redis, red): reintentos acotados con backoff; si se agotan, NACK sin requeue.
  *  - Todo NACK sin requeue deja el mensaje en la DLQ de la cola, donde DeadLetterRegistro lo registra en logs.
+ *  - Evento en proceso en otro consumidor: no es un fallo. Pausa breve y NACK con requeue; al reentregarse será
+ *    duplicado o procesable.
  */
 @Component
 class NotificationConsumerViewModel(
@@ -46,6 +47,11 @@ class NotificationConsumerViewModel(
             channel.basicAck(etiqueta, false)
         } catch (ex: MensajeNoRecuperableException) {
             rechazarSinReencolar(channel, etiqueta, clave, propiedades.messageId, "no recuperable", ex)
+        } catch (ex: EventoEnProcesoException) {
+            // Otro consumidor lo está procesando: no es un fallo. Se reencola tras una pausa para no girar en vacío.
+            Thread.sleep(PAUSA_EN_PROCESO_MS)
+            channel.basicNack(etiqueta, false, true)
+            log.info("Evento en proceso en otro consumidor; se reencola: routingKey={} messageId={}", clave, propiedades.messageId ?: "-")
         } catch (ex: RuntimeException) {
             rechazarSinReencolar(channel, etiqueta, clave, propiedades.messageId, "reintentos agotados", ex)
         }
@@ -85,6 +91,8 @@ class NotificationConsumerViewModel(
                 return
             } catch (ex: MensajeNoRecuperableException) {
                 throw ex
+            } catch (ex: EventoEnProcesoException) {
+                throw ex
             } catch (ex: IllegalArgumentException) {
                 throw MensajeNoRecuperableException("Datos de notificación no válidos: ${ex.message}", ex)
             } catch (ex: ConstraintViolationException) {
@@ -116,11 +124,8 @@ class NotificationConsumerViewModel(
     }
 
     companion object {
-        /** Tamaño máximo del cuerpo que se copia en los logs de la DLQ. */
-        const val LIMITE_LOG = 2000
-
-        fun textoParaLog(cuerpo: ByteArray): String =
-            String(cuerpo, StandardCharsets.UTF_8).take(LIMITE_LOG)
+        /** Pausa antes de reencolar un evento que otro consumidor tiene en proceso (ver PROCESSING_TTL). */
+        private const val PAUSA_EN_PROCESO_MS = 1000L
     }
 }
 

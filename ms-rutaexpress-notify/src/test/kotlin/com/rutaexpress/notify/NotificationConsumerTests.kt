@@ -4,6 +4,7 @@ import com.rabbitmq.client.Channel
 import com.rutaexpress.notify.config.NotificationProperties
 import com.rutaexpress.notify.config.RabbitNombres
 import com.rutaexpress.notify.viewmodel.EmailNotificationViewModel
+import com.rutaexpress.notify.viewmodel.EventoEnProcesoException
 import com.rutaexpress.notify.viewmodel.NotificationConsumerViewModel
 import com.rutaexpress.notify.viewmodel.WarehouseNotificationViewModel
 import jakarta.validation.ConstraintViolationException
@@ -80,6 +81,18 @@ class NotificationConsumerTests {
 
         verify(email, times(3)).notifyRecipient(any())
         verify(canal).basicNack(46, false, false)
+        verify(canal, never()).basicAck(any(), any())
+    }
+
+    @Test
+    fun `un evento en proceso en otro consumidor se reencola sin ir a la DLQ`() {
+        doThrow(EventoEnProcesoException("evt-proceso")).`when`(email).notifyRecipient(any())
+
+        consumidor(maxAttempts = 3).onNotification(mensaje(47, "notification.email.send", correo()), canal)
+
+        verify(email, times(1)).notifyRecipient(any())
+        verify(canal).basicNack(47, false, true)
+        verify(canal, never()).basicNack(47, false, false)
         verify(canal, never()).basicAck(any(), any())
     }
 
