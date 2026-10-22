@@ -26,7 +26,7 @@ FROM build AS e2e-build
 RUN npm run build -- --configuration e2e
 
 FROM runtime-base AS e2e
-COPY --from=e2e-build /app/dist/e2e/browser /usr/share/nginx/html
+COPY --chown=101:101 --from=e2e-build /app/dist/e2e/browser /usr/share/nginx/html
 
 # The default/production image always contains the real MSAL entrypoint.
 FROM runtime-base AS runtime
