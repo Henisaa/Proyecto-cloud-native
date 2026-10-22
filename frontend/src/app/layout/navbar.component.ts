@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { runtimeConfig } from '../core/app-config';
-import { tieneAlgunRol } from '../core/roles';
+import { esSoloCliente, tieneAlgunRol } from '../core/roles';
 import { routes } from '../app.routes';
 
 interface ItemMenu {
@@ -30,13 +30,15 @@ export function menuParaRoles(roles: readonly string[]): ItemMenu[] {
             <img src="logo.webp" alt="RutaExpress" class="h-8 w-8 object-contain transition-transform duration-200 group-hover:scale-105" />
             <span class="text-base font-bold tracking-tight text-zinc-900">Ruta<span class="text-blue-600">Express</span></span>
           </a>
-          <span
-            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
-            [class]="esProduccion ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50/80 text-amber-700'"
-            data-testid="entorno"
-          >
-            {{ entorno }}
-          </span>
+          @if (!soloCliente()) {
+            <span
+              class="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+              [class]="esProduccion ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50/80 text-amber-700'"
+              data-testid="entorno"
+            >
+              {{ entorno }}
+            </span>
+          }
         </div>
 
         <button
@@ -98,6 +100,7 @@ export class NavbarComponent {
   readonly abierto = signal(false);
   readonly entorno = runtimeConfig.environmentName;
   readonly esProduccion = /prod/i.test(runtimeConfig.environmentName);
+  readonly soloCliente = computed(() => esSoloCliente(this.auth.roles));
 
   readonly menu = computed(() => {
     // Depende de la cuenta (signal) para recalcularse al iniciar o cerrar sesión.
