@@ -141,6 +141,9 @@ SECURITY_ENABLED=${SECURITY_ENABLED:-true}
 AZURE_AD_ISSUER_URI=https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0
 AZURE_AD_AUDIENCE=api://f3136620-804c-4b15-b22d-b6fad957937e
 
+# --- Swagger/OpenAPI de los servicios (false en la nube: no se publica la documentación de la API).
+SWAGGER_ENABLED=false
+
 # --- Origen(es) del frontend que llaman al BFF directo, separados por coma (https://mi-app.vercel.app).
 #     Vacío si delante hay un API Gateway que resuelve CORS.
 CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
