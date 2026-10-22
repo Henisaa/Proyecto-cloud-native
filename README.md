@@ -58,7 +58,7 @@ MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y c
 
 ## Estado de la EP2
 
-[PLAN_MAESTRO_IMPLEMENTACION_EP2.md](PLAN_MAESTRO_IMPLEMENTACION_EP2.md) es la especificación vigente: auditoría contra los dos documentos de la evaluación, bugs con su corrección y checklist de implementación. CI verde certifica solo las comprobaciones automatizadas de su commit: no prueba el tenant, DNS, Gateway ni EC2.
+CI verde certifica solo las comprobaciones automatizadas de su commit: no prueba el tenant, DNS, Gateway ni EC2.
 
 Modo local (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
 
