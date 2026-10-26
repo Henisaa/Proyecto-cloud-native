@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RutaExpress Console</title>
+
+  <link rel="icon" href="data:,">
+
+  <!-- Tailwind CSS v4 (navegador) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Google Fonts: Lato -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+
+  <!-- Tabler Icons (ruta dist/ del paquete @tabler/icons-webfont@3.2.0) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.2.0/dist/tabler-icons.min.css">
+
+  <style>
+    * {
+      font-family: 'Lato', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-sizing: border-box;
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+
+<body class="bg-[#151515] text-[#ededed] antialiased h-full overflow-hidden flex p-2.5 sm:p-3.5 gap-3.5">
+
+  <!-- ========================================== -->
+  <!-- SIDEBAR                                    -->
+  <!-- ========================================== -->
+  <aside class="w-64 bg-[#1A1A1A] border border-white/[0.05] rounded-md flex flex-col justify-between shrink-0 h-full relative z-20">
+    <div class="flex flex-col flex-1 min-h-0">
+      <div class="h-20 flex items-center px-6 border-b border-white/[0.03]">
+        <div class="w-full h-8 flex items-center justify-start text-xs text-white/50 tracking-widest uppercase font-mono">
+          RutaExpress
+        </div>
+      </div>
+
+      <nav id="nav-scroll" class="flex-1 overflow-y-auto no-scrollbar py-4 px-3 space-y-5 relative">
+        <div id="nav-indicator" class="absolute left-0 w-1 bg-white rounded-r-xs transition-all duration-300 ease-out z-10 pointer-events-none opacity-0" style="top: 0; height: 42px;"></div>
+
+        <div class="space-y-1">
+          <a href="#/panel" data-nav="panel" data-perm="panel" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+            <i class="ti ti-layout-grid text-lg transition-transform group-hover:scale-110"></i>
+            <span>Panel</span>
+          </a>
+
+          <a href="#/envios" data-nav="envios" data-perm="envios" class="nav-item group w-full flex items-center justify-between px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+            <span class="flex items-center gap-3.5">
+              <i class="ti ti-package text-lg transition-transform group-hover:scale-110"></i>
+              <span>Envíos</span>
+            </span>
+            <span id="badge-envios-count" class="bg-zinc-800 text-zinc-300 border border-white/[0.06] text-[11px] font-mono px-2 py-0.5 rounded-xs">0</span>
+          </a>
+
+          <a href="#/catalogo" data-nav="catalogo" data-perm="catalogo" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+            <i class="ti ti-grid-dots text-lg transition-transform group-hover:scale-110"></i>
+            <span>Catálogo</span>
+          </a>
+        </div>
+
+        <div id="grupo-herramientas" class="pt-3">
+          <div class="px-3 pb-2 flex items-center justify-between">
+            <span class="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Herramientas</span>
+            <div class="h-[1px] flex-1 ml-3 bg-white/[0.06]"></div>
+          </div>
+          <div class="space-y-1">
+            <a href="#/reportes" data-nav="reportes" data-perm="reportes" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+              <i class="ti ti-chart-bar text-lg transition-transform group-hover:scale-110"></i>
+              <span>Reportes</span>
+            </a>
+            <a href="#/auditoria" data-nav="auditoria" data-perm="auditoria" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+              <i class="ti ti-shield-check text-lg transition-transform group-hover:scale-110"></i>
+              <span>Auditoría</span>
+            </a>
+            <a href="#/rabbitmq" data-nav="rabbitmq" data-perm="rabbitmq" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+              <i class="ti ti-cpu text-lg transition-transform group-hover:scale-110"></i>
+              <span>RabbitMQ</span>
+            </a>
+            <a href="#/kafka" data-nav="kafka" data-perm="kafka" class="nav-item group w-full flex items-center gap-3.5 px-3 py-2.5 rounded-sm text-[15px] font-medium transition-colors text-zinc-400 hover:text-white hover:bg-white/[0.03]">
+              <i class="ti ti-arrows-exchange text-lg transition-transform group-hover:scale-110"></i>
+              <span>Kafka</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Píldora de sesión -->
+    <div class="p-3">
+      <div class="bg-[#313131] rounded-sm px-3.5 py-2.5 flex items-center justify-between border border-white/[0.06]">
+        <button id="btn-sesion" type="button" title="Ver datos de la sesión" class="flex items-center gap-2.5 text-zinc-300 hover:text-white transition-colors cursor-pointer group min-w-0">
+          <i class="ti ti-user-circle text-2xl transition-transform group-hover:scale-105"></i>
+          <span id="sesion-resumen" class="text-xs font-medium text-zinc-300 truncate">Sesión</span>
+        </button>
+        <button id="btn-salir" type="button" title="Cerrar sesión" class="text-zinc-400 hover:text-white transition-colors cursor-pointer p-1">
+          <i class="ti ti-logout-2 text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========================================== -->
+  <!-- CONTENIDO PRINCIPAL                        -->
+  <!-- ========================================== -->
+  <main class="flex-1 h-full overflow-y-auto no-scrollbar relative p-4 lg:p-6 bg-[#151515]">
+
+    <div id="aviso-global" class="hidden mb-4 border border-white/[0.1] bg-[#1A1A1A] rounded-sm px-4 py-3 text-xs text-zinc-300"></div>
+
+    <!-- 1. PANEL -->
+    <section id="view-panel" class="hidden space-y-6">
+      <div class="pt-2">
+        <h1 id="dynamic-greeting" class="text-3xl lg:text-4xl font-bold tracking-tight text-white">Bienvenido</h1>
+        <p class="text-xs text-zinc-500 mt-1 font-mono">Consola de operaciones e infraestructura centralizada · RutaExpress</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <div class="flex items-center justify-between text-zinc-400">
+            <span class="text-xs uppercase tracking-wider">Envíos en curso</span>
+            <i class="ti ti-truck text-base"></i>
+          </div>
+          <p id="kpi-envios" class="text-3xl font-bold font-mono mt-3 text-white">—</p>
+          <p id="kpi-envios-sub" class="text-xs text-zinc-500 mt-1">Cargando…</p>
+        </div>
+
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <div class="flex items-center justify-between text-zinc-400">
+            <span class="text-xs uppercase tracking-wider">Topología RabbitMQ</span>
+            <i class="ti ti-cpu text-base"></i>
+          </div>
+          <p id="kpi-mq" class="text-3xl font-bold font-mono mt-3 text-white">—</p>
+          <p id="kpi-mq-sub" class="text-xs text-zinc-500 mt-1">Cargando…</p>
+        </div>
+
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <div class="flex items-center justify-between text-zinc-400">
+            <span class="text-xs uppercase tracking-wider">Kafka Consumer Lag</span>
+            <i class="ti ti-activity text-base"></i>
+          </div>
+          <p id="kpi-lag" class="text-3xl font-bold font-mono mt-3 text-white">—</p>
+          <p id="kpi-lag-sub" class="text-xs text-zinc-500 mt-1">Cargando…</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div data-perm="reportes" class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Indicadores (últimas 24 horas)</h3>
+          <div id="panel-indicadores" class="grid grid-cols-3 gap-3 text-xs text-zinc-500">Cargando…</div>
+        </div>
+
+        <div data-perm="estadoServicios" class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Servicios</h3>
+          <ul id="panel-servicios" class="divide-y divide-white/[0.04] text-xs">
+            <li class="py-2 text-zinc-500">Cargando…</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. ENVÍOS -->
+    <section id="view-envios" class="hidden space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] pb-4">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Gestión de Envíos</h2>
+          <p class="text-xs text-zinc-500">Ciclo de vida completo: creación, bodega, ruta y entrega</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-zinc-400 font-mono bg-[#1A1A1A] border border-white/[0.06] px-3 py-1.5 rounded-sm">
+            Total listados: <strong class="text-white" id="envios-total-label">0</strong>
+          </span>
+          <button type="button" data-perm="crearEnvio" data-accion="nuevoEnvio" class="text-xs bg-white text-black font-semibold px-3 py-2 rounded-sm hover:bg-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+            <i class="ti ti-plus"></i> Nuevo envío
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] p-3 rounded-sm flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex-1 min-w-[240px] relative">
+          <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm"></i>
+          <input type="text" id="envios-q" placeholder="Buscar por código de seguimiento (RX-…)"
+                 class="w-full bg-[#151515] border border-white/[0.08] text-xs text-zinc-200 pl-9 pr-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400 placeholder:text-zinc-600">
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="envios-estado" class="bg-[#151515] border border-white/[0.08] text-xs text-zinc-300 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
+            <option value="">Todos los estados</option>
+            <option value="CREADO">Creado</option>
+            <option value="ACEPTADO">Aceptado</option>
+            <option value="EN_BODEGA">En bodega</option>
+            <option value="EN_RUTA">En ruta</option>
+            <option value="ENTREGADO">Entregado</option>
+            <option value="CANCELADO">Cancelado</option>
+          </select>
+          <select id="envios-capacidad" class="bg-[#151515] border border-white/[0.08] text-xs text-zinc-300 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
+            <option value="">Toda la capacidad</option>
+            <option value="RESERVADA">Reservada</option>
+            <option value="PENDIENTE">Pendiente</option>
+            <option value="RECHAZADA">Rechazada</option>
+            <option value="NO_APLICA">No aplica</option>
+          </select>
+          <button type="button" id="btn-envios-limpiar" class="text-xs text-zinc-400 hover:text-white border border-white/[0.08] bg-[#151515] px-3 py-2 rounded-sm transition-colors">Limpiar</button>
+        </div>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[1100px] text-left text-xs">
+            <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+              <tr>
+                <th class="px-4 py-3">Seguimiento</th>
+                <th class="px-4 py-3">Servicio</th>
+                <th class="px-4 py-3">Zona</th>
+                <th class="px-4 py-3">Estado</th>
+                <th class="px-4 py-3">Capacidad</th>
+                <th class="px-4 py-3">Destinatario</th>
+                <th class="px-4 py-3">Destino</th>
+                <th class="px-4 py-3">Carga</th>
+                <th class="px-4 py-3">Actualizado</th>
+                <th class="px-4 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="envios-tbody" class="divide-y divide-white/[0.04]"></tbody>
+          </table>
+        </div>
+        <div id="envios-vacio" class="hidden p-8 text-center text-xs text-zinc-500 font-mono">No hay envíos que coincidan con los filtros.</div>
+        <div class="p-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-500">
+          <span id="envios-pagina-info">—</span>
+          <div class="flex gap-2">
+            <button type="button" id="btn-envios-ant" class="px-3 py-1 border border-white/[0.06] rounded-sm text-zinc-300 hover:text-white disabled:text-zinc-600 disabled:cursor-not-allowed">Anterior</button>
+            <button type="button" id="btn-envios-sig" class="px-3 py-1 border border-white/[0.06] rounded-sm text-zinc-300 hover:text-white disabled:text-zinc-600 disabled:cursor-not-allowed">Siguiente</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. CATÁLOGO -->
+    <section id="view-catalogo" class="hidden space-y-4">
+      <div id="catalogo-lista" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] pb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white tracking-tight">Catálogo de Servicios</h2>
+            <p class="text-xs text-zinc-500">Tarifas, SLA y capacidad por zona y vehículo</p>
+          </div>
+        </div>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+                <tr>
+                  <th class="px-4 py-3">Código</th>
+                  <th class="px-4 py-3">Nombre del servicio</th>
+                  <th class="px-4 py-3">Tipo</th>
+                  <th class="px-4 py-3">Estado</th>
+                  <th class="px-4 py-3">Tarifa base</th>
+                  <th class="px-4 py-3">SLA entrega</th>
+                  <th class="px-4 py-3">Cupos disponibles</th>
+                  <th class="px-4 py-3 text-right">Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="catalogo-tbody" class="divide-y divide-white/[0.04]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="catalogo-detalle" class="hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-[#1A1A1A] border border-white/[0.06] p-4 rounded-sm">
+          <div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-accion="volverCatalogo" class="text-zinc-400 hover:text-white transition-colors p-1" title="Volver al catálogo">
+                <i class="ti ti-arrow-left text-base"></i>
+              </button>
+              <h2 id="detalle-titulo" class="text-base font-bold text-white font-mono">—</h2>
+            </div>
+            <p id="detalle-resumen" class="text-xs text-zinc-400 mt-1 pl-7">—</p>
+            <p id="detalle-descripcion" class="text-xs text-zinc-500 mt-1 pl-7"></p>
+          </div>
+          <button type="button" id="btn-detalle-refrescar" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">
+            Actualizar
+          </button>
+        </div>
+
+        <div id="detalle-capacidades-caja" class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Capacidad por zona y vehículo</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[860px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th class="px-3 py-2">Zona</th>
+                  <th class="px-3 py-2">Vehículo</th>
+                  <th class="px-3 py-2">Máximo diario</th>
+                  <th class="px-3 py-2">Reservados</th>
+                  <th class="px-3 py-2">Disponibles</th>
+                  <th class="px-3 py-2">Peso máx.</th>
+                  <th class="px-3 py-2">Volumen máx.</th>
+                  <th class="px-3 py-2">Activo</th>
+                  <th class="px-3 py-2 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="detalle-capacidades" class="divide-y divide-white/[0.04]"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Tarifas por zona</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th class="px-3 py-2">Origen</th>
+                  <th class="px-3 py-2">Destino</th>
+                  <th class="px-3 py-2">Tarifa base</th>
+                  <th class="px-3 py-2">Por km</th>
+                  <th class="px-3 py-2">Por kg</th>
+                  <th class="px-3 py-2">Mínima</th>
+                  <th class="px-3 py-2">Activa</th>
+                </tr>
+              </thead>
+              <tbody id="detalle-tarifas" class="divide-y divide-white/[0.04]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. REPORTES -->
+    <section id="view-reportes" class="hidden space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] pb-4">
+        <div>
+          <h2 class="text-xl font-bold text-white tracking-tight">Reportes de Operación</h2>
+          <p class="text-xs text-zinc-500">Indicadores calculados por el servicio de reportes (EP1)</p>
+        </div>
+        <select id="reportes-rango" class="bg-[#151515] border border-white/[0.08] text-xs text-zinc-300 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
+          <option value="last1h">Última hora</option>
+          <option value="last24h" selected>Últimas 24 horas</option>
+          <option value="last7d">Últimos 7 días</option>
+          <option value="last30d">Últimos 30 días</option>
+        </select>
+      </div>
+
+      <div id="reportes-aviso" class="hidden bg-[#1A1A1A] border border-white/[0.08] rounded-sm p-4 text-xs text-zinc-300"></div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <p class="text-xs uppercase tracking-wider text-zinc-400">Envíos totales</p>
+          <p id="rep-total" class="font-mono text-3xl font-bold text-white mt-2">—</p>
+        </div>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <p class="text-xs uppercase tracking-wider text-zinc-400">Envíos por hora</p>
+          <p id="rep-hora" class="font-mono text-3xl font-bold text-white mt-2">—</p>
+        </div>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4">
+          <p class="text-xs uppercase tracking-wider text-zinc-400">Tiempo promedio de entrega</p>
+          <p id="rep-promedio" class="font-mono text-3xl font-bold text-white mt-2">—</p>
+        </div>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+        <h3 class="text-sm font-bold text-white">Envíos activos por estado</h3>
+        <div id="rep-estados" class="space-y-2"></div>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+        <h3 class="text-sm font-bold text-white">Servicios más usados</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[420px] text-left text-xs">
+            <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
+              <tr>
+                <th class="px-3 py-2">Servicio</th>
+                <th class="px-3 py-2">Envíos</th>
+                <th class="px-3 py-2">Participación</th>
+              </tr>
+            </thead>
+            <tbody id="rep-top" class="divide-y divide-white/[0.04]"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. AUDITORÍA -->
+    <section id="view-auditoria" class="hidden space-y-4">
+      <div class="border-b border-white/[0.05] pb-4">
+        <h2 class="text-xl font-bold text-white tracking-tight">Auditoría y Trazabilidad</h2>
+        <p class="text-xs text-zinc-500">Eventos de RabbitMQ y Kafka por envío</p>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-3 flex flex-wrap gap-3 items-center justify-between">
+        <form id="form-auditoria" class="flex-1 min-w-[280px] flex gap-2">
+          <div class="flex-1 relative">
+            <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm"></i>
+            <input type="text" id="auditoria-q" placeholder="Código de seguimiento (RX-…) o id del envío"
+                   class="w-full bg-[#151515] border border-white/[0.08] text-xs text-zinc-200 pl-9 pr-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400 placeholder:text-zinc-600">
+          </div>
+          <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-2 rounded-sm hover:bg-zinc-200 transition-colors">Buscar</button>
+        </form>
+        <select id="auditoria-fuente" class="bg-[#151515] border border-white/[0.08] text-xs text-zinc-300 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
+          <option value="TODAS">Todas las fuentes</option>
+          <option value="RABBITMQ">RabbitMQ</option>
+          <option value="KAFKA">Kafka</option>
+        </select>
+      </div>
+
+      <div id="auditoria-resumen" class="hidden bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 text-xs text-zinc-300"></div>
+      <div id="auditoria-aviso" class="hidden bg-[#1A1A1A] border border-white/[0.08] rounded-sm p-3 text-xs text-zinc-400"></div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[820px] text-left text-xs">
+            <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+              <tr>
+                <th class="px-4 py-3">Fecha</th>
+                <th class="px-4 py-3">Fuente</th>
+                <th class="px-4 py-3">Tipo</th>
+                <th class="px-4 py-3">Routing key / origen</th>
+                <th class="px-4 py-3">Actor</th>
+                <th class="px-4 py-3">Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="auditoria-tbody" class="divide-y divide-white/[0.04]"><tr><td colspan="6" class="px-4 py-6 text-center text-zinc-500">Busca un envío por su código de seguimiento para ver su trazabilidad.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. RABBITMQ -->
+    <section id="view-rabbitmq" class="hidden space-y-4">
+      <div class="border-b border-white/[0.05] pb-3 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <i class="ti ti-cpu text-zinc-400"></i> RabbitMQ Management
+            </h2>
+            <p class="text-xs text-zinc-500">Clústeres, colas, exchanges, bindings y retención</p>
+          </div>
+          <span class="text-xs font-mono bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-sm text-zinc-300">vhost: /</span>
+        </div>
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1">
+          <button type="button" data-rtab="resumen" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Resumen</button>
+          <button type="button" data-rtab="colas" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Colas</button>
+          <button type="button" data-rtab="exchanges" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Exchanges</button>
+          <button type="button" data-rtab="bindings" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Bindings</button>
+          <button type="button" data-rtab="retencion" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Retención y topología</button>
+          <button type="button" data-rtab="pruebas" class="rabbit-tab px-3 py-1.5 text-xs rounded-sm font-medium transition-colors">Mensaje de prueba</button>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div id="rtab-resumen" class="space-y-4">
+        <div id="mq-nodos" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        <div id="mq-metricas" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5"></div>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-white">Backlog en el tiempo</h3>
+            <p class="text-[11px] text-zinc-500">Mensajes listos más sin confirmar, muestreados cada 15 s desde que abriste esta pestaña</p>
+            <p id="mq-backlog-actual" class="text-xs font-mono text-zinc-300 mt-1"></p>
+          </div>
+          <div class="h-40 w-full relative">
+            <svg id="mq-grafico" class="w-full h-full overflow-visible" viewBox="0 0 600 120" preserveAspectRatio="none">
+              <line x1="0" y1="110" x2="600" y2="110" stroke="rgba(255,255,255,0.08)" />
+              <polyline id="mq-linea" fill="none" stroke="#ededed" stroke-width="1.8" points=""></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colas -->
+      <div id="rtab-colas" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Colas registradas</h3>
+          <button type="button" data-toggle="form-cola" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">+ Crear cola</button>
+        </div>
+        <form id="form-cola" class="hidden bg-[#1A1A1A] border border-white/[0.08] p-4 rounded-sm grid gap-3 sm:grid-cols-3">
+          <h4 class="text-xs font-bold text-white sm:col-span-3">Nueva cola</h4>
+          <div class="sm:col-span-2">
+            <label class="block text-[11px] text-zinc-400 mb-1">Nombre</label>
+            <input type="text" name="nombre" required placeholder="q.rutaexpress…" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <label class="flex items-end gap-2 text-xs text-zinc-300 pb-2"><input type="checkbox" name="durable" checked> Durable</label>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">TTL de mensajes (ms)</label>
+            <input type="number" name="ttl" min="1" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Máximo de mensajes</label>
+            <input type="number" name="maxLength" min="1" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Al llenarse</label>
+            <select name="overflow" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              <option value="">(por defecto)</option>
+              <option value="reject-publish">Rechazar publicación</option>
+              <option value="drop-head">Descartar el más antiguo</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Exchange DLX</label>
+            <select name="dlx" data-exchanges class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Routing key DLX</label>
+            <input type="text" name="dlrk" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div class="sm:col-span-3 flex justify-end gap-2 pt-2">
+            <button type="button" data-toggle="form-cola" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+            <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Guardar cola</button>
+          </div>
+        </form>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+                <tr>
+                  <th class="px-3 py-2.5">Nombre</th>
+                  <th class="px-3 py-2.5">Listos</th>
+                  <th class="px-3 py-2.5">Sin confirmar</th>
+                  <th class="px-3 py-2.5">Consumidores</th>
+                  <th class="px-3 py-2.5">Llegados</th>
+                  <th class="px-3 py-2.5">Estado</th>
+                  <th class="px-3 py-2.5 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="mq-colas-tbody" class="divide-y divide-white/[0.04]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exchanges -->
+      <div id="rtab-exchanges" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Exchanges</h3>
+          <button type="button" data-toggle="form-exchange" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">+ Crear exchange</button>
+        </div>
+        <form id="form-exchange" class="hidden bg-[#1A1A1A] border border-white/[0.08] p-4 rounded-sm grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Nombre</label>
+            <input type="text" name="nombre" required placeholder="ex.rutaexpress…" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Tipo</label>
+            <select name="tipo" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              <option value="direct">direct</option>
+              <option value="topic">topic</option>
+              <option value="fanout">fanout</option>
+              <option value="headers">headers</option>
+            </select>
+          </div>
+          <label class="flex items-end gap-2 text-xs text-zinc-300 pb-2"><input type="checkbox" name="durable" checked> Durable</label>
+          <div class="sm:col-span-3 flex justify-end gap-2 pt-2">
+            <button type="button" data-toggle="form-exchange" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+            <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Crear exchange</button>
+          </div>
+        </form>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+          <table class="w-full text-left text-xs">
+            <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+              <tr>
+                <th class="px-4 py-3">Nombre</th>
+                <th class="px-4 py-3">Tipo</th>
+                <th class="px-4 py-3">Durable</th>
+                <th class="px-4 py-3 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="mq-exchanges-tbody" class="divide-y divide-white/[0.04]"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Bindings -->
+      <div id="rtab-bindings" class="hidden space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Bindings activos</h3>
+          <button type="button" data-toggle="form-binding" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">+ Crear binding</button>
+        </div>
+        <form id="form-binding" class="hidden bg-[#1A1A1A] border border-white/[0.08] p-4 rounded-sm grid gap-3 sm:grid-cols-4">
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Exchange origen</label>
+            <select name="origen" data-exchanges class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Tipo de destino</label>
+            <select name="tipoDestino" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              <option value="queue">Cola</option>
+              <option value="exchange">Exchange</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Destino</label>
+            <select name="destino" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Routing key</label>
+            <input type="text" name="clave" placeholder="capacity.reserve" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div class="sm:col-span-4 flex justify-end gap-2 pt-2">
+            <button type="button" data-toggle="form-binding" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+            <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Crear binding</button>
+          </div>
+        </form>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-400 bg-white/[0.02]">
+                <tr>
+                  <th class="px-4 py-3">Origen</th>
+                  <th class="px-4 py-3">Destino</th>
+                  <th class="px-4 py-3">Tipo</th>
+                  <th class="px-4 py-3">Routing key</th>
+                  <th class="px-4 py-3 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="mq-bindings-tbody" class="divide-y divide-white/[0.04]"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retención y topología -->
+      <div id="rtab-retencion" class="hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-white">Políticas y retención</h3>
+            <p class="text-xs text-zinc-500">Límites y vencimientos de las colas de trabajo y de las DLQ</p>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" data-accion="mqJson" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400 hover:text-white">Ver JSON</button>
+            <button type="button" data-accion="topologia" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white">Aplicar topología</button>
+          </div>
+        </div>
+        <div id="mq-politicas" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        <pre id="mq-politicas-json" class="hidden bg-[#151515] border border-white/[0.06] rounded-sm p-4 font-mono text-[11px] text-zinc-300 overflow-x-auto"></pre>
+        <form id="form-retencion" class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 grid gap-3 sm:grid-cols-3">
+          <h4 class="text-xs font-bold text-white sm:col-span-3">Ajustar parámetros globales</h4>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">TTL de comandos (ms)</label>
+            <input type="number" name="commandTtlMs" value="86400000" min="1000" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">TTL de las DLQ (ms)</label>
+            <input type="number" name="dlqTtlMs" value="604800000" min="1000" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Máximo de mensajes por cola</label>
+            <input type="number" name="maxLength" value="10000" min="1" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div class="sm:col-span-3 flex gap-2">
+            <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Guardar retención</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Mensaje de prueba -->
+      <div id="rtab-pruebas" class="hidden space-y-4">
+        <form id="form-prueba" class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 grid gap-3 sm:grid-cols-3">
+          <h3 class="text-sm font-bold text-white sm:col-span-3">Publicar mensaje de prueba</h3>
+          <div class="sm:col-span-3">
+            <label class="block text-[11px] text-zinc-400 mb-1">Plantilla rápida</label>
+            <select id="p-plantilla" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              <option value="">(ninguna)</option>
+              <option value="notificacion">Notificación válida</option>
+              <option value="sin-event-id">Mensaje sin eventId (debe ir a la DLQ)</option>
+              <option value="comando-capacidad">Comando de capacidad</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Exchange</label>
+            <select id="p-exchange" data-exchanges class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Routing key</label>
+            <input type="text" id="p-clave" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div>
+            <label class="block text-[11px] text-zinc-400 mb-1">Repetir (máx. 50)</label>
+            <input type="number" id="p-veces" value="1" min="1" max="50" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-[11px] text-zinc-400 mb-1">Cuerpo (JSON)</label>
+            <textarea id="p-cuerpo" rows="8" class="w-full bg-[#151515] border border-white/[0.08] text-xs font-mono p-3 rounded-sm text-zinc-200">{}</textarea>
+            <p class="text-[10px] text-zinc-500 mt-1">«REEMPLAZAR-UUID» se cambia por un identificador nuevo en cada mensaje.</p>
+          </div>
+          <div class="sm:col-span-3 flex items-center gap-3">
+            <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-2 rounded-sm hover:bg-zinc-200 transition-colors">Publicar</button>
+            <span id="p-resultado" class="text-xs text-zinc-400 font-mono"></span>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 7. KAFKA -->
+    <section id="view-kafka" class="hidden space-y-4">
+      <div class="border-b border-white/[0.05] pb-4">
+        <h2 class="text-xl font-bold text-white tracking-tight">Kafka</h2>
+        <p class="text-xs text-zinc-500">Retraso por grupo de consumo, tópicos y clúster</p>
+      </div>
+
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+        <h3 class="text-sm font-bold text-white">Consultar retraso</h3>
+        <form id="form-lag" class="flex flex-wrap gap-2">
+          <input type="text" id="kafka-grupo" placeholder="Grupo de consumo, p. ej. ms-rutaexpress-report-group"
+                 class="flex-1 min-w-[260px] bg-[#151515] border border-white/[0.08] text-xs text-zinc-200 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
+          <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-2 rounded-sm hover:bg-zinc-200 transition-colors">Consultar</button>
+        </form>
+        <p id="kafka-lag-aviso" class="hidden text-xs text-zinc-400"></p>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[520px] text-left text-xs">
+            <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
+              <tr>
+                <th class="px-3 py-2">Tópico</th>
+                <th class="px-3 py-2">Partición</th>
+                <th class="px-3 py-2">Offset confirmado</th>
+                <th class="px-3 py-2">Offset final</th>
+                <th class="px-3 py-2">Retraso</th>
+              </tr>
+            </thead>
+            <tbody id="kafka-lag-tbody" class="divide-y divide-white/[0.04]"><tr><td colspan="5" class="px-3 py-6 text-center text-zinc-500">Escribe un grupo de consumo y pulsa Consultar.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white">Tópicos</h3>
+            <button type="button" data-accion="kafkaTopicos" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white">Consultar tópicos</button>
+          </div>
+          <ul id="kafka-topicos" class="font-mono text-xs text-zinc-300 space-y-1"></ul>
+        </div>
+        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+          <h3 class="text-sm font-bold text-white">Clúster</h3>
+          <div id="kafka-cluster" class="font-mono text-xs text-zinc-300 space-y-1"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODALES                                    -->
+  <!-- ========================================== -->
+
+  <!-- Sesión -->
+  <div id="modal-sesion" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-[#1A1A1A] border border-white/[0.1] rounded-sm max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-shield-lock text-lg text-white"></i>
+          <h3 class="text-sm font-bold text-white">Sesión</h3>
+        </div>
+        <button type="button" data-cerrar="modal-sesion" class="text-zinc-400 hover:text-white p-1"><i class="ti ti-x text-base"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-zinc-500 block">Usuario</span>
+          <span id="sesion-nombre" class="text-white font-semibold block mt-1">—</span>
+          <span id="sesion-id" class="font-mono text-zinc-400 break-all block mt-1 select-all">—</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <span class="text-[10px] uppercase tracking-wider text-zinc-500 block">Proveedor</span>
+            <span id="sesion-proveedor" class="text-zinc-200 mt-1 block">—</span>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase tracking-wider text-zinc-500 block">Vencimiento</span>
+            <span id="sesion-vence" class="text-zinc-300 font-mono mt-1 block">—</span>
+          </div>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-zinc-500 block">Roles</span>
+          <div id="sesion-roles" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-zinc-500 block">API</span>
+          <span id="sesion-api" class="font-mono text-zinc-400 break-all block mt-1 select-all">—</span>
+        </div>
+        <div id="bloque-rol-dev" class="hidden border-t border-white/[0.06] pt-3 space-y-2">
+          <label for="dev-rol" class="text-[10px] uppercase tracking-wider text-zinc-500 block">Rol de prueba (solo sin seguridad)</label>
+          <select id="dev-rol" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+            <option value="ADMIN">ADMIN</option>
+            <option value="DESPACHADOR">DESPACHADOR</option>
+            <option value="CLIENTE">CLIENTE</option>
+            <option value="AUDITOR">AUDITOR</option>
+          </select>
+          <p class="text-[10px] text-zinc-500">Cambia lo que muestra la consola. El BFF sin seguridad no aplica roles.</p>
+        </div>
+      </div>
+      <div class="pt-2 flex justify-end">
+        <button type="button" data-cerrar="modal-sesion" class="text-xs bg-white text-black font-semibold px-4 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmación genérica -->
+  <div id="modal-confirmar" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-[#1A1A1A] border border-white/[0.1] rounded-sm max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center gap-2 text-white">
+        <i class="ti ti-alert-triangle text-lg"></i>
+        <h3 class="text-sm font-bold">Confirmar</h3>
+      </div>
+      <p id="confirmar-texto" class="text-xs text-zinc-300"></p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" data-cerrar="modal-confirmar" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400 hover:text-white">No</button>
+        <button type="button" id="confirmar-si" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200">Sí</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Capacidad -->
+  <div id="modal-capacidad" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-[#1A1A1A] border border-white/[0.1] rounded-sm max-w-xs w-full p-5 space-y-4 shadow-2xl">
+      <h3 class="text-sm font-bold text-white">Editar máximo diario</h3>
+      <div>
+        <label id="cap-etiqueta" for="cap-valor" class="block text-xs text-zinc-400 mb-1">—</label>
+        <input type="number" id="cap-valor" min="0" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" data-cerrar="modal-capacidad" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+        <button type="button" id="btn-cap-guardar" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nuevo envío -->
+  <div id="modal-envio" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 overflow-y-auto">
+    <form id="form-envio" class="bg-[#1A1A1A] border border-white/[0.1] rounded-sm max-w-2xl w-full p-5 space-y-4 shadow-2xl">
+      <h3 class="text-sm font-bold text-white">Nuevo envío</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div class="sm:col-span-2">
+          <label class="block text-[11px] text-zinc-400 mb-1">Servicio</label>
+          <select id="env-servicio" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Zona</label>
+          <select id="env-zona" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200"></select>
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Paquetes</label>
+          <input type="number" id="env-paquetes" value="1" min="1" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Peso (kg)</label>
+          <input type="number" id="env-peso" step="0.1" min="0.1" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Volumen (m³)</label>
+          <input type="number" id="env-volumen" step="0.01" min="0.01" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Destinatario</label>
+          <input type="text" id="env-destinatario" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Correo del destinatario</label>
+          <input type="email" id="env-email" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Teléfono</label>
+          <input type="text" id="env-telefono" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Precio (opcional)</label>
+          <input type="number" id="env-precio" step="1" min="0" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div>
+          <label class="block text-[11px] text-zinc-400 mb-1">Dirección de origen</label>
+          <input type="text" id="env-origen" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-[11px] text-zinc-400 mb-1">Dirección de destino</label>
+          <input type="text" id="env-destino" required class="w-full bg-[#151515] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+        </div>
+      </div>
+      <p id="env-error" class="hidden text-xs text-rose-300"></p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" data-cerrar="modal-envio" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+        <button type="submit" id="btn-env-guardar" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Crear envío</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Línea de tiempo -->
+  <div id="modal-timeline" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div class="bg-[#1A1A1A] border border-white/[0.1] rounded-sm max-w-3xl w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+        <h3 id="timeline-titulo" class="text-sm font-bold text-white font-mono">Línea de tiempo</h3>
+        <button type="button" data-cerrar="modal-timeline" class="text-zinc-400 hover:text-white p-1"><i class="ti ti-x text-base"></i></button>
+      </div>
+      <p id="timeline-aviso" class="hidden text-xs text-zinc-400"></p>
+      <div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+        <table class="w-full min-w-[640px] text-left text-xs">
+          <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
+            <tr>
+              <th class="px-3 py-2">Fecha</th>
+              <th class="px-3 py-2">Fuente</th>
+              <th class="px-3 py-2">Tipo</th>
+              <th class="px-3 py-2">Routing key</th>
+              <th class="px-3 py-2">Actor</th>
+              <th class="px-3 py-2">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="timeline-tbody" class="divide-y divide-white/[0.04]"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-[#1A1A1A] border border-white/[0.1] text-xs text-white px-4 py-2.5 rounded-sm shadow-2xl flex items-center gap-2 max-w-md">
+    <i id="toast-icono" class="ti ti-check"></i>
+    <span id="toast-texto"></span>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

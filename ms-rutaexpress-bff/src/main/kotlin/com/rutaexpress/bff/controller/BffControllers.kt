@@ -50,11 +50,12 @@ class BffController(
     @Operation(summary = "Detalle de un servicio con tarifas; las capacidades solo las ven Admin y Despachador")
     fun getCatalogService(
         @PathVariable id: Long,
-        authentication: Authentication,
+        authentication: Authentication?,
         @AuthenticationPrincipal jwt: Jwt?
     ): ResponseEntity<Any> {
         val detalle = bffService.fetchCatalogService(id, jwt?.tokenValue ?: "")
-        val veCapacidades = authentication.authorities.any { it.authority == "ROLE_ADMIN" || it.authority == "ROLE_DESPACHADOR" }
+        // Sin seguridad (SECURITY_ENABLED=false) no hay autenticación ni restricción por rol: se muestran las capacidades.
+        val veCapacidades = authentication == null || authentication.authorities.any { it.authority == "ROLE_ADMIN" || it.authority == "ROLE_DESPACHADOR" }
         if (!veCapacidades && detalle is Map<*, *>) {
             return ResponseEntity.ok(detalle.filterKeys { it != "capacities" })
         }

@@ -61,6 +61,7 @@ services:
     hostname: rabbit1
     ports:
       - "${RABBIT1_UI_PORT:-15672}:15672"
+      - "${RABBIT1_AMQP_PORT:-5672}:5672"
     volumes:
       - rabbit1:/var/lib/rabbitmq
       - ../mq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -96,7 +97,7 @@ services:
       AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?defina AUDIT_DB_PASSWORD en infra/vps/.env}
       REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?defina REPORT_DB_PASSWORD en infra/vps/.env}
     ports:
-      - "127.0.0.1:${ORACLE_PORT:-1521}:1521"
+      - "${ORACLE_PORT:-1521}:1521"
     volumes:
       - oracle:/opt/oracle/oradata
       # Crea los usuarios de aplicación en FREEPDB1; solo corre con el volumen vacío (primer arranque).
@@ -114,6 +115,8 @@ services:
     logging: *logging
     mem_limit: 128m
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis:/data
     healthcheck:
@@ -132,6 +135,7 @@ services:
       MP_UI_AUTH: "${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}"
     ports:
       - "${MAILPIT_PORT:-8025}:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
 
   # ---------------------------------------------------------------- Microservicios EP2 (imágenes de deploy-vps.sh)
   bff:

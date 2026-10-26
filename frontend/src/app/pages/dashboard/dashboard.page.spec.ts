@@ -10,6 +10,7 @@ describe('Panel por rol', () => {
       { provide: AuthService, useValue: { roles: ['ADMIN'], hasRole: () => true } },
       { provide: BffService, useValue: {
         dashboard: () => of({ shipmentsOverview: { available: true, data: { total: 3, byStatus: {}, byCapacity: {}, recent: [] } } }),
+        kpis: () => of({ range: 'last24h', totalShipments: 3, shipmentsPerHour: 0.1, avgLeadTimeMinutes: 0, activeShipmentsByStatus: {} }),
         mqMetricas: () => throwError(() => new Error('offline')),
         estadoServicios: () => throwError(() => new Error('offline')),
       } },
@@ -18,6 +19,7 @@ describe('Panel por rol', () => {
     page.cargar();
     expect(page.resumen()?.total).toBe(3);
     expect(page.errorBroker()).not.toBeNull();
+    expect(page.kpis()?.totalShipments).toBe(3);
     expect(page.cargandoBase()).toBeFalse();
   });
   it('no consulta administradores para otros roles', () => {

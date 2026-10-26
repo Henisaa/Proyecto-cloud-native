@@ -74,11 +74,14 @@ class BffDownstreamTests {
     }
 
     @Test
-    fun `dashboard conserva el resto de datos cuando catalogo y reportes fallan`() {
+    fun `dashboard conserva el resto de datos cuando catalogo y auditoria fallan y reportes usa los envios`() {
         server.expect(requestTo("http://catalog/api/shipments/summary"))
             .andRespond(withSuccess("""{"total":3,"byStatus":{"CREADO":3}}""", MediaType.APPLICATION_JSON))
         server.expect(requestTo("http://catalog/api/catalog/services")).andRespond(withServerError())
         server.expect(requestTo("http://catalog/api/report/kpis?range=last24h")).andRespond(withServerError())
+        // Con reportes caído, sus KPIs de respaldo vuelven a pedir el resumen de envíos.
+        server.expect(requestTo("http://catalog/api/shipments/summary"))
+            .andRespond(withSuccess("""{"total":3,"byStatus":{"CREADO":3}}""", MediaType.APPLICATION_JSON))
         server.expect(requestTo("http://catalog/api/audit?page=0&size=10")).andRespond(withServerError())
         val jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("token")
             .header("alg", "none")
@@ -92,9 +95,22 @@ class BffDownstreamTests {
 
         assertThat(dashboard.shipmentsOverview?.available).isTrue()
         assertThat(dashboard.catalogOverview?.available).isFalse()
-        assertThat(dashboard.reportOverview?.available).isFalse()
+        assertThat(dashboard.reportOverview?.available).isTrue()
         assertThat(dashboard.auditOverview?.available).isFalse()
-        assertThat(dashboard.notices).hasSize(3)
+        assertThat(dashboard.notices).hasSize(2)
+        server.verify()
+    }
+
+    @Test
+    fun `sin report desplegado los KPIs se calculan con los envios`() {
+        val sinReport = DefaultBffGatewayService(client, client, client, client, client, "", "", "http://catalog", "", "", "", "", false, "")
+        server.expect(requestTo("http://catalog/api/shipments/summary"))
+            .andRespond(withSuccess("""{"total":4,"byStatus":{"CREADO":3,"ENTREGADO":1}}""", MediaType.APPLICATION_JSON))
+
+        val kpis = sinReport.fetchKpis("last24h", "token") as Map<*, *>
+
+        assertThat(kpis["totalShipments"]).isEqualTo(4L)
+        assertThat(kpis["shipmentsPerHour"]).isEqualTo(0.17)
         server.verify()
     }
 

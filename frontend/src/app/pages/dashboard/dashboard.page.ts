@@ -5,7 +5,7 @@ import { timer } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { BffService } from '../../core/bff.service';
 import { interpretarError } from '../../core/http-error';
-import { Dashboard, EstadoServicios, MqMetricas, ResumenEnvios } from '../../core/models';
+import { Dashboard, EstadoServicios, Kpis, MqMetricas, ResumenEnvios } from '../../core/models';
 import { esSoloCliente } from '../../core/roles';
 import { etiquetaCapacidad, pillCapacidad, pillEstado } from '../../shared/estado-ui';
 import { decimal, fechaHora, numero } from '../../shared/format';
@@ -100,8 +100,8 @@ const ESTADOS_TARJETA = ['CREADO', 'ACEPTADO', 'EN_BODEGA', 'EN_RUTA', 'ENTREGAD
       @if (auth.hasRole('Admin')) {
         <section aria-labelledby="titulo-kpis" class="space-y-3">
           <h2 id="titulo-kpis" class="text-sm font-bold text-zinc-800">Indicadores (últimas 24 horas)</h2>
-          <app-vista-estado [cargando]="cargandoBase()" [error]="errorKpis()" (reintentar)="cargar()">
-            @if (panel()?.reportOverview?.data; as k) {
+          <app-vista-estado [cargando]="cargandoBase()" [error]="errorKpis() ?? errorIndicadores()" (reintentar)="cargar()">
+            @if (kpis(); as k) {
               <div class="grid gap-3 sm:grid-cols-3">
                 <div class="card"><p class="label">Envíos totales</p><p class="font-mono text-2xl font-bold">{{ numero(k.totalShipments) }}</p></div>
                 <div class="card"><p class="label">Envíos por hora</p><p class="font-mono text-2xl font-bold">{{ decimal(k.shipmentsPerHour) }}</p></div>
@@ -206,6 +206,10 @@ export class DashboardPage implements OnInit {
     const bloque = this.panel()?.reportOverview;
     return bloque && !bloque.available ? 'Los reportes no están disponibles (la EP1 puede estar apagada).' : null;
   });
+  readonly indicadores = signal<Kpis | null>(null);
+  readonly errorIndicadores = signal<string | null>(null);
+  /** Indicadores de 24 h: los trae el panel si el BFF incluye el reporte; si no, se piden al servicio de reportes. */
+  readonly kpis = computed<Kpis | null>(() => this.panel()?.reportOverview?.data ?? this.indicadores());
   readonly capacidades = computed<[string, number][]>(() =>
     Object.entries(this.resumen()?.byCapacity ?? {}).filter(([clave, valor]) => clave !== 'NO_APLICA' && valor > 0)
   );
@@ -254,6 +258,13 @@ export class DashboardPage implements OnInit {
     });
 
     if (this.auth.hasRole('Admin')) {
+      this.bff.kpis('last24h').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (k) => {
+          this.indicadores.set(k);
+          this.errorIndicadores.set(null);
+        },
+        error: (err: unknown) => this.errorIndicadores.set(interpretarError(err).mensaje),
+      });
       this.bff.mqMetricas(true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (m) => {
           this.broker.set(m);

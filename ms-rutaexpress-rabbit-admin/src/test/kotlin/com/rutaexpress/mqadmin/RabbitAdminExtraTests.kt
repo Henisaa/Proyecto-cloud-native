@@ -191,4 +191,20 @@ class RabbitAdminExtraTests {
 
         verify(servicioAdmin, times(3)).reconciliar()
     }
+
+    @Test
+    fun `el listado incluye las colas creadas desde la API y deja fuera las internas amq`() {
+        val gestion = mock<ClienteGestion>()
+        whenever(gestion.lista(RutasGestion.colasDelVhost("/"))).thenReturn(
+            listOf(mapOf("name" to "q.v2.prueba"), mapOf("name" to "amq.gen-XYZ"))
+        )
+        whenever(gestion.objeto(RutasGestion.cola("/", "q.v2.prueba"))).thenReturn(mapOf("messages" to 2, "consumers" to 0))
+        val servicioMonitor = MqAdminService(gestion, topologia, SimpleMeterRegistry(), "/", 1)
+
+        val colas = servicioMonitor.colas().associateBy { it["name"] }
+
+        assertThat(colas["q.v2.prueba"]?.get("declared")).isEqualTo(true)
+        assertThat(colas["q.v2.prueba"]?.get("messages")).isEqualTo(2L)
+        assertThat(colas).doesNotContainKey("amq.gen-XYZ")
+    }
 }

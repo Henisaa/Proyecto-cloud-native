@@ -11,7 +11,11 @@ import { interpretarError } from '../../core/http-error';
       <input id="grupo" name="grupo" class="input" [(ngModel)]="grupo" required />
       <button class="btn-primary mt-2" [disabled]="!grupo.trim()">Consultar retraso</button></form>
     @if (error()) { <p role="alert">{{ error() }}</p> }
+    @if (datos() === null) {
+    <p class="text-xs text-zinc-500">Pulsa «Consultar tópicos» o escribe un grupo para ver su retraso.</p>
+  } @else {
     <pre class="overflow-x-auto text-xs" aria-live="polite">{{ datos() | json }}</pre>
+  }
   </section>` })
 export class AdminKafkaPage {
   private readonly bff = inject(BffService);

@@ -59,8 +59,11 @@ class MqAdminService(
                 )
             }
 
-    /** Estado de las colas de la topología fija. Una cola no declarada aparece con declared=false. */
-    fun colas(): List<Map<String, Any?>> = topologia.colasDeMonitoreo().map { nombre ->
+    /**
+     * Colas de la topología fija (una no declarada aparece con declared=false) y las demás colas del vhost, como las
+     * que crea la API. Sin estas últimas, una cola recién creada no aparecería nunca en el listado.
+     */
+    fun colas(): List<Map<String, Any?>> = (topologia.colasDeMonitoreo() + otrasColas()).map { nombre ->
         val datos = cliente.objeto(RutasGestion.cola(vhost, nombre))
         val mensajes = numero(datos, "messages")
         profundidadDlq[nombre]?.set(mensajes)
@@ -74,6 +77,15 @@ class MqAdminService(
             "alert" to (nombre.endsWith(".dlq") && mensajes >= umbralAlerta),
             "arrivedTotal" to llegados(datos),
         )
+    }
+
+    /** Colas del vhost que no son de la topología fija (las creadas desde la API), sin las internas amq.*. */
+    private fun otrasColas(): List<String> {
+        val fijas = topologia.colasDeMonitoreo().toSet()
+        return cliente.lista(RutasGestion.colasDelVhost(vhost))
+            .mapNotNull { it["name"] as? String }
+            .filter { it !in fijas && !it.startsWith("amq.") }
+            .sorted()
     }
 
     /**
