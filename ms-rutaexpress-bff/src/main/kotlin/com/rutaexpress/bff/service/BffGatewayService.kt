@@ -1,5 +1,7 @@
 package com.rutaexpress.bff.service
 
+import com.rutaexpress.bff.config.normalizeRole
+import org.springframework.security.access.AccessDeniedException
 import com.rutaexpress.bff.model.dto.DashboardBlock
 import com.rutaexpress.bff.model.dto.DashboardSummaryDto
 import com.rutaexpress.bff.model.dto.GatewayHealthDto
@@ -42,6 +44,7 @@ interface BffGatewayService {
     fun fetchShipments(filtros: Map<String, String>, token: String): Any
     fun fetchShipmentsSummary(token: String): Any
     fun fetchShipment(id: String, token: String): Any
+    fun resolveAuditReference(reference: String, token: String): Any
     fun fetchShipmentTimeline(id: String, token: String): Any
     fun createShipment(body: Map<String, Any?>, token: String): Any
     fun changeShipmentStatus(id: String, status: String, token: String): Any
@@ -75,14 +78,14 @@ class DefaultBffGatewayService(
                 username = "usuario-invitado",
                 name = "Usuario Invitado",
                 email = null,
-                roles = listOf("CLIENTE"),
+                roles = emptyList(),
                 scopes = emptyList(),
                 tenantId = null
             )
         }
 
         val roles = when (val claim = jwt.claims["roles"]) {
-            is List<*> -> claim.filterIsInstance<String>()
+            is List<*> -> claim.filterIsInstance<String>().mapNotNull(::normalizeRole).distinct()
             else -> emptyList()
         }
 
@@ -118,14 +121,9 @@ class DefaultBffGatewayService(
      */
     override fun buildDashboard(jwt: Jwt?): DashboardSummaryDto {
         val profile = getUserProfile(jwt)
-        val normalizedRoles = profile.roles.map {
-            when (val role = it.trim().removePrefix("ROLE_").uppercase()) {
-                "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
-                "CLIENTE DEL DOMINIO" -> "CLIENTE"
-                else -> role
-            }
-        }
-        val primaryRole = listOf("ADMIN", "DESPACHADOR", "AUDITOR", "CLIENTE").firstOrNull { it in normalizedRoles } ?: "CLIENTE"
+        val normalizedRoles = profile.roles.toSet()
+        val primaryRole = listOf("ADMIN", "DESPACHADOR", "AUDITOR", "CLIENTE").firstOrNull { it in normalizedRoles }
+            ?: throw AccessDeniedException("No tiene un rol válido de RutaExpress")
         val token = jwt?.tokenValue ?: ""
         val avisos = mutableListOf<String>()
 
@@ -137,10 +135,10 @@ class DefaultBffGatewayService(
             DashboardBlock(available = false, message = "$nombre no disponible")
         }
 
-        val envios = bloque("los envíos") { fetchShipmentsSummary(token) }
-        val catalogo = if (primaryRole in listOf("ADMIN", "DESPACHADOR")) bloque("el catálogo") { fetchCatalogServices(token) } else null
-        val reportes = if (primaryRole == "ADMIN") bloque("los indicadores de reportes") { fetchKpis("last24h", token) } else null
-        val auditoria = if (primaryRole in listOf("ADMIN", "AUDITOR")) bloque("la auditoría") { fetchAuditSummary(token) } else null
+        val envios = if (normalizedRoles.any { it in setOf("ADMIN", "DESPACHADOR", "CLIENTE") }) bloque("los envíos") { fetchShipmentsSummary(token) } else null
+        val catalogo = if (normalizedRoles.any { it in setOf("ADMIN", "DESPACHADOR") }) bloque("el catálogo") { fetchCatalogServices(token) } else null
+        val reportes = if ("ADMIN" in normalizedRoles) bloque("los indicadores de reportes") { fetchKpis("last24h", token) } else null
+        val auditoria = if (normalizedRoles.any { it in setOf("ADMIN", "AUDITOR") }) bloque("la auditoría") { fetchAuditSummary(token) } else null
 
         return DashboardSummaryDto(
             role = primaryRole,
@@ -287,6 +285,11 @@ class DefaultBffGatewayService(
      * Línea de tiempo unificada: eventos de RabbitMQ (shipments) más la auditoría de Kafka de la EP1 (audit).
      * Si audit está apagado, se devuelve solo la de RabbitMQ y se indica con kafkaAvailable=false.
      */
+    override fun resolveAuditReference(reference: String, token: String): Any = llamarGet("ms-rutaexpress-shipments") {
+        shipmentsClient.get().uri("/api/shipments/audit/resolve/{reference}", reference)
+            .header("Authorization", "Bearer $token").retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+    }
+
     override fun fetchShipmentTimeline(id: String, token: String): Any {
         val rabbit = llamarGet("ms-rutaexpress-shipments") {
             shipmentsClient.get()

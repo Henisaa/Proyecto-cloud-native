@@ -40,6 +40,10 @@ import {
  */
 @Injectable({ providedIn: 'root' })
 export class BffService {
+  resolverAuditoria(reference: string) {
+    return this.http.get<{ id: string; trackingCode: string }>(`${runtimeConfig.apiBaseUrl}/api/bff/audit/resolve/${encodeURIComponent(reference)}`);
+  }
+
   private readonly http = inject(HttpClient);
 
   private get bff(): string {

@@ -2,7 +2,7 @@
 window.RUTAEXPRESS_CONFIG = {
   /* Backend del BFF de producción. En local se llama directo por HTTP (CORS permite localhost). Publicada en Vercel
      la ruta relativa /api la reenvía vercel.json al BFF: un navegador https no puede llamar a un http directo. */
-  apiBaseUrl: /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname) ? 'http://3.232.45.160:8080' : '',
+  apiBaseUrl: /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname) ? 'http://localhost:8080' : '',
 
   /* 'none': sin seguridad (desarrollo, SECURITY_ENABLED=false). 'msal': Microsoft Entra ID (producción). */
   authMode: 'msal',

@@ -41,11 +41,19 @@ class SecurityConfig {
 	private fun rolesConverter(): Converter<Jwt, AbstractAuthenticationToken> = Converter { jwt ->
 		val authorities = jwt.getClaimAsStringList(ROLES_CLAIM)
 			.orEmpty()
-			.map { SimpleGrantedAuthority("ROLE_" + it.uppercase()) }
+			.mapNotNull { normalizeRole(it) }.distinct()
+			.map { SimpleGrantedAuthority("ROLE_$it") }
 		JwtAuthenticationToken(jwt, authorities, jwt.subject ?: jwt.tokenValue)
 	}
 
 	private companion object {
 		const val ROLES_CLAIM = "roles"
 	}
+}
+
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
+    "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
+    "CLIENTE DEL DOMINIO" -> "CLIENTE"
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

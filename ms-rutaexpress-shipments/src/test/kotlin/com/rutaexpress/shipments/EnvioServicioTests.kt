@@ -201,9 +201,42 @@ class EnvioServicioTests {
         assertThat(servicio.obtener("shipment-1").id).isEqualTo("shipment-1")
     }
 
+    @Test
+    fun `cliente con auditor sigue limitado a sus envios fuera del timeline`() {
+        val jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("mixed").header("alg", "none")
+            .claim("oid", "oid-cliente-a").subject("mixed").build()
+        org.springframework.security.core.context.SecurityContextHolder.getContext().authentication =
+            org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt,
+                listOf("ROLE_CLIENTE", "ROLE_AUDITOR").map { org.springframework.security.core.authority.SimpleGrantedAuthority(it) })
+        prepararGuardado(envio(EstadoEnvio.CREADO).apply { ownerOid = "oid-cliente-b" })
+        assertThatThrownBy { servicio.obtener("shipment-1") }.isInstanceOf(EnvioNoEncontradoException::class.java)
+    }
+
     private fun prepararGuardado(envio: Envio) {
         whenever(repositorio.findById("shipment-1")).thenReturn(Optional.of(envio))
         whenever(repositorio.saveAndFlush(any<Envio>())).thenAnswer { it.getArgument<Envio>(0) }
+    }
+
+    @Test
+    fun `referencia de auditoria por id solo devuelve identificadores`() {
+        whenever(repositorio.findById("shipment-1")).thenReturn(Optional.of(envio(EstadoEnvio.CREADO)))
+        assertThat(servicio.referenciaAuditoria("shipment-1"))
+            .containsExactlyInAnyOrderEntriesOf(mapOf("id" to "shipment-1", "trackingCode" to "RX-TEST1234"))
+        verify(repositorio, never()).findByTrackingCodeIgnoreCase(any())
+    }
+
+    @Test
+    fun `referencia de auditoria resuelve codigo sin listar envios`() {
+        whenever(repositorio.findById("rx-test1234")).thenReturn(Optional.empty())
+        whenever(repositorio.findByTrackingCodeIgnoreCase("rx-test1234")).thenReturn(Optional.of(envio(EstadoEnvio.CREADO)))
+        assertThat(servicio.referenciaAuditoria("rx-test1234")["id"]).isEqualTo("shipment-1")
+    }
+
+    @Test
+    fun `referencia de auditoria inexistente devuelve no encontrado`() {
+        whenever(repositorio.findById("unknown")).thenReturn(Optional.empty())
+        whenever(repositorio.findByTrackingCodeIgnoreCase("unknown")).thenReturn(Optional.empty())
+        assertThatThrownBy { servicio.referenciaAuditoria("unknown") }.isInstanceOf(EnvioNoEncontradoException::class.java)
     }
 
     private fun envio(estado: EstadoEnvio, capacidad: EstadoCapacidad = EstadoCapacidad.NO_APLICA) = Envio(

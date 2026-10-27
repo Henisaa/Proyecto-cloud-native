@@ -101,24 +101,10 @@ export class AuditPage {
     this.error.set(null);
     this.envio.set(null);
 
-    // Un código RX-… se resuelve primero al id interno del envío; si no, se usa el valor tal cual.
-    if (/^RX-/i.test(valor)) {
-      this.bff.listarEnvios({ q: valor, size: 1 }, true).subscribe({
-        next: (pagina) => {
-          const encontrado = pagina.content.find((e) => e.trackingCode.toUpperCase() === valor.toUpperCase());
-          if (!encontrado) {
-            this.cargando.set(false);
-            this.eventos.set([]);
-            return;
-          }
-          this.envio.set(encontrado);
-          this.cargarLinea(encontrado.id);
-        },
-        error: (err: unknown) => this.fallar(err),
-      });
-    } else {
-      this.cargarLinea(valor);
-    }
+    this.bff.resolverAuditoria(valor).subscribe({
+      next: (referencia) => this.cargarLinea(referencia.id),
+      error: (err: unknown) => this.fallar(err),
+    });
   }
 
   private cargarLinea(id: string): void {

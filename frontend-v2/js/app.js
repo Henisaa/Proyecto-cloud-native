@@ -80,11 +80,11 @@
   /* Misma matriz que el BFF (plan, §1.3). En modo sin seguridad solo decide lo que se muestra. */
   var PERMISOS = {
     panel: ['ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR'],
-    envios: ['ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR'],
+    envios: ['ADMIN', 'DESPACHADOR', 'CLIENTE'],
     crearEnvio: ['ADMIN', 'DESPACHADOR', 'CLIENTE'],
     cambiarEstado: ['ADMIN', 'DESPACHADOR'],
-    timeline: ['ADMIN', 'DESPACHADOR', 'AUDITOR'],
-    catalogo: ['ADMIN', 'DESPACHADOR', 'CLIENTE'],
+    timeline: ['ADMIN', 'AUDITOR'],
+    catalogo: ['ADMIN', 'DESPACHADOR'],
     editarCapacidad: ['ADMIN'],
     reportes: ['ADMIN'],
     auditoria: ['ADMIN', 'AUDITOR'],
@@ -176,7 +176,7 @@
       function () { estado.perfil = null; }
     ).then(function () {
       if (cfg.authMode === 'msal') {
-        estado.roles = ((estado.perfil && estado.perfil.roles) || []).map(function (r) { return String(r).toUpperCase(); });
+        estado.roles = ((estado.perfil && estado.perfil.roles) || []).map(RXRoles.normalizar).filter(Boolean);
       } else {
         estado.roles = [devRol()];
       }
@@ -231,6 +231,7 @@
   function mostrarVista(vista) {
     if (!puede(vista)) {
       toast('Tu rol no tiene acceso a esta sección.', true);
+      if (!puede('panel')) return;
       vista = 'panel';
     }
     limpiarTimers();
@@ -271,7 +272,7 @@
 
   function cargarPanel() {
     var tareas = [];
-    tareas.push(RX.get('/api/bff/shipments/summary').then(pintarPanelEnvios, function (e) {
+    if (puede('envios')) tareas.push(RX.get('/api/bff/shipments/summary').then(pintarPanelEnvios, function (e) {
       $('#kpi-envios-sub').textContent = e.message;
     }));
 
@@ -687,17 +688,7 @@
     var q = $('#auditoria-q').value.trim();
     if (!q) return toast('Escribe un código de seguimiento o un id de envío.', true);
     $('#auditoria-tbody').innerHTML = vacioFila(6, 'Buscando…');
-    return RX.get('/api/bff/shipments', { q: q, size: 10 }).then(function (pag) {
-      var coincidencia = (pag.content || []).filter(function (x) {
-        return x.id === q || String(x.trackingCode).toUpperCase() === q.toUpperCase();
-      })[0];
-      if (!coincidencia) {
-        estado.auditoria = null;
-        $('#auditoria-tbody').innerHTML = '';
-        $('#auditoria-resumen').classList.add('hidden');
-        ocultarAviso('#auditoria-aviso');
-        return toast('No se encontró un envío con ese código.', true);
-      }
+    return RX.get('/api/bff/audit/resolve/' + encodeURIComponent(q)).then(function (coincidencia) {
       return RX.get('/api/bff/shipments/' + encodeURIComponent(coincidencia.id) + '/timeline').then(function (linea) {
         estado.auditoria = { envio: coincidencia, linea: linea };
         pintarAuditoria();
@@ -714,9 +705,7 @@
     var e = a.envio;
     var resumen = $('#auditoria-resumen');
     resumen.classList.remove('hidden');
-    resumen.innerHTML = '<span class="font-mono text-white font-semibold">' + esc(e.trackingCode) + '</span> · ' +
-      insignia(ESTADO_TEXTO[e.status] || e.status, estiloEstado(e.status)) + ' · creado ' + esc(fecha(e.createdAt)) +
-      ' · ' + esc(e.destinationAddress);
+    resumen.innerHTML = '<span class="font-mono text-white font-semibold">' + esc(e.trackingCode) + '</span>';
     var fuente = $('#auditoria-fuente').value;
     var eventos = (a.linea.events || []).filter(function (ev) { return fuente === 'TODAS' || ev.source === fuente; });
     $('#auditoria-tbody').innerHTML = eventos.map(filaEvento).join('') || vacioFila(6, 'Sin eventos para este filtro.');
@@ -1343,6 +1332,10 @@
     }).then(function (listo) {
       if (!listo) return;
       aplicarPermisos();
+      if (!estado.roles.length) {
+        avisoGlobal('Tu sesión no tiene un rol válido de RutaExpress. Solicita la asignación a un administrador.');
+        return;
+      }
       saludo();
       mostrarVista(vistaDesdeHash());
     }).catch(function (e) {

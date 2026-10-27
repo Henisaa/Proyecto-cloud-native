@@ -23,6 +23,15 @@ class BffDownstreamTests {
     private val gateway = DefaultBffGatewayService(client, client, client, client, client, "", "", "http://catalog", "http://catalog", "", "", "", false, "")
 
     @Test
+    fun `resuelve referencia de auditoria con Bearer sin consultar el listado general`() {
+        server.expect(requestTo("http://catalog/api/shipments/audit/resolve/RX-TEST"))
+            .andExpect(header("Authorization", "Bearer token"))
+            .andRespond(withSuccess("""{"id":"s-1","trackingCode":"RX-TEST"}""", MediaType.APPLICATION_JSON))
+        assertThat(gateway.resolveAuditReference("RX-TEST", "token")).isInstanceOf(Map::class.java)
+        server.verify()
+    }
+
+    @Test
     fun `entrega lista del catalogo y conserva Bearer`() {
         server.expect(requestTo("http://catalog/api/catalog/services")).andExpect(header("Authorization", "Bearer token"))
             .andRespond(withSuccess("""{"success":true,"data":[{"id":1}]}""", MediaType.APPLICATION_JSON))
@@ -142,4 +151,25 @@ class BffDownstreamTests {
         assertThat(estado.azureIdaasConfigured).isFalse()
         assertThat(estado.services).isEmpty()
     }
+    @Test
+    fun `perfil normaliza alias y no inventa cliente para un usuario sin roles`() {
+        val jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("token").header("alg", "none")
+            .claim("roles", listOf("Operador del dominio", "Cliente del dominio", "INVENTADO")).build()
+        assertThat(gateway.getUserProfile(jwt).roles).containsExactly("DESPACHADOR", "CLIENTE")
+        assertThat(gateway.getUserProfile(null).roles).isEmpty()
+        assertThrows(org.springframework.security.access.AccessDeniedException::class.java) { gateway.buildDashboard(null) }
+    }
+
+    @Test
+    fun `dashboard de auditor no consulta el resumen de envios`() {
+        server.expect(requestTo("http://catalog/api/audit?page=0&size=10"))
+            .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON))
+        val jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("token").header("alg", "none")
+            .claim("roles", listOf("Auditor")).build()
+        val dashboard = gateway.buildDashboard(jwt)
+        assertThat(dashboard.shipmentsOverview).isNull()
+        assertThat(dashboard.auditOverview?.available).isTrue()
+        server.verify()
+    }
+
 }

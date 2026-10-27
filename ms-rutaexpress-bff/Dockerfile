@@ -7,17 +7,14 @@ FROM eclipse-temurin:21-jdk AS deps
 WORKDIR /app
 COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
-RUN chmod +x gradlew \
- && ./gradlew --no-daemon --version \
- && (./gradlew --no-daemon dependencies --configuration compileClasspath > /dev/null \
-     && ./gradlew --no-daemon dependencies --configuration runtimeClasspath > /dev/null \
-     && ./gradlew --no-daemon dependencies --configuration testRuntimeClasspath > /dev/null || true)
+RUN --mount=type=cache,id=rutaexpress-gradle,target=/root/.gradle,sharing=locked chmod +x gradlew \
+ && ./gradlew --no-daemon --version
 
 # 2) Compilación, pruebas (unitarias y de integración ligera) y jar. Las pruebas con Testcontainers
 #    se omiten solas sin Docker; se ejecutan en el job de integración del CI.
 FROM deps AS build
 COPY src ./src
-RUN ./gradlew --no-daemon build
+RUN --mount=type=cache,id=rutaexpress-gradle,target=/root/.gradle,sharing=locked ./gradlew --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process build
 
 # 3) Reportes de pruebas (opcional): docker build --target reports --output type=local,dest=out .
 FROM scratch AS reports

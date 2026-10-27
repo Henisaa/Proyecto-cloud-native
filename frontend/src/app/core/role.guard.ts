@@ -7,7 +7,7 @@ import { tieneAlgunRol } from './roles';
  * Los roles se declaran una sola vez, en `data.roles` de cada ruta. Este guard, el menú y el backend comparten la
  * misma normalización (Operador = Despachador, Cliente del dominio = Cliente). Sin permiso se muestra la página 403.
  */
-export const roleGuard: CanActivateFn = (route) => {
+export const roleGuard: CanActivateFn = async (route) => {
   const auth = inject(AuthService);
   const router = inject(Router);
   const requeridos = (route.data['roles'] as string[] | undefined) ?? [];
@@ -15,6 +15,7 @@ export const roleGuard: CanActivateFn = (route) => {
   if (!auth.hasSession()) {
     return router.createUrlTree(['/']);
   }
+  await auth.cargarRoles();
   if (requeridos.length === 0 || tieneAlgunRol(auth.roles, requeridos)) {
     return true;
   }

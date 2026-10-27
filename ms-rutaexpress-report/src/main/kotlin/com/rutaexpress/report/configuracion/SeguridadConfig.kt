@@ -26,9 +26,8 @@ class SeguridadConfig {
         }
         .oauth2ResourceServer { resource -> resource.jwt { config ->
             config.jwtAuthenticationConverter { jwt ->
-                val roles = jwt.getClaimAsStringList("roles").orEmpty().map {
-                    SimpleGrantedAuthority("ROLE_" + normalizeRole(it))
-                }
+                val roles = jwt.getClaimAsStringList("roles").orEmpty().mapNotNull { normalizeRole(it) }
+                    .distinct().map { SimpleGrantedAuthority("ROLE_$it") }
                 JwtAuthenticationToken(jwt, roles, jwt.subject ?: "usuario")
             }
         } }
@@ -40,8 +39,9 @@ class SeguridadConfig {
         .authorizeHttpRequests { it.anyRequest().permitAll() }.build()
 }
 
-private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
     "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
     "CLIENTE DEL DOMINIO" -> "CLIENTE"
-    else -> value
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

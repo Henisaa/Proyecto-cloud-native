@@ -134,8 +134,7 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
         if (rolesClaim is List<*>) {
             rolesClaim.forEach { role ->
                 if (role is String && role.isNotBlank()) {
-                    val roleName = "ROLE_${normalizeRole(role)}"
-                    authorities.add(SimpleGrantedAuthority(roleName))
+                    normalizeRole(role)?.let { authorities.add(SimpleGrantedAuthority("ROLE_$it")) }
                 }
             }
         }
@@ -159,8 +158,9 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
 }
 
 
-private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
     "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
     "CLIENTE DEL DOMINIO" -> "CLIENTE"
-    else -> value
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

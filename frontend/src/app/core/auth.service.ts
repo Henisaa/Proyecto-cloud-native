@@ -24,6 +24,7 @@ export class AuthService {
   readonly error = signal<string | null>(null);
   readonly enProceso = signal<boolean>(false);
   readonly infoToken = signal<InfoToken | null>(null);
+  private readonly rolesToken = signal<string[]>([]);
 
   init(): void {
     this.msal.handleRedirectObservable().subscribe({
@@ -126,6 +127,7 @@ export class AuthService {
   }
 
   logout(): void {
+    this.rolesToken.set([]);
     const account = this.account() ?? undefined;
     void this.msal.logoutRedirect({ account });
   }
@@ -162,12 +164,22 @@ export class AuthService {
     return typeof claimEmail === 'string' ? claimEmail : this.username;
   }
 
-  /** Roles tal como vienen en el token, ya normalizados (misma regla que el backend). */
-  get roles(): string[] {
-    const claims = (this.cuentaActual()?.idTokenClaims ?? {}) as Record<string, unknown>;
-    const roles = claims['roles'];
-    return Array.isArray(roles) ? (roles as string[]).map(normalizarRol) : [];
+  /** Roles del access token de la API, igual que el backend. Nunca se usan los del ID token. */
+  async cargarRoles(): Promise<void> {
+    const account = this.cuentaActual();
+    this.rolesToken.set([]);
+    if (!account) return;
+    try {
+      const resultado = await firstValueFrom(this.msal.acquireTokenSilent({ scopes: [runtimeConfig.scope], account }));
+      const claims = decodificarPayload(resultado.accessToken);
+      const roles = Array.isArray(claims['roles']) ? claims['roles'] : [];
+      this.rolesToken.set(roles.filter((r): r is string => typeof r === 'string').map(normalizarRol).filter(Boolean));
+    } catch {
+      this.rolesToken.set([]);
+    }
   }
+
+  get roles(): string[] { return this.rolesToken(); }
 
   hasRole(...requeridos: string[]): boolean {
     return tieneAlgunRol(this.roles, requeridos);

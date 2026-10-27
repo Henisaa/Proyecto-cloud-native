@@ -25,6 +25,7 @@ flowchart LR
 | Carpeta | Responsabilidad | Puerto interno |
 |---|---|---|
 | frontend | Angular 19, MSAL, envíos, catálogo y administración de colas | 8080 |
+| frontend-v2 | Consola JavaScript con MSAL y proxy nginx; interfaz del Compose local | 8080 |
 | ms-rutaexpress-bff | JWT, roles, agregación y proxy del dominio | 8080 |
 | ms-rutaexpress-catalog | Servicios, tarifas y reservas de capacidad | 8081 |
 | ms-rutaexpress-notify | Correos y PDF desde RabbitMQ | 8082 |
@@ -37,9 +38,21 @@ flowchart LR
 
 Kotlin 2.3.21, JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, Oracle/JPA/Flyway, RabbitMQ 4, Kafka 3.9.2/ZooKeeper, Redis y Mailpit.
 
+## Ejecutar todo en local
+
+Con Docker Desktop (contenedores Linux), desde la raíz:
+
+```sh
+docker compose up --build
+```
+
+Abre **http://localhost:4200**: este Compose sirve **frontend-v2** y levanta los ocho backends, Oracle, Redis, Mailpit, RabbitMQ (dos nodos), Kafka (tres brokers), ZooKeeper y Kafka UI. Crea automáticamente su red y cookie persistente. No requiere preparar `.env` ni ejecutar Bash; los valores públicos de Entra ID del proyecto vienen predeterminados.
+
+El login conserva **Microsoft Entra ID**, requiere internet y la URI `http://localhost:4200` registrada como SPA. Los recursos CDN de v2 también requieren internet. Asignar inicialmente 16 GiB de memoria a Docker. Comandos, credenciales locales, puertos, configuración opcional y matriz de permisos: [guía local](infra/LOCAL.md).
+
 ## Construcción, pruebas y ejecución
 
-GitHub Actions ejecuta la suite completa en cada push y PR: nueve compilaciones Docker, ocho suites backend con Testcontainers y cobertura, Karma/Chromium, smoke nginx y stack integrado con Playwright en cuatro navegadores/dispositivos. Solo publica las imágenes candidatas en GHCR con etiqueta `sha-<commit corto>` después de aprobar el control global. Fallos, omisiones, pruebas inestables y regresiones de cobertura bloquean la publicación. Alcance, artefactos y límites: [ci/README.md](ci/README.md). No instalar JDK, Gradle ni Node en el PC.
+GitHub Actions ejecuta la suite completa en cada push y PR: diez compilaciones Docker (incluye frontend-v2), ocho suites backend con Testcontainers y cobertura, Karma/Chromium, smoke nginx y stack integrado con Playwright en cuatro navegadores/dispositivos. Solo publica las imágenes candidatas en GHCR con etiqueta `sha-<commit corto>` después de aprobar el control global. Fallos, omisiones, pruebas inestables y regresiones de cobertura bloquean la publicación. Alcance, artefactos y límites: [ci/README.md](ci/README.md). No instalar JDK, Gradle ni Node en el PC.
 
 En EC2, configurar `infra/.env` a partir de su ejemplo y ejecutar:
 
@@ -60,7 +73,7 @@ MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y c
 
 CI verde certifica solo las comprobaciones automatizadas de su commit: no prueba el tenant, DNS, Gateway ni EC2.
 
-Modo local (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
+Modo local anterior con Angular (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
 
 Despliegue en una VPS (Azure, AWS EC2 u otra Linux): `bash deploy-vps.sh` instala Docker si falta y levanta el clúster RabbitMQ de dos nodos, Oracle, Redis, Mailpit y los cinco microservicios EP2 (sin frontend) con sus puertos publicados en `http://<ip>:<puerto>`. Configuración en `infra/vps/.env` (se genera la primera vez) y servicios en `infra/vps/compose.yml`.
 

@@ -212,4 +212,5 @@ class CatalogViewControllerTests {
             .andExpect(jsonPath("$.data.serviceCode").value("SRV-EXP-01"))
             .andExpect(jsonPath("$.data.available").value(true))
     }
+
 }

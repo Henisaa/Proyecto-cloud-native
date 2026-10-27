@@ -19,7 +19,8 @@ describe('Flujos de páginas y formularios EP2', () => {
   let api: jasmine.SpyObj<BffService>;
   const failure = () => throwError(() => new HttpErrorResponse({ status: 409, error: { detail: 'Conflicto de prueba' } }));
   beforeEach(() => {
-    api = jasmine.createSpyObj<BffService>('BffService', ['servicios', 'crearEnvio', 'servicio', 'editarCapacidad', 'listarEnvios', 'lineaDeTiempo', 'kpis', 'topServicios', 'mqColas', 'mqMetricas', 'mqExchanges', 'mqBindings', 'mqPoliticas', 'crearCola', 'eliminarCola', 'crearExchange', 'eliminarExchange', 'crearBinding', 'eliminarBinding', 'aplicarRetencion', 'aplicarTopologia', 'kafkaTopics', 'kafkaLag']);
+    api = jasmine.createSpyObj<BffService>('BffService', ['resolverAuditoria', 'servicios', 'crearEnvio', 'servicio', 'editarCapacidad', 'listarEnvios', 'lineaDeTiempo', 'kpis', 'topServicios', 'mqColas', 'mqMetricas', 'mqExchanges', 'mqBindings', 'mqPoliticas', 'crearCola', 'eliminarCola', 'crearExchange', 'eliminarExchange', 'crearBinding', 'eliminarBinding', 'aplicarRetencion', 'aplicarTopologia', 'kafkaTopics', 'kafkaLag']);
+    api.resolverAuditoria.and.returnValue(of({ id: 's1', trackingCode: 'RX-TEST' }));
     api.servicios.and.returnValue(of([])); api.mqExchanges.and.returnValue(of([])); api.mqColas.and.returnValue(of([]));
     api.mqMetricas.and.returnValue(of({ queues: [] } as any)); api.mqBindings.and.returnValue(of([])); api.mqPoliticas.and.returnValue(of([]));
     TestBed.configureTestingModule({ providers: [provideRouter([]),
@@ -82,13 +83,13 @@ describe('Flujos de páginas y formularios EP2', () => {
   it('auditoría exige término y resuelve seguimiento al id interno', () => {
     const page = TestBed.runInInjectionContext(() => new AuditPage()); page.buscar();
     expect(page.errorCampo()).not.toBeNull(); expect(api.lineaDeTiempo).not.toHaveBeenCalled();
-    api.listarEnvios.and.returnValue(of({ content: [{ id: 's1', trackingCode: 'RX-TEST' }] } as any));
+    api.resolverAuditoria.and.returnValue(of({ id: 's1', trackingCode: 'RX-TEST' }));
     api.lineaDeTiempo.and.returnValue(of({ events: [], kafkaAvailable: false } as any));
     page.termino.set('rx-test'); page.buscar();
     expect(api.lineaDeTiempo).toHaveBeenCalledWith('s1'); expect(page.kafkaDisponible()).toBeFalse();
   });
   it('auditoría no consulta timeline para un código inexistente', () => {
-    api.listarEnvios.and.returnValue(of({ content: [] } as any));
+    api.resolverAuditoria.and.returnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
     const page = TestBed.runInInjectionContext(() => new AuditPage()); page.termino.set('RX-NOEXISTE'); page.buscar();
     expect(api.lineaDeTiempo).not.toHaveBeenCalled(); expect(page.cargando()).toBeFalse();
   });

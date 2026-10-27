@@ -17,13 +17,14 @@ flowchart LR
 | Ruta | Roles |
 |---|---|
 | `/` | Login público con Entra ID |
-| `/dashboard`, `/shipments`, `/shipments/:id` | Admin, Despachador, Cliente, Auditor |
+| `/dashboard` | Admin, Despachador, Cliente, Auditor |
+| `/shipments`, `/shipments/:id` | Admin, Despachador, Cliente |
 | `/shipments/new` | Admin, Despachador, Cliente |
-| `/catalog` | Admin, Despachador, Cliente |
+| `/catalog` | Admin, Despachador |
 | `/reports`, `/admin/mq`, `/admin/kafka`, `/admin/session` | Admin |
 | `/audit` | Admin, Auditor |
 
-Cliente solo ve sus envíos (el backend filtra por `oid`). Las capacidades del catálogo se muestran a Admin y Despachador; solo Admin edita. Las acciones usan `allowedTransitions` del backend. Roles, rutas y menú comparten la normalización de `core/roles.ts`.
+Cliente solo ve sus envíos (el backend filtra por `oid`). Las capacidades del catálogo se muestran a Admin y Despachador; solo Admin edita. Las acciones usan `allowedTransitions` del backend. Roles, rutas y menú comparten la normalización de `core/roles.ts`; los guards cargan los roles del access token de la API, sin conceder permisos a partir del ID token. Cliente conserva la selección de servicios para crear un envío. El timeline es exclusivo de Admin y Auditor.
 
 ## Mensajería visible
 

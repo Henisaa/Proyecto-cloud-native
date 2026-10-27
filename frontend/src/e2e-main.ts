@@ -23,6 +23,7 @@ async function main(): Promise<void> {
     init: () => undefined, hasSession: () => true, isLoggedIn: true,
     roles: session.claims.roles, name: session.claims.name, username: session.claims.preferred_username,
     email: session.claims.preferred_username,
+    cargarRoles: async () => {},
     hasRole: (...required: string[]) => tieneAlgunRol(session.claims.roles, required),
     login: () => undefined, logout: () => { window.location.href = '/'; }, inspeccionarToken: async () => undefined,
   };

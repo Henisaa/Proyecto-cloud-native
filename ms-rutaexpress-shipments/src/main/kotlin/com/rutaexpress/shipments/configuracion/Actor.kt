@@ -20,7 +20,7 @@ data class Actor(
         get() = "CLIENTE" in roles && roles.none { it in ROLES_INTERNOS }
 
     companion object {
-        private val ROLES_INTERNOS = setOf("ADMIN", "DESPACHADOR", "AUDITOR")
+        private val ROLES_INTERNOS = setOf("ADMIN", "DESPACHADOR")
 
         fun actual(): Actor {
             val autenticacion = SecurityContextHolder.getContext().authentication

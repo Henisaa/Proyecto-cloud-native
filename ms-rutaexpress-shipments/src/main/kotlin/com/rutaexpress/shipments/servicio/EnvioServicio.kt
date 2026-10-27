@@ -172,8 +172,17 @@ class EnvioServicio(
 
     /** Línea de tiempo del envío según el registro de eventos RabbitMQ (roles internos, validado en el controlador). */
     @Transactional(readOnly = true)
+    fun referenciaAuditoria(reference: String): Map<String, String> {
+        val envio = repositorio.findById(reference).orElseGet {
+            repositorio.findByTrackingCodeIgnoreCase(reference)
+                .orElseThrow { EnvioNoEncontradoException("Envío no encontrado: $reference") }
+        }
+        return mapOf("id" to envio.id, "trackingCode" to envio.trackingCode)
+    }
+
+    @Transactional(readOnly = true)
     fun auditoria(id: String): List<RegistroAuditoriaResponse> {
-        buscarVisible(id, Actor.actual())
+        repositorio.findById(id).orElseThrow { EnvioNoEncontradoException("Envío no encontrado: $id") }
         return registros.findByShipmentIdOrderByOcurridoEnAsc(id).map { RegistroAuditoriaResponse.desde(it) }
     }
 

@@ -27,7 +27,7 @@ export const routes: Routes = [
   {
     path: 'shipments',
     canActivate: [roleGuard],
-    data: meta({ roles: TODOS_LOS_ROLES, menu: 'Envíos' }),
+    data: meta({ roles: ['ADMIN', 'DESPACHADOR', 'CLIENTE'], menu: 'Envíos' }),
     loadComponent: () => import('./pages/shipments/shipments.page').then((m) => m.ShipmentsPage),
   },
   {
@@ -40,13 +40,13 @@ export const routes: Routes = [
   {
     path: 'shipments/:id',
     canActivate: [roleGuard],
-    data: meta({ roles: TODOS_LOS_ROLES }),
+    data: meta({ roles: ['ADMIN', 'DESPACHADOR', 'CLIENTE'] }),
     loadComponent: () => import('./pages/shipments/shipment-detail.page').then((m) => m.ShipmentDetailPage),
   },
   {
     path: 'catalog',
     canActivate: [roleGuard],
-    data: meta({ roles: ['ADMIN', 'DESPACHADOR', 'CLIENTE'], menu: 'Catálogo' }),
+    data: meta({ roles: ['ADMIN', 'DESPACHADOR'], menu: 'Catálogo' }),
     loadComponent: () => import('./pages/catalog/catalog.page').then((m) => m.CatalogPage),
   },
   {

@@ -107,7 +107,7 @@ export class ShipmentDetailPage implements OnInit {
   readonly linea = signal<LineaTiempo | null>(null);
   readonly cargandoLinea = signal(false);
   readonly errorLinea = signal<string | null>(null);
-  readonly veLineaDeTiempo = computed(() => this.auth.hasRole('Admin', 'Despachador', 'Auditor'));
+  readonly veLineaDeTiempo = computed(() => this.auth.hasRole('Admin', 'Auditor'));
 
   private sondeo: Subscription | null = null;
 

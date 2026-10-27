@@ -1,5 +1,7 @@
 # Infraestructura RutaExpress
 
+Para levantar frontend-v2 y todos los servicios con `docker compose up --build` desde la raíz, consultar [ejecución local](LOCAL.md). Los scripts siguientes conservan el despliegue por capas.
+
 Ejecución en EC2 con Docker Engine y Compose v2. GitHub Actions construye y prueba las imágenes y las publica en GHCR; el EC2 solo las descarga. No se instala JDK, Gradle, Node ni bases de datos en el PC.
 
 ```mermaid

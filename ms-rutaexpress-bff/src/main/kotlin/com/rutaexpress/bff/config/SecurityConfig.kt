@@ -81,7 +81,7 @@ class SecurityConfig(
                         .requestMatchers("/api/bff/audit/**").hasAnyRole("ADMIN", "AUDITOR")
                         .requestMatchers("/api/bff/catalog/manage/**").hasRole("ADMIN")
                         .requestMatchers("/api/bff/catalog/**").hasAnyRole("ADMIN", "DESPACHADOR", "CLIENTE")
-                        .requestMatchers("/api/bff/dashboard/**").authenticated()
+                        .requestMatchers("/api/bff/dashboard", "/api/bff/dashboard/**").hasAnyRole("ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR")
                         .requestMatchers("/api/bff/auth/**").authenticated()
                         .requestMatchers("/api/bff/**").authenticated()
                         .anyRequest().authenticated()
@@ -224,8 +224,7 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
         if (rolesClaim is List<*>) {
             rolesClaim.filterIsInstance<String>().forEach { role ->
                 if (role.isNotBlank()) {
-                    val roleName = "ROLE_${normalizeRole(role)}"
-                    authorities.add(SimpleGrantedAuthority(roleName))
+                    normalizeRole(role)?.let { authorities.add(SimpleGrantedAuthority("ROLE_$it")) }
                 }
             }
         }
@@ -252,8 +251,9 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
     }
 }
 
-private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
     "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
     "CLIENTE DEL DOMINIO" -> "CLIENTE"
-    else -> value
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

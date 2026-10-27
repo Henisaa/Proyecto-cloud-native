@@ -56,6 +56,51 @@ test('matriz de autorización con cinco actores', async ({ request }) => {
   }
 });
 
+test('alias documentados y roles desconocidos usan el mismo contrato en API y perfil', async ({ request }) => {
+  for (const [raw, canonical] of [['Operador del dominio', 'DESPACHADOR'], ['Cliente del dominio', 'CLIENTE'], ['INVENTADO', null]] as const) {
+    const { accessToken } = await session(request, raw);
+    const headers = bearer(accessToken);
+    const profile = await request.get(`${API}/api/bff/auth/me`, { headers });
+    expect(profile.status()).toBe(200);
+    expect((await profile.json()).roles).toEqual(canonical ? [canonical] : []);
+    for (const base of [API, BFF]) {
+      expect((await request.get(`${base}/api/bff/shipments`, { headers })).status()).toBe(canonical ? 200 : 403);
+      expect((await request.get(`${base}/api/bff/dashboard`, { headers })).status()).toBe(canonical ? 200 : 403);
+    }
+  }
+});
+
+test('auditor solo resuelve referencias y lee timeline sin obtener el listado operacional', async ({ request }) => {
+  const svc = await service(request);
+  const created = await (await shipment(request, svc.id, svc.accessToken)).json();
+  const { accessToken } = await session(request, 'AUDITOR');
+  const headers = bearer(accessToken);
+  for (const url of [`${API}/api/bff/shipments`, `${API}/api/bff/shipments/summary`, `${SHIPMENTS}/api/shipments`, `${SHIPMENTS}/api/shipments/${created.id}`]) {
+    expect((await request.get(url, { headers })).status()).toBe(403);
+  }
+  const resolved = await request.get(`${API}/api/bff/audit/resolve/${created.trackingCode}`, { headers });
+  expect(resolved.status()).toBe(200);
+  expect(await resolved.json()).toEqual({ id: created.id, trackingCode: created.trackingCode });
+  expect((await request.get(`${API}/api/bff/shipments/${created.id}/timeline`, { headers })).status()).toBe(200);
+  const operator = await session(request, 'DESPACHADOR');
+  expect((await request.get(`${API}/api/bff/shipments/${created.id}/timeline`, { headers: bearer(operator.accessToken) })).status()).toBe(403);
+});
+
+test('cliente no obtiene capacidades directamente ni en proyecciones de servicios', async ({ request }) => {
+  const svc = await service(request);
+  const { accessToken } = await session(request, 'CLIENTE');
+  const headers = bearer(accessToken);
+  for (const path of [`/api/catalog/services/${svc.id}`, `/api/catalog/services/code/${svc.code}`]) {
+    const response = await request.get(`${CATALOG}${path}`, { headers });
+    expect(response.status()).toBe(200);
+    const data = (await response.json()).data;
+    for (const field of ['capacities', 'totalDailyCapacity', 'totalBookedPackages', 'overallUtilizationPercentage']) {
+      expect(data).not.toHaveProperty(field);
+    }
+  }
+  expect((await request.get(`${CATALOG}/api/catalog/services/${svc.id}/capacities`, { headers })).status()).toBe(403);
+});
+
 test('cliente A nunca lista ni obtiene envíos de cliente B', async ({ request }) => {
   const svc = await service(request);
   const a = await session(request, 'CLIENTE', { oid: 'cliente-a' });

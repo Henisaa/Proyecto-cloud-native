@@ -31,6 +31,8 @@ jobs:
           bash -n tests/system/run.sh
           bash -n tests/system/mq-smoke.sh
           bash -n infra/mq/start-rabbit.sh
+          sh -n frontend-v2/docker/40-runtime-config.sh
+          docker run --rm -v "$PWD":/repo -w /repo node:22-alpine node --test frontend-v2/tests/*.test.cjs
           for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
 
@@ -158,6 +160,9 @@ jobs:
             docker compose --env-file infra/.env -f "infra/$dir/compose.yml" config -q
           done
           docker compose --env-file infra/.env -f infra/apps/compose.yml -f infra/apps/compose.dev.yml --profile ep1 config -q
+          docker compose config -q
+          docker compose config --format json | docker run --rm -i -v "$PWD":/repo -w /repo python:3.12-alpine python ci/compose_contract.py
+          docker build -t rutaexpress-ci/frontend-v2:test frontend-v2
           docker compose --env-file tests/system/ci.env -f tests/system/compose.yml config -q
           docker compose --env-file tests/system/ci.env -f infra/apps/compose.yml -f tests/system/apps.override.yml --profile ep1 config -q
       - name: Fresh RabbitMQ cluster, credentials and restart

@@ -1,0 +1,943 @@
+# Full local stack. Run: docker compose up --build
+# Entra ID remains external; this configuration never disables JWT security.
+name: rutaexpress-local
+services:
+  audit:
+    build:
+      context: ./ms-rutaexpress-audit
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+      oracle:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      PORT: "8083"
+      SECURITY_ENABLED: "true"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_PASSWORD: ${LOCAL_AUDIT_DB_PASSWORD:-RutaLocalAudit2026}
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      SPRING_DATASOURCE_USERNAME: ruta_audit
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8083/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/audit:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  bff:
+    build:
+      context: ./ms-rutaexpress-bff
+    depends_on:
+      audit:
+        condition: service_healthy
+        required: true
+      catalog:
+        condition: service_healthy
+        required: true
+      kafka-admin:
+        condition: service_healthy
+        required: true
+      notify:
+        condition: service_healthy
+        required: true
+      rabbit-admin:
+        condition: service_healthy
+        required: true
+      report:
+        condition: service_healthy
+        required: true
+      shipments:
+        condition: service_healthy
+        required: true
+    environment:
+      AUDIT_SERVICE_URL: http://audit:8083
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      CATALOG_SERVICE_URL: http://catalog:8081
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_ADMIN_SERVICE_URL: http://kafka-admin:8087
+      MQ_ADMIN_SERVICE_URL: http://rabbit-admin:8086
+      NOTIFY_SERVICE_URL: http://notify:8082
+      PORT: "8080"
+      REPORT_SERVICE_URL: http://report:8084
+      SECURITY_ENABLED: "true"
+      SHIPMENTS_SERVICE_URL: http://shipments:8085
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/bff:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  catalog:
+    build:
+      context: ./ms-rutaexpress-catalog
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+      oracle:
+        condition: service_healthy
+        required: true
+      rabbit1:
+        condition: service_healthy
+        required: true
+      rabbit2:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_ENABLED: "true"
+      PORT: "8081"
+      RABBIT_DLQ_CONSUMER_ENABLED: "true"
+      RABBIT_PREFETCH: "10"
+      RABBIT_RETRY_INITIAL_MS: "500"
+      RABBIT_RETRY_MAX_ATTEMPTS: "3"
+      RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+      RABBITMQ_PASSWORD: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_USERNAME: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+      SECURITY_ENABLED: "true"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_PASSWORD: ${LOCAL_CATALOG_DB_PASSWORD:-RutaLocalCatalog2026}
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      SPRING_DATASOURCE_USERNAME: ruta_catalog
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8081/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/catalog:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ./frontend-v2
+    depends_on:
+      bff:
+        condition: service_healthy
+        required: true
+    environment:
+      MSAL_AUTHORITY: ${MSAL_AUTHORITY:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09}
+      MSAL_CLIENT_ID: ${MSAL_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      MSAL_REDIRECT_URI: ${MSAL_REDIRECT_URI:-http://localhost:4200}
+      MSAL_SCOPE: ${MSAL_SCOPE:-api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
+    healthcheck:
+      interval: 10s
+      retries: 10
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8080/health
+      timeout: 3s
+    image: rutaexpress-local/frontend-v2:dev
+    mem_limit: 128m
+    ports:
+      - 127.0.0.1:${FRONTEND_PORT:-4200}:8080
+    restart: unless-stopped
+  kafka-1:
+    command:
+      - bash
+      - /opt/rutaexpress/start-zookeeper-mode.sh
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+        required: true
+      zookeeper-2:
+        condition: service_healthy
+        required: true
+      zookeeper-3:
+        condition: service_healthy
+        required: true
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:29092,EXTERNAL://localhost:9092
+      KAFKA_BROKER_ID: "1"
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+    healthcheck:
+      interval: 15s
+      retries: 25
+      start_period: 1m0s
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092
+          >/dev/null 2>&1
+      timeout: 10s
+    hostname: kafka-1
+    image: apache/kafka:3.9.2
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+    volumes:
+      - source: kafka-1
+        target: /var/lib/kafka/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/kafka/start-zookeeper-mode.sh
+        target: /opt/rutaexpress/start-zookeeper-mode.sh
+        type: bind
+  kafka-2:
+    command:
+      - bash
+      - /opt/rutaexpress/start-zookeeper-mode.sh
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+        required: true
+      zookeeper-2:
+        condition: service_healthy
+        required: true
+      zookeeper-3:
+        condition: service_healthy
+        required: true
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:29092,EXTERNAL://localhost:9093
+      KAFKA_BROKER_ID: "2"
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9093
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+    healthcheck:
+      interval: 15s
+      retries: 25
+      start_period: 1m0s
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092
+          >/dev/null 2>&1
+      timeout: 10s
+    hostname: kafka-2
+    image: apache/kafka:3.9.2
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+    volumes:
+      - source: kafka-2
+        target: /var/lib/kafka/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/kafka/start-zookeeper-mode.sh
+        target: /opt/rutaexpress/start-zookeeper-mode.sh
+        type: bind
+  kafka-3:
+    command:
+      - bash
+      - /opt/rutaexpress/start-zookeeper-mode.sh
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+        required: true
+      zookeeper-2:
+        condition: service_healthy
+        required: true
+      zookeeper-3:
+        condition: service_healthy
+        required: true
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:29092,EXTERNAL://localhost:9094
+      KAFKA_BROKER_ID: "3"
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+    healthcheck:
+      interval: 15s
+      retries: 25
+      start_period: 1m0s
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092
+          >/dev/null 2>&1
+      timeout: 10s
+    hostname: kafka-3
+    image: apache/kafka:3.9.2
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+    volumes:
+      - source: kafka-3
+        target: /var/lib/kafka/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/kafka/start-zookeeper-mode.sh
+        target: /opt/rutaexpress/start-zookeeper-mode.sh
+        type: bind
+  kafka-admin:
+    build:
+      context: ./ms-rutaexpress-kafka-admin
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      PORT: "8087"
+      SECURITY_ENABLED: "true"
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8087/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/kafka-admin:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "536870912"
+    restart: unless-stopped
+  kafka-ui:
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_CLUSTERS_0_NAME: rutaexpress
+    image: provectuslabs/kafka-ui:v0.7.2
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "536870912"
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "8090"
+        target: 8080
+    restart: unless-stopped
+  mailpit:
+    image: axllent/mailpit:v1.27
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "134217728"
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "8025"
+        target: 8025
+    restart: unless-stopped
+  notify:
+    build:
+      context: ./ms-rutaexpress-notify
+    depends_on:
+      mailpit:
+        condition: service_started
+        required: true
+      rabbit1:
+        condition: service_healthy
+        required: true
+      rabbit2:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      NOTIFY_FROM: no-reply@rutaexpress.local
+      PORT: "8082"
+      RABBIT_DLQ_CONSUMER_ENABLED: "true"
+      RABBIT_PREFETCH: "10"
+      RABBIT_RETRY_INITIAL_MS: "500"
+      RABBIT_RETRY_MAX_ATTEMPTS: "3"
+      RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+      RABBITMQ_PASSWORD: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_USERNAME: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+      REDIS_HOST: redis
+      SECURITY_ENABLED: "true"
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8082/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/notify:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  oracle:
+    environment:
+      AUDIT_DB_PASSWORD: ${LOCAL_AUDIT_DB_PASSWORD:-RutaLocalAudit2026}
+      CATALOG_DB_PASSWORD: ${LOCAL_CATALOG_DB_PASSWORD:-RutaLocalCatalog2026}
+      ORACLE_PASSWORD: cambiar-admin-oracle
+      REPORT_DB_PASSWORD: ${LOCAL_REPORT_DB_PASSWORD:-RutaLocalReport2026}
+      SHIPMENTS_DB_PASSWORD: ${LOCAL_SHIPMENTS_DB_PASSWORD:-RutaLocalShipments2026}
+    healthcheck:
+      interval: 10s
+      retries: 60
+      start_period: 1m0s
+      test:
+        - CMD
+        - healthcheck.sh
+      timeout: 5s
+    image: gvenzl/oracle-free:23-slim
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "3221225472"
+    restart: unless-stopped
+    volumes:
+      - source: oracle
+        target: /opt/oracle/oradata
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/apps/oracle-init/001-users.sh
+        target: /container-entrypoint-initdb.d/001-users.sh
+        type: bind
+  rabbit-admin:
+    build:
+      context: ./ms-rutaexpress-rabbit-admin
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+        required: true
+      rabbit2:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      MQ_ALERT_THRESHOLD: "1"
+      MQ_COMMAND_TTL_MS: "86400000"
+      MQ_DLQ_TTL_MS: "604800000"
+      MQ_MAX_LENGTH: "10000"
+      PORT: "8086"
+      RABBIT_DLQ_CONSUMER_ENABLED: "true"
+      RABBIT_PREFETCH: "10"
+      RABBIT_RETRY_INITIAL_MS: "500"
+      RABBIT_RETRY_MAX_ATTEMPTS: "3"
+      RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+      RABBITMQ_MANAGEMENT_URLS: http://rabbit1:15672,http://rabbit2:15672
+      RABBITMQ_PASSWORD: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_USERNAME: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+      SECURITY_ENABLED: "true"
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8086/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/rabbit-admin:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "536870912"
+    restart: unless-stopped
+  rabbit-init:
+    command:
+      - sh
+      - -ec
+      - umask 077; if [ ! -s /cookie/erlang_cookie ]; then head -c 32 /dev/urandom
+        | od -An -tx1 | tr -d " \n" > /cookie/erlang_cookie; fi
+    image: alpine:3.22
+    restart: 'no'
+    volumes:
+      - source: rabbit-cookie
+        target: /cookie
+        type: volume
+        volume: {}
+  rabbit1:
+    depends_on:
+      rabbit-init:
+        condition: service_completed_successfully
+        required: true
+    entrypoint:
+      - bash
+      - /opt/rutaexpress/start-rabbit.sh
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_DEFAULT_USER: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+    healthcheck:
+      interval: 10s
+      retries: 20
+      start_period: 30s
+      test:
+        - CMD-SHELL
+        - gosu rabbitmq rabbitmq-diagnostics -q ping && gosu rabbitmq rabbitmqctl
+          authenticate_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null
+          2>&1
+      timeout: 5s
+    hostname: rabbit1
+    image: rabbitmq:4.4-management
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "15672"
+        target: 15672
+    restart: unless-stopped
+    volumes:
+      - source: rabbit1
+        target: /var/lib/rabbitmq
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/definitions.json
+        target: /etc/rabbitmq/definitions.json
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/start-rabbit.sh
+        target: /opt/rutaexpress/start-rabbit.sh
+        type: bind
+      - read_only: true
+        source: rabbit-cookie
+        target: /run/secrets
+        type: volume
+  rabbit2:
+    depends_on:
+      rabbit-init:
+        condition: service_completed_successfully
+        required: true
+      rabbit1:
+        condition: service_started
+        required: true
+    entrypoint:
+      - bash
+      - /opt/rutaexpress/start-rabbit.sh
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_DEFAULT_USER: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+    healthcheck:
+      interval: 10s
+      retries: 20
+      start_period: 30s
+      test:
+        - CMD-SHELL
+        - gosu rabbitmq rabbitmq-diagnostics -q ping && gosu rabbitmq rabbitmqctl
+          authenticate_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null
+          2>&1
+      timeout: 5s
+    hostname: rabbit2
+    image: rabbitmq:4.4-management
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "15673"
+        target: 15672
+    restart: unless-stopped
+    volumes:
+      - source: rabbit2
+        target: /var/lib/rabbitmq
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/definitions.json
+        target: /etc/rabbitmq/definitions.json
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./infra/mq/start-rabbit.sh
+        target: /opt/rutaexpress/start-rabbit.sh
+        type: bind
+      - read_only: true
+        source: rabbit-cookie
+        target: /run/secrets
+        type: volume
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      interval: 5s
+      retries: 20
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 3s
+    image: redis:8-alpine
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "134217728"
+    restart: unless-stopped
+    volumes:
+      - source: redis
+        target: /data
+        type: volume
+        volume: {}
+  report:
+    build:
+      context: ./ms-rutaexpress-report
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+      oracle:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      PORT: "8084"
+      SECURITY_ENABLED: "true"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_PASSWORD: ${LOCAL_REPORT_DB_PASSWORD:-RutaLocalReport2026}
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      SPRING_DATASOURCE_USERNAME: ruta_report
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8084/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/report:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  shipments:
+    build:
+      context: ./ms-rutaexpress-shipments
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+        required: true
+      kafka-2:
+        condition: service_healthy
+        required: true
+      kafka-3:
+        condition: service_healthy
+        required: true
+      oracle:
+        condition: service_healthy
+        required: true
+      rabbit1:
+        condition: service_healthy
+        required: true
+      rabbit2:
+        condition: service_healthy
+        required: true
+    environment:
+      AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-f3136620-804c-4b15-b22d-b6fad957937e}
+      AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}
+      CATALOG_SERVICE_URL: http://catalog:8081
+      CATALOGO_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_ENABLED: "true"
+      NOTIFY_WAREHOUSE_EMAIL: bodega@rutaexpress.local
+      PORT: "8085"
+      RABBIT_DLQ_CONSUMER_ENABLED: "true"
+      RABBIT_PREFETCH: "10"
+      RABBIT_RETRY_INITIAL_MS: "500"
+      RABBIT_RETRY_MAX_ATTEMPTS: "3"
+      RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+      RABBITMQ_PASSWORD: ${LOCAL_RABBITMQ_PASSWORD:-RutaLocalRabbit2026}
+      RABBITMQ_USERNAME: ${LOCAL_RABBITMQ_USERNAME:-ruta_local}
+      SECURITY_ENABLED: "true"
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_PASSWORD: ${LOCAL_SHIPMENTS_DB_PASSWORD:-RutaLocalShipments2026}
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      SPRING_DATASOURCE_USERNAME: ruta_shipments
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      interval: 15s
+      retries: 20
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://localhost:8085/actuator/health/readiness || exit 1
+      timeout: 5s
+    image: rutaexpress-local/shipments:dev
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "805306368"
+    restart: unless-stopped
+  zookeeper-1:
+    environment:
+      ZK_SERVER_HEAP: "256"
+      ZOO_4LW_COMMANDS_WHITELIST: ruok
+      ZOO_MY_ID: "1"
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181
+        server.3=zookeeper-3:2888:3888;2181
+    healthcheck:
+      interval: 10s
+      retries: 30
+      test:
+        - CMD-SHELL
+        - zkServer.sh status >/dev/null 2>&1
+      timeout: 5s
+    hostname: zookeeper-1
+    image: zookeeper:3.9
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "402653184"
+    restart: unless-stopped
+    volumes:
+      - source: zookeeper-1
+        target: /data
+        type: volume
+        volume: {}
+      - source: zookeeper-1-log
+        target: /datalog
+        type: volume
+        volume: {}
+  zookeeper-2:
+    environment:
+      ZK_SERVER_HEAP: "256"
+      ZOO_4LW_COMMANDS_WHITELIST: ruok
+      ZOO_MY_ID: "2"
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181
+        server.3=zookeeper-3:2888:3888;2181
+    healthcheck:
+      interval: 10s
+      retries: 30
+      test:
+        - CMD-SHELL
+        - zkServer.sh status >/dev/null 2>&1
+      timeout: 5s
+    hostname: zookeeper-2
+    image: zookeeper:3.9
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "402653184"
+    restart: unless-stopped
+    volumes:
+      - source: zookeeper-2
+        target: /data
+        type: volume
+        volume: {}
+      - source: zookeeper-2-log
+        target: /datalog
+        type: volume
+        volume: {}
+  zookeeper-3:
+    environment:
+      ZK_SERVER_HEAP: "256"
+      ZOO_4LW_COMMANDS_WHITELIST: ruok
+      ZOO_MY_ID: "3"
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181
+        server.3=zookeeper-3:2888:3888;2181
+    healthcheck:
+      interval: 10s
+      retries: 30
+      test:
+        - CMD-SHELL
+        - zkServer.sh status >/dev/null 2>&1
+      timeout: 5s
+    hostname: zookeeper-3
+    image: zookeeper:3.9
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    mem_limit: "402653184"
+    restart: unless-stopped
+    volumes:
+      - source: zookeeper-3
+        target: /data
+        type: volume
+        volume: {}
+      - source: zookeeper-3-log
+        target: /datalog
+        type: volume
+        volume: {}
+volumes:
+  kafka-1: {}
+  kafka-2: {}
+  kafka-3: {}
+  oracle: {}
+  rabbit-cookie: {}
+  rabbit1: {}
+  rabbit2: {}
+  redis: {}
+  zookeeper-1: {}
+  zookeeper-1-log: {}
+  zookeeper-2: {}
+  zookeeper-2-log: {}
+  zookeeper-3: {}
+  zookeeper-3-log: {}

@@ -41,7 +41,7 @@ const ESTADOS_TARJETA = ['CREADO', 'ACEPTADO', 'EN_BODEGA', 'EN_RUTA', 'ENTREGAD
         </div>
       </header>
 
-      <!-- Envíos: todos los roles (un cliente solo ve los suyos) -->
+      @if (auth.hasRole('Admin', 'Despachador', 'Cliente')) {
       <section aria-labelledby="titulo-envios" class="space-y-3">
         <h2 id="titulo-envios" class="text-sm font-bold text-zinc-800">{{ soloCliente() ? 'Mis envíos' : 'Envíos' }}</h2>
         <app-vista-estado [cargando]="cargandoEnvios()" [error]="errorEnvios()" (reintentar)="cargar()">
@@ -96,6 +96,8 @@ const ESTADOS_TARJETA = ['CREADO', 'ACEPTADO', 'EN_BODEGA', 'EN_RUTA', 'ENTREGAD
           }
         </app-vista-estado>
       </section>
+
+      }
 
       @if (auth.hasRole('Admin')) {
         <section aria-labelledby="titulo-kpis" class="space-y-3">

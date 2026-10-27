@@ -14,6 +14,9 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.beans.factory.annotation.Value
+import tools.jackson.databind.ObjectMapper
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -21,7 +24,9 @@ import org.springframework.web.bind.annotation.*
 @Tag(name = "Catalog Microservice", description = "Servicios, tarifas y capacidad de flota para RutaExpress")
 @SecurityRequirement(name = "BearerAuth")
 class CatalogViewController(
-    private val viewModelService: CatalogViewModelService
+    private val viewModelService: CatalogViewModelService,
+    private val objectMapper: ObjectMapper,
+    @Value("\${app.security.enabled:true}") private val securityEnabled: Boolean,
 ) {
 
     // ----------------------------------------------------
@@ -40,12 +45,12 @@ class CatalogViewController(
         @RequestParam(required = false) category: ServiceCategory?,
         @RequestParam(required = false) status: ServiceStatus?,
         @RequestParam(required = false) active: Boolean?
-    ): ResponseEntity<ApiResponseViewModel<List<ServiceSummaryViewModel>>> {
+    ): ResponseEntity<ApiResponseViewModel<List<Any>>> {
         val services = viewModelService.getAllServices(category, status, active)
         return ResponseEntity.ok(
             ApiResponseViewModel(
                 message = "Services retrieved successfully",
-                data = services
+                data = services.map(::visibleService)
             )
         )
     }
@@ -57,12 +62,12 @@ class CatalogViewController(
         ApiResponse(responseCode = "404", description = "Servicio no encontrado")
     )
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
-    fun getServiceById(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
+    fun getServiceById(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<Any>> {
         val service = viewModelService.getServiceById(id)
         return ResponseEntity.ok(
             ApiResponseViewModel(
                 message = "Service retrieved successfully",
-                data = service
+                data = visibleService(service)
             )
         )
     }
@@ -70,12 +75,12 @@ class CatalogViewController(
     @GetMapping("/services/code/{code}")
     @Operation(summary = "Obtener servicio por código", description = "Búsqueda de servicio por código único de negocio (ej. SRV-EXP-01).")
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
-    fun getServiceByCode(@PathVariable code: String): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
+    fun getServiceByCode(@PathVariable code: String): ResponseEntity<ApiResponseViewModel<Any>> {
         val service = viewModelService.getServiceByCode(code)
         return ResponseEntity.ok(
             ApiResponseViewModel(
                 message = "Service retrieved successfully",
-                data = service
+                data = visibleService(service)
             )
         )
     }
@@ -90,7 +95,7 @@ class CatalogViewController(
     @PreAuthorize("hasRole(\'ADMIN\')")
     fun createService(
         @Valid @RequestBody request: CreateServiceViewModel
-    ): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
+    ): ResponseEntity<ApiResponseViewModel<Any>> {
         val created = viewModelService.createService(request)
         return ResponseEntity.status(HttpStatus.CREATED).body(
             ApiResponseViewModel(
@@ -110,7 +115,7 @@ class CatalogViewController(
     fun updateService(
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateServiceViewModel
-    ): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
+    ): ResponseEntity<ApiResponseViewModel<Any>> {
         val updated = viewModelService.updateService(id, request)
         return ResponseEntity.ok(
             ApiResponseViewModel(
@@ -126,7 +131,7 @@ class CatalogViewController(
     fun updateStatus(
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateStatusViewModel
-    ): ResponseEntity<ApiResponseViewModel<ServiceDetailViewModel>> {
+    ): ResponseEntity<ApiResponseViewModel<Any>> {
         val updated = viewModelService.updateServiceStatus(id, request)
         return ResponseEntity.ok(
             ApiResponseViewModel(
@@ -155,7 +160,7 @@ class CatalogViewController(
 
     @GetMapping("/services/{id}/capacities")
     @Operation(summary = "Listar capacidades de flota para un servicio")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
     fun getCapacities(@PathVariable id: Long): ResponseEntity<ApiResponseViewModel<List<CapacityDetailViewModel>>> {
         val capacities = viewModelService.getCapacities(id)
         return ResponseEntity.ok(
@@ -309,4 +314,13 @@ class CatalogViewController(
             )
         )
     }
+    private fun visibleService(service: Any): Any {
+        val internal = !securityEnabled || SecurityContextHolder.getContext().authentication?.authorities
+            ?.any { it.authority in setOf("ROLE_ADMIN", "ROLE_DESPACHADOR") } == true
+        if (internal) return service
+        val fields = objectMapper.convertValue(service, Map::class.java)
+        return fields.filterKeys { it !in setOf("capacities", "totalDailyCapacity", "totalBookedPackages",
+            "overallUtilizationPercentage", "availableCapacitiesCount") }
+    }
+
 }

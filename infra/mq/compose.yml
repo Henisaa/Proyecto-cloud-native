@@ -53,8 +53,9 @@ services:
       - ./definitions.json:/etc/rabbitmq/definitions.json:ro
       - ./start-rabbit.sh:/opt/rutaexpress/start-rabbit.sh:ro
     depends_on:
+      # Ambos nodos deben iniciar para resolver sus nombres y recuperar el clúster.
       rabbit1:
-        condition: service_healthy
+        condition: service_started
 
 secrets:
   erlang_cookie:

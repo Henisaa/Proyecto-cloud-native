@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param
 import java.time.Instant
 
 interface EnvioRepositorio : JpaRepository<Envio, String>, JpaSpecificationExecutor<Envio> {
+    fun findByTrackingCodeIgnoreCase(trackingCode: String): java.util.Optional<Envio>
+
 
     @Query("SELECT e.status, COUNT(e) FROM Envio e GROUP BY e.status")
     fun contarPorEstado(): List<Array<Any>>

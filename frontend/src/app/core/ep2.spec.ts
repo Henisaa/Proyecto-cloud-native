@@ -11,28 +11,36 @@ import { interpretarError } from './http-error';
 import { roleGuard } from './role.guard';
 import { sondear } from './polling';
 import { validarCola, validarRetencion } from '../shared/mq-validators';
+import { tieneAlgunRol, esSoloCliente } from './roles';
 
 describe('Contratos EP2', () => {
   afterEach(() => TestBed.resetTestingModule());
-  it('AuthService normaliza los roles del caché antes de hidratar la cuenta', () => {
-    const cuenta = { idTokenClaims: { roles: ['Operador', 'Cliente del dominio'] } };
+  it('roles desconocidos no coinciden entre sí y Auditor no amplía la visibilidad de Cliente', () => {
+    expect(tieneAlgunRol(['INVENTADO'], ['OTRO'])).toBeFalse();
+    expect(esSoloCliente(['Cliente', 'Auditor'])).toBeTrue();
+    expect(esSoloCliente(['Cliente', 'Operador'])).toBeFalse();
+  });
+  it('AuthService usa el access token y no concede roles del ID token', async () => {
+    const cuenta = { idTokenClaims: { roles: ['ADMIN'] } };
+    const accessToken = 'header.' + btoa(JSON.stringify({ roles: ['Operador', 'Cliente del dominio', 'INVENTADO'] })) + '.signature';
     TestBed.configureTestingModule({ providers: [
-      { provide: MsalService, useValue: { instance: { getActiveAccount: () => cuenta, getAllAccounts: () => [cuenta] } } },
+      { provide: MsalService, useValue: { acquireTokenSilent: () => of({ accessToken }), instance: { getActiveAccount: () => cuenta, getAllAccounts: () => [cuenta] } } },
       { provide: MsalBroadcastService, useValue: {} },
     ] });
     const auth = TestBed.inject(AuthService);
+    await auth.cargarRoles();
     expect(auth.roles).toEqual(['DESPACHADOR', 'CLIENTE']);
     expect(auth.hasRole('Despachador')).toBeTrue();
     expect(auth.hasRole('Admin')).toBeFalse();
   });
-  it('guard permite el sinónimo Operador y rechaza un usuario sin rol con 403', () => {
-    const auth = { hasSession: () => true, roles: ['Operador'] };
+  it('guard permite el sinónimo Operador y rechaza un usuario sin rol con 403', async () => {
+    const auth = { hasSession: () => true, cargarRoles: async () => {}, roles: ['Operador'] };
     TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: AuthService, useValue: auth }] });
     const route = { data: { roles: ['DESPACHADOR'] } } as unknown as ActivatedRouteSnapshot;
     const ejecutar = () => TestBed.runInInjectionContext(() => roleGuard(route, {} as RouterStateSnapshot));
-    expect(ejecutar()).toBeTrue();
+    expect(await ejecutar()).toBeTrue();
     auth.roles = [];
-    expect(TestBed.inject(Router).serializeUrl(ejecutar() as ReturnType<Router['createUrlTree']>)).toBe('/forbidden');
+    expect(TestBed.inject(Router).serializeUrl(await ejecutar() as ReturnType<Router['createUrlTree']>)).toBe('/forbidden');
   });
   it('conserva el mensaje 409 y errores de validación de ambos formatos', () => {
     expect(interpretarError(new HttpErrorResponse({ status: 409, error: { detail: 'Capacidad rechazada' } })).mensaje).toBe('Capacidad rechazada');

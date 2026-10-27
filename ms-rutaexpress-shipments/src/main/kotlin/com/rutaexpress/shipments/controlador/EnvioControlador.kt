@@ -42,23 +42,27 @@ class EnvioControlador(
         @AuthenticationPrincipal jwt: Jwt?
     ): EnvioResponse = servicio.crear(request, jwt?.tokenValue)
 
+    @GetMapping("/audit/resolve/{reference}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    fun referenciaAuditoria(@PathVariable reference: String): Map<String, String> = servicio.referenciaAuditoria(reference)
+
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Conteos por estado y por capacidad, y los últimos envíos (un cliente solo ve los suyos)")
     fun resumen(): ResumenEnviosResponse = servicio.resumen()
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Obtener un envío por id (un cliente solo ve los suyos)")
     fun obtener(@PathVariable id: String): EnvioResponse = servicio.obtener(id)
 
     @GetMapping("/{id}/audit")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @Operation(summary = "Línea de tiempo del envío según los eventos de RabbitMQ")
     fun auditoria(@PathVariable id: String): List<RegistroAuditoriaResponse> = servicio.auditoria(id)
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Listar envíos paginados, con filtros de estado, capacidad, fechas y código de seguimiento")
     fun listar(
         @RequestParam(required = false) status: String?,

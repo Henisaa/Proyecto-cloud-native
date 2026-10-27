@@ -103,8 +103,13 @@ class BffController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping("/audit/resolve/{reference}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    fun resolveAuditReference(@PathVariable reference: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<Any> =
+        ResponseEntity.ok(bffService.resolveAuditReference(reference, jwt?.tokenValue ?: ""))
+
     @GetMapping("/shipments")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Listar envíos paginados con filtros (page, size, status, capacity, from, to, q)")
     fun getShipments(
         @RequestParam params: Map<String, String>,
@@ -115,13 +120,13 @@ class BffController(
     }
 
     @GetMapping("/shipments/summary")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Conteos por estado y capacidad, y los últimos envíos (un cliente solo ve los suyos)")
     fun getShipmentsSummary(@AuthenticationPrincipal jwt: Jwt?): ResponseEntity<Any> =
         ResponseEntity.ok(bffService.fetchShipmentsSummary(jwt?.tokenValue ?: ""))
 
     @GetMapping("/shipments/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
     @Operation(summary = "Obtener un envío por id, con las transiciones permitidas")
     fun getShipment(
         @PathVariable id: String,
@@ -132,7 +137,7 @@ class BffController(
     }
 
     @GetMapping("/shipments/{id}/timeline")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @Operation(summary = "Línea de tiempo unificada del envío: RabbitMQ (shipments) y Kafka (audit)")
     fun getShipmentTimeline(
         @PathVariable id: String,
