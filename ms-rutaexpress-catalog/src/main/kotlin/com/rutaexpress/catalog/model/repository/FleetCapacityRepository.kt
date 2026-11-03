@@ -32,6 +32,29 @@ interface FleetCapacityRepository : JpaRepository<FleetCapacity, Long> {
         vehicleType: VehicleType
     ): Optional<FleetCapacity>
 
+    /** Reserva y descuento ordenados por id y con bloqueo: sin interbloqueos entre comandos concurrentes. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT c FROM FleetCapacity c
+        WHERE c.service.id = :serviceId
+          AND c.zone = :zone
+          AND c.active = true
+          AND c.currentBookedPackages < c.maxDailyPackages
+          AND c.maxWeightKg >= :weightKg
+          AND c.maxVolumeM3 >= :volumeM3
+        ORDER BY c.id
+    """)
+    fun findLockedAvailable(
+        @Param("serviceId") serviceId: Long,
+        @Param("zone") zone: ZoneType,
+        @Param("weightKg") weightKg: Double,
+        @Param("volumeM3") volumeM3: Double
+    ): List<FleetCapacity>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM FleetCapacity c WHERE c.id = :id")
+    fun findLockedById(@Param("id") id: Long): Optional<FleetCapacity>
+
     @Query("""
         SELECT c FROM FleetCapacity c 
         WHERE c.service.id = :serviceId 

@@ -49,14 +49,15 @@ class SecurityConfig(
                         "/api-docs/**"
                     ).permitAll()
 
-                    // Actuator health and metrics
+                    // Actuator: solo las probes de salud son públicas; las métricas exigen el rol ADMIN
                     .requestMatchers(
                         "/actuator/health",
-                        "/actuator/info",
-                        "/actuator/prometheus"
+                        "/actuator/health/**",
+                        "/actuator/info"
                     ).permitAll()
 
                 if (securityEnabled) {
+                    auth.requestMatchers("/actuator/prometheus", "/actuator/prometheus/**").hasRole("ADMIN")
                     // Protected catalog domain endpoints
                     auth.requestMatchers("/api/catalog/**").authenticated()
                     auth.anyRequest().authenticated()
@@ -133,8 +134,7 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
         if (rolesClaim is List<*>) {
             rolesClaim.forEach { role ->
                 if (role is String && role.isNotBlank()) {
-                    val roleName = "ROLE_${normalizeRole(role)}"
-                    authorities.add(SimpleGrantedAuthority(roleName))
+                    normalizeRole(role)?.let { authorities.add(SimpleGrantedAuthority("ROLE_$it")) }
                 }
             }
         }
@@ -158,8 +158,9 @@ class AzureJwtAuthenticationConverter : Converter<Jwt, AbstractAuthenticationTok
 }
 
 
-private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
     "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
     "CLIENTE DEL DOMINIO" -> "CLIENTE"
-    else -> value
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

@@ -1,24 +1,29 @@
 import { Configuration, PopupRequest } from '@azure/msal-browser';
-import { environment } from '../../environments/environment';
+import { origenApp, runtimeConfig } from './app-config';
 
-export const msalConfig: Configuration = {
-  auth: {
-    clientId: environment.msal.clientId,
-    authority: environment.msal.authority,
-    redirectUri: environment.msal.redirectUri,
-    postLogoutRedirectUri: environment.msal.postLogoutRedirectUri,
-  },
-  cache: {
-    cacheLocation: 'localStorage',
-  },
-};
+/** Se construye a partir de la configuración en tiempo de ejecución (ya cargada antes de importar app.config). */
+export function crearMsalConfig(): Configuration {
+  const origen = origenApp();
+  return {
+    auth: {
+      clientId: runtimeConfig.clientId,
+      authority: runtimeConfig.authority,
+      redirectUri: origen,
+      postLogoutRedirectUri: runtimeConfig.postLogoutRedirectUri || origen,
+    },
+    cache: {
+      // sessionStorage: menos exposición a XSS, a cambio de no compartir la sesión entre pestañas (decisión D8).
+      cacheLocation: 'sessionStorage',
+    },
+  };
+}
 
-export const loginRequest: PopupRequest = {
-  scopes: ['openid', 'profile', 'email', environment.msal.scope],
-};
+export function crearLoginRequest(): PopupRequest {
+  return { scopes: ['openid', 'profile', 'email', runtimeConfig.scope] };
+}
 
-export const protectedResourceMap = new Map<string, string[]>([
-  [`${window.location.origin}/api/bff*`, [environment.msal.scope]],
-  ['/api/bff*', [environment.msal.scope]],
-  ['*/api/bff*', [environment.msal.scope]],
-]);
+/** El MsalInterceptor adjunta el Bearer con este scope a todo lo que vaya al API (Gateway). */
+export function crearProtectedResourceMap(): Map<string, string[]> {
+  const base = runtimeConfig.apiBaseUrl || window.location.origin;
+  return new Map<string, string[]>([[`${base}/api/*`, [runtimeConfig.scope]]]);
+}

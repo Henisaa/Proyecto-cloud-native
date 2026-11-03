@@ -1,0 +1,51 @@
+# Test-only issuer. Never include this override in a real Entra deployment.
+x-test-auth: &test-auth
+  AZURE_AD_ISSUER_URI: http://oidc:9000
+  AZURE_AD_AUDIENCE: api://rutaexpress-ci
+  AZURE_AD_CLIENT_ID: rutaexpress-ci
+services:
+  oidc:
+    build:
+      # Overrides resolve paths from the first file (compose.yaml in the repository root).
+      context: .
+      dockerfile: tests/system/Dockerfile.oidc
+    ports: ["127.0.0.1:19000:9000"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  bff:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}
+  catalog:
+    environment: *test-auth
+    ports: ["127.0.0.1:18081:8081"]
+    depends_on:
+      oidc: {condition: service_healthy}
+  shipments:
+    environment: *test-auth
+    ports: ["127.0.0.1:18085:8085"]
+    depends_on:
+      oidc: {condition: service_healthy}
+  notify:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}
+  audit:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}
+  report:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}
+  rabbit-admin:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}
+  kafka-admin:
+    environment: *test-auth
+    depends_on:
+      oidc: {condition: service_healthy}

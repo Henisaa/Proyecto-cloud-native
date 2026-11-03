@@ -34,4 +34,13 @@ class PrometheusSecurityTests {
     fun `prometheus permite solamente el rol Admin`() {
         mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isForbidden)
     }
+
+    @Test
+    @WithMockUser(roles = ["AUDITOR"])
+    fun `auditor no consulta operaciones de envios`() {
+        for (path in listOf("/api/shipments", "/api/shipments/summary", "/api/shipments/s-1")) {
+            mockMvc.perform(get(path)).andExpect(status().isForbidden)
+        }
+    }
+
 }

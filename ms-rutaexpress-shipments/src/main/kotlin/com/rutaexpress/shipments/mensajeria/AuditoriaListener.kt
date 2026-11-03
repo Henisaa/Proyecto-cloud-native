@@ -38,12 +38,27 @@ class AuditoriaListener(
                 clave.startsWith(nombres.routing.shipmentStatusPrefix) ->
                     reintentar { auditoria.registrarEstado(sobre, clave) }
                 clave.startsWith(nombres.routing.capacityResultPrefix) -> {
-                    val compensar = reintentar { auditoria.aplicarResultadoCapacidad(sobre, clave) }
-                    if (compensar != null) {
-                        // La reserva llegó después de cancelar el envío: se devuelve el cupo.
-                        // El commandId deriva del eventId del resultado, así un reenvío no libera dos veces.
-                        val commandId = "compensacion:" + sobre.path("eventId").asText("")
-                        reintentar { mensajeria.solicitarLiberacion(compensar, commandId) }
+                    val aplicado = reintentar { auditoria.aplicarResultadoCapacidad(sobre, clave) }
+                    val envio = aplicado.envio
+                    when {
+                        aplicado.accion == AccionPosterior.COMPENSAR && envio != null -> {
+                            // La reserva llegó después de cancelar el envío: se devuelve el cupo. El estado
+                            // LIBERACION_PENDIENTE ya quedó guardado; si esta publicación falla, el reconciliador la reenvía.
+                            // El commandId deriva del comando de reserva, así un reenvío no libera dos veces.
+                            val comandoReserva = IdsComando.commandIdDeResultado(aplicado.eventId)
+                            reintentar { mensajeria.solicitarLiberacion(envio, IdsComando.compensacion(comandoReserva)) }
+                        }
+
+                        aplicado.accion == AccionPosterior.NOTIFICAR_RECHAZO && envio != null ->
+                            reintentar {
+                                mensajeria.enviarEmailEstado(
+                                    envio,
+                                    "No hay capacidad para tu envío ${envio.trackingCode}",
+                                    "No pudimos reservar capacidad para tu envío ${envio.trackingCode}. " +
+                                        "Nuestro equipo lo revisará y te contactaremos.",
+                                    IdsComando.avisoRechazo(aplicado.eventId),
+                                )
+                            }
                     }
                 }
                 else -> throw MensajeNoRecuperableException("Routing key sin manejador en la auditoría: '$clave'")
