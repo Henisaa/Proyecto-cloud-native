@@ -117,7 +117,7 @@ class KafkaAdminService(private val admin: AdminClient,
         return topics()
     }
     fun lag(group: String): List<Map<String, Any>> {
-        require(group.matches(Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo"))) { "Grupo fuera del dominio RutaExpress" }
+        require(group.matches(Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo|rutaexpress-streams-processor"))) { "Grupo fuera del dominio RutaExpress" }
         val offsets: Map<TopicPartition, OffsetAndMetadata> = admin.listConsumerGroupOffsets(group)
             .partitionsToOffsetAndMetadata().get(timeout, TimeUnit.SECONDS).filterKeys { managed(it.topic()) }
         if(offsets.isEmpty()) return emptyList()
