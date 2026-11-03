@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.core.Authentication
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.*
@@ -30,7 +31,7 @@ class BffController(
     }
 
     @GetMapping("/dashboard")
-    @Operation(summary = "Panel de control consolidado según el rol del usuario (Admin, Despachador, Cliente, Auditor)")
+    @Operation(summary = "Panel consolidado según el rol; un servicio caído solo deja no disponible su bloque")
     fun getDashboard(@AuthenticationPrincipal jwt: Jwt?): ResponseEntity<DashboardSummaryDto> {
         val dashboard = bffService.buildDashboard(jwt)
         return ResponseEntity.ok(dashboard)
@@ -44,6 +45,34 @@ class BffController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping("/catalog/services/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @Operation(summary = "Detalle de un servicio con tarifas; las capacidades solo las ven Admin y Despachador")
+    fun getCatalogService(
+        @PathVariable id: Long,
+        authentication: Authentication?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> {
+        val detalle = bffService.fetchCatalogService(id, jwt?.tokenValue ?: "")
+        // Sin seguridad (SECURITY_ENABLED=false) no hay autenticación ni restricción por rol: se muestran las capacidades.
+        val veCapacidades = authentication == null || authentication.authorities.any { it.authority == "ROLE_ADMIN" || it.authority == "ROLE_DESPACHADOR" }
+        if (!veCapacidades && detalle is Map<*, *>) {
+            return ResponseEntity.ok(detalle.filterKeys { it != "capacities" })
+        }
+        return ResponseEntity.ok(detalle)
+    }
+
+    @PutMapping("/catalog/manage/services/{id}/capacities/{capacityId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Editar una capacidad de flota: máximo diario, peso, volumen o estado activo (solo ADMIN)")
+    fun updateCapacity(
+        @PathVariable id: Long,
+        @PathVariable capacityId: Long,
+        @RequestBody body: Map<String, Any?>,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> =
+        ResponseEntity.ok(bffService.updateCapacity(id, capacityId, body, jwt?.tokenValue ?: ""))
+
     @GetMapping("/report/kpis")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Consultar KPIs de red (retransmite a ms-rutaexpress-report, exclusivo ADMIN)")
@@ -54,6 +83,14 @@ class BffController(
         val response = bffService.fetchKpis(range, jwt?.tokenValue ?: "")
         return ResponseEntity.ok(response)
     }
+
+    @GetMapping("/report/top-services")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Servicios más usados (retransmite a ms-rutaexpress-report, exclusivo ADMIN)")
+    fun getTopServices(
+        @RequestParam(defaultValue = "last7d") range: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> = ResponseEntity.ok(bffService.fetchTopServices(range, jwt?.tokenValue ?: ""))
 
     @GetMapping("/audit/timeline/{idEntidad}")
     @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
@@ -66,20 +103,31 @@ class BffController(
         return ResponseEntity.ok(response)
     }
 
+    @GetMapping("/audit/resolve/{reference}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    fun resolveAuditReference(@PathVariable reference: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<Any> =
+        ResponseEntity.ok(bffService.resolveAuditReference(reference, jwt?.tokenValue ?: ""))
+
     @GetMapping("/shipments")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
-    @Operation(summary = "Listar envíos con filtro opcional de estado (retransmite a ms-rutaexpress-shipments)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @Operation(summary = "Listar envíos paginados con filtros (page, size, status, capacity, from, to, q)")
     fun getShipments(
-        @RequestParam(required = false) status: String?,
+        @RequestParam params: Map<String, String>,
         @AuthenticationPrincipal jwt: Jwt?
     ): ResponseEntity<Any> {
-        val response = bffService.fetchShipments(status, jwt?.tokenValue ?: "")
-        return ResponseEntity.ok(response)
+        val filtros = params.filterKeys { it in FILTROS_ENVIOS }.filterValues { it.isNotBlank() }
+        return ResponseEntity.ok(bffService.fetchShipments(filtros, jwt?.tokenValue ?: ""))
     }
 
+    @GetMapping("/shipments/summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @Operation(summary = "Conteos por estado y capacidad, y los últimos envíos (un cliente solo ve los suyos)")
+    fun getShipmentsSummary(@AuthenticationPrincipal jwt: Jwt?): ResponseEntity<Any> =
+        ResponseEntity.ok(bffService.fetchShipmentsSummary(jwt?.tokenValue ?: ""))
+
     @GetMapping("/shipments/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE', 'AUDITOR')")
-    @Operation(summary = "Obtener un envío por id (retransmite a ms-rutaexpress-shipments)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
+    @Operation(summary = "Obtener un envío por id, con las transiciones permitidas")
     fun getShipment(
         @PathVariable id: String,
         @AuthenticationPrincipal jwt: Jwt?
@@ -87,6 +135,14 @@ class BffController(
         val response = bffService.fetchShipment(id, jwt?.tokenValue ?: "")
         return ResponseEntity.ok(response)
     }
+
+    @GetMapping("/shipments/{id}/timeline")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    @Operation(summary = "Línea de tiempo unificada del envío: RabbitMQ (shipments) y Kafka (audit)")
+    fun getShipmentTimeline(
+        @PathVariable id: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> = ResponseEntity.ok(bffService.fetchShipmentTimeline(id, jwt?.tokenValue ?: ""))
 
     @PostMapping("/shipments")
     @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR', 'CLIENTE')")
@@ -112,9 +168,22 @@ class BffController(
         return ResponseEntity.ok(response)
     }
 
+    @PostMapping("/shipments/{id}/capacity/retry")
+    @PreAuthorize("hasAnyRole('ADMIN', 'DESPACHADOR')")
+    @Operation(summary = "Reintentar la reserva de capacidad de un envío ACEPTADO con capacidad RECHAZADA")
+    fun retryCapacity(
+        @PathVariable id: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<Any> = ResponseEntity.ok(bffService.retryShipmentCapacity(id, jwt?.tokenValue ?: ""))
+
     @GetMapping("/status")
-    @Operation(summary = "Estado de conectividad del BFF con Azure IDaaS y microservicios")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Estado UP/DOWN de cada microservicio, sin exponer URLs internas (solo ADMIN)")
     fun getStatus(): ResponseEntity<GatewayHealthDto> {
         return ResponseEntity.ok(bffService.getStatus())
+    }
+
+    private companion object {
+        val FILTROS_ENVIOS = setOf("page", "size", "status", "capacity", "from", "to", "q")
     }
 }

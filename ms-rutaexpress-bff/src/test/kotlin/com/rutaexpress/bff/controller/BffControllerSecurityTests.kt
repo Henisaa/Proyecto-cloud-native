@@ -135,4 +135,37 @@ class BffControllerSecurityTests {
         assertTrue(authorityNames.contains("SCOPE_write:orders"), "Debe contener SCOPE_write:orders")
         assertEquals("admin@rutaexpress.cl", auth.name)
     }
+    @Test
+    @WithMockUser(roles = ["AUDITOR"])
+    fun `auditor no tiene acceso al listado detalle ni resumen de envios`() {
+        for (path in listOf("/api/bff/shipments", "/api/bff/shipments/summary", "/api/bff/shipments/s-1")) {
+            mockMvc.perform(get(path)).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = ["DESPACHADOR"])
+    fun `despachador no consulta timelines`() {
+        for (path in listOf("/api/bff/audit/timeline/s-1", "/api/bff/shipments/s-1/timeline")) {
+            mockMvc.perform(get(path)).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = ["INVENTADO"])
+    fun `rol desconocido no obtiene dashboard ni funciones de negocio`() {
+        for (path in listOf("/api/bff/dashboard", "/api/bff/shipments", "/api/bff/catalog/services")) {
+            mockMvc.perform(get(path)).andExpect(status().isForbidden)
+        }
+    }
+
+    @Test
+    fun `solo los roles documentados generan autoridades y los scopes no son roles`() {
+        val jwt = Jwt.withTokenValue("aliases").header("alg", "RS256")
+            .claim("roles", listOf("role_operador del dominio", "Cliente del dominio", "AUDITOR", "INVENTADO"))
+            .claim("scp", "ADMIN access_as_user").build()
+        val authorities = AzureJwtAuthenticationConverter().convert(jwt).authorities.map { it.authority }.toSet()
+        assertEquals(setOf("ROLE_DESPACHADOR", "ROLE_CLIENTE", "ROLE_AUDITOR", "SCOPE_ADMIN", "SCOPE_access_as_user"), authorities)
+    }
+
 }

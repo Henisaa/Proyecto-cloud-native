@@ -35,6 +35,8 @@ class MensajeriaPublicador(
     @Value("\${app.notify.warehouse-email:bodega@rutaexpress.local}")
     private val warehouseEmail: String,
     private val nombres: RabbitNombres,
+    @Value("\${app.rabbit.confirm-timeout-ms:3000}")
+    private val esperaConfirmacionMs: Long = 3000,
 ) {
     private val logger = LoggerFactory.getLogger(MensajeriaPublicador::class.java)
 
@@ -54,23 +56,24 @@ class MensajeriaPublicador(
         )))
     }
 
-    fun solicitarReserva(envio: Envio): String {
-        val commandId = UUID.randomUUID().toString()
+    /** commandId: el que quedó guardado en el envío (lastReserveCommandId), para descartar resultados viejos. */
+    fun solicitarReserva(envio: Envio, commandId: String): String {
         publicarComando(nombres.routing.capacityReserve, envolver("capacity.reserve.requested", commandId, comandoCapacidad(envio)))
         return commandId
     }
 
-    fun solicitarLiberacion(envio: Envio, commandId: String = UUID.randomUUID().toString()): String {
+    /** commandId determinista (IdsComando): reenviar la liberación nunca descuenta dos veces. */
+    fun solicitarLiberacion(envio: Envio, commandId: String): String {
         publicarComando(nombres.routing.capacityRelease, envolver("capacity.release.requested", commandId, comandoCapacidad(envio)))
         return commandId
     }
 
-    fun enviarEmailEstado(envio: Envio, subject: String, mensaje: String) {
+    fun enviarEmailEstado(envio: Envio, subject: String, mensaje: String, eventId: String = UUID.randomUUID().toString()) {
         if (envio.recipientEmail.isNullOrBlank()) {
             logger.info("Envío {} sin correo de destinatario; no se solicita email", envio.id)
             return
         }
-        publicar(nombres.exchanges.events, nombres.routing.notificationEmail, envolver("notification.requested", UUID.randomUUID().toString(),
+        publicar(nombres.exchanges.events, nombres.routing.notificationEmail, envolver("notification.requested", eventId,
             EmailNotification(
                 shipmentId = envio.id,
                 recipientEmail = envio.recipientEmail,
@@ -138,7 +141,7 @@ class MensajeriaPublicador(
         val correlacion = CorrelationData(sobre.eventId)
         try {
             rabbitTemplate.convertAndSend(exchange, clave, sobre, identificar, correlacion)
-            val confirmacion = correlacion.future.get(10, TimeUnit.SECONDS)
+            val confirmacion = correlacion.future.get(esperaConfirmacionMs, TimeUnit.MILLISECONDS)
             check(confirmacion.isAck && correlacion.returned == null) {
                 "el broker no confirmó el mensaje (ack=${confirmacion.isAck}, sinRuta=${correlacion.returned != null})"
             }
