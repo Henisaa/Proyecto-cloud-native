@@ -15,8 +15,6 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 app:
-  method-security:
-    enabled: ${SECURITY_ENABLED:false}
   security:
     enabled: ${SECURITY_ENABLED:false}
   kafka:

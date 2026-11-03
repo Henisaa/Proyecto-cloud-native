@@ -54,6 +54,7 @@ class SeguridadConfig(
                     ).permitAll()
                     .requestMatchers(
                         "/actuator/health",
+                        "/actuator/health/**",
                         "/actuator/info"
                     ).permitAll()
 
@@ -115,8 +116,7 @@ class AzureRolesConverter : Converter<Jwt, AbstractAuthenticationToken> {
         if (rolesClaim is List<*>) {
             rolesClaim.forEach { role ->
                 if (role is String && role.isNotBlank()) {
-                    val roleName = "ROLE_${normalizeRole(role)}"
-                    authorities.add(SimpleGrantedAuthority(roleName))
+                    normalizeRole(role)?.let { authorities.add(SimpleGrantedAuthority("ROLE_$it")) }
                 }
             }
         }
@@ -130,12 +130,14 @@ class AzureRolesConverter : Converter<Jwt, AbstractAuthenticationToken> {
                 .forEach { authorities.add(SimpleGrantedAuthority("SCOPE_$it")) }
         }
 
-        return JwtAuthenticationToken(jwt, authorities, jwt.subject ?: "usuario")
+        // El nombre del actor es legible (correo o nombre), no el sub opaco del token.
+        return JwtAuthenticationToken(jwt, authorities, Actor.nombreLegible(jwt.claims, jwt.subject))
     }
 }
 
-private fun normalizeRole(role: String): String = when(val value = role.trim().removePrefix("ROLE_").uppercase()) {
+internal fun normalizeRole(role: String): String? = when (val value = role.trim().uppercase().removePrefix("ROLE_")) {
     "OPERADOR DEL DOMINIO", "OPERADOR" -> "DESPACHADOR"
     "CLIENTE DEL DOMINIO" -> "CLIENTE"
-    else -> value
+    "ADMIN", "DESPACHADOR", "CLIENTE", "AUDITOR" -> value
+    else -> null
 }

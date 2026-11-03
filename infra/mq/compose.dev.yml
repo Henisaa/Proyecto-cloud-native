@@ -1,0 +1,9 @@
+# Solo para Docker Desktop o Codespaces: publica AMQP en 127.0.0.1 para ejecutar aplicaciones fuera de Docker.
+# Nunca se usa en el EC2.
+services:
+  rabbit1:
+    ports:
+      - "127.0.0.1:5672:5672"
+  rabbit2:
+    ports:
+      - "127.0.0.1:5673:5672"

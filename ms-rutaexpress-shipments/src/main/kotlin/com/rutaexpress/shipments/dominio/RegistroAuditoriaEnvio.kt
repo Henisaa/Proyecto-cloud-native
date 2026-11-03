@@ -14,7 +14,7 @@ import java.time.Instant
 @Table(name = "tb_auditoria_envio")
 class RegistroAuditoriaEnvio(
     @Id
-    @Column(name = "event_id", length = 64, nullable = false)
+    @Column(name = "event_id", length = 100, nullable = false)
     var eventId: String = "",
 
     @Column(name = "shipment_id", length = 36, nullable = false)
