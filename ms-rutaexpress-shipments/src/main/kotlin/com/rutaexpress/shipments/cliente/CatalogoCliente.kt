@@ -69,6 +69,12 @@ class CatalogoCliente(
         )
     }
 
+    /** Mensaje que devolvió catalog en su cuerpo de error; si no hay, el texto de HTTP. */
+    private fun mensajeDe(ex: RestClientResponseException): String =
+        runCatching {
+            tools.jackson.databind.json.JsonMapper().readTree(ex.responseBodyAsString).path("message").asText("")
+        }.getOrDefault("").ifBlank { "solicitud inválida" }
+
     private fun llamar(serviceId: Long, operacion: String, body: Map<String, Any?>, token: String?): JsonNode? {
         if (!catalogoEnabled) {
             logger.debug("Integración con catálogo deshabilitada; se omite {}", operacion)
@@ -88,6 +94,7 @@ class CatalogoCliente(
             when (ex.statusCode.value()) {
                 404 -> throw ServicioCatalogoNoEncontradoException("El servicio $serviceId no existe en el catálogo (404)")
                 409 -> throw CapacidadNoDisponibleException("Catálogo rechazó '$operacion': sin capacidad disponible (409)")
+                400 -> throw IllegalArgumentException("Catálogo rechazó la solicitud: ${mensajeDe(ex)}")
                 else -> throw CatalogoNoDisponibleException("Error del catálogo en '$operacion' (HTTP ${ex.statusCode.value()})", ex)
             }
         } catch (ex: Exception) {

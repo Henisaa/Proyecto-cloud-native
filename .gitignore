@@ -19,6 +19,7 @@
 # Logs and temps
 *.log
 *.tmp
+__pycache__/
 
 # OS
 .DS_Store

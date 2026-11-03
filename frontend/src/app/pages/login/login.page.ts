@@ -115,6 +115,12 @@ import { AuthService } from '../../core/auth.service';
             </button>
           </div>
 
+          @if (expirada) {
+            <p class="mt-6 max-w-sm rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs font-semibold text-amber-700" role="alert">
+              Su sesión expiró. Inicie sesión de nuevo para continuar.
+            </p>
+          }
+
           @if (auth.enProceso()) {
             <p class="mt-6 text-xs font-medium text-zinc-400">Procesando inicio de sesión con Microsoft…</p>
           }
@@ -140,6 +146,8 @@ export class LoginPage implements AfterViewInit, OnDestroy {
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private submitting = false;
+  /** El interceptor de errores vuelve aquí con ?expirada=1 cuando el token ya no se puede renovar (FE-01). */
+  readonly expirada = new URLSearchParams(window.location.search).has('expirada');
 
   constructor() {
     if (this.auth.isLoggedIn) {
