@@ -4,6 +4,7 @@ import com.rutaexpress.bff.service.MqAdminCliente
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.security.access.prepost.PreAuthorize
@@ -126,6 +127,44 @@ class BrokerAdminController(
     fun topic(@PathVariable name: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/topics/{name}", jwt, name)
     @GetMapping("/kafka/groups/{group}/lag")
     fun lag(@PathVariable group: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
+    @GetMapping("/kafka/streams/state")
+    fun streamsState(@AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka/streams/state", jwt)
+    @PostMapping("/kafka/streams/simulate")
+    fun simulateStreamsPost(
+        @RequestParam(value = "scenario", required = false) scenario: String?,
+        @RequestBody(required = false) body: Map<String, Any?>?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any {
+        return try {
+            val req = kafkaDisponible().post()
+                .uri { uri ->
+                    val b = uri.path("/api/kafka/streams/simulate")
+                    if (!scenario.isNullOrBlank()) b.queryParam("scenario", scenario)
+                    b.build()
+                }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+            if (body != null) {
+                req.contentType(MediaType.APPLICATION_JSON).body(body)
+            }
+            req.retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo simular evento en Kafka Streams: ${e.message}", e)
+        }
+    }
+    @GetMapping("/kafka/streams/simulate")
+    fun simulateStreamsGet(
+        @RequestParam(value = "scenario", defaultValue = "rafaga") scenario: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any {
+        return try {
+            kafkaDisponible().get()
+                .uri { uri -> uri.path("/api/kafka/streams/simulate").queryParam("scenario", scenario).build() }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo simular escenario en Kafka Streams: ${e.message}", e)
+        }
+    }
     @PostMapping("/kafka/send")
     fun sendKafkaPost(
         @RequestParam("message") message: String,

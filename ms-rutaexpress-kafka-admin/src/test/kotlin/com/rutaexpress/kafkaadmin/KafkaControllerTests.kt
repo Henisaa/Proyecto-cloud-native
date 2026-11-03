@@ -8,6 +8,7 @@ import org.mockito.Mockito.*
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -15,11 +16,12 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.assertj.core.api.Assertions.assertThat
 
 @WebMvcTest(KafkaController::class)
-@Import(SeguridadConfig::class)
+@Import(SeguridadConfig::class, KafkaStreamsService::class)
 class KafkaControllerTests {
 
     @Autowired lateinit var mvc: MockMvc
@@ -69,6 +71,27 @@ class KafkaControllerTests {
 
         mvc.perform(get("/api/kafka/messages"))
             .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `streams state y simulate procesan envios y consultan State Store`() {
+        mvc.perform(get("/api/kafka/streams/simulate").param("scenario", "rafaga"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.processedCount").value(5))
+
+        mvc.perform(
+            post("/api/kafka/streams/simulate")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"serviceType":"EXPRESS","status":"ENTREGADO","zone":"NORTE","weightKg":14.0,"packagesCount":2,"price":19000.0}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.success").value(true))
+
+        mvc.perform(get("/api/kafka/streams/state"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.applicationId").value("rutaexpress-streams-processor"))
+            .andExpect(jsonPath("$.inputTopic").value("shipments.events"))
     }
 
     @Test
