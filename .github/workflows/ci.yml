@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A later commit never turns an unfinished verification into a green check.
+concurrency:
+  group: ci-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test policy and script syntax
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          docker run --rm -e BASE_SHA -v "$PWD":/repo -w /repo python:3.12-alpine sh -ec 'apk add --no-cache git > /dev/null; git config --global --add safe.directory /repo; python ci/policy.py'
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python -m unittest discover -s ci -v
+          bash -n tests/system/run.sh
+          bash -n tests/system/mq-smoke.sh
+          bash -n infra/mq/start-rabbit.sh
+          sh -n frontend-v2/docker/40-runtime-config.sh
+          docker run --rm -v "$PWD":/repo -w /repo node:22-alpine node --test frontend-v2/tests/*.test.cjs
+          for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
+          docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
+
+  build:
+    needs: policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Test and export reports inside Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          target: reports
+          outputs: type=local,dest=reports
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-reports-${{ matrix.service }}
+          path: reports
+          if-no-files-found: error
+          retention-days: 7
+      - name: Build candidate image, without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          target: runtime
+          load: true
+          tags: rutaexpress-ci/${{ matrix.service }}:test
+          build-args: VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Production frontend runtime and authentication entrypoint
+        if: matrix.service == 'frontend'
+        run: |
+          docker run -d --name frontend-smoke -p 127.0.0.1:18080:8080 \
+            -e API_BASE_URL=https://api.ejemplo.cl -e MSAL_CLIENT_ID=ci \
+            -e MSAL_AUTHORITY=https://login.microsoftonline.com/organizations \
+            -e MSAL_REDIRECT_URI=https://app.ejemplo.cl \
+            -e MSAL_SCOPE=api://ci/access_as_user rutaexpress-ci/frontend:test
+          trap 'docker logs frontend-smoke; docker rm -f frontend-smoke' EXIT
+          curl --retry 15 --retry-all-errors --retry-delay 2 -fsS http://127.0.0.1:18080/health
+          curl -fsS http://127.0.0.1:18080/shipments/example | grep -q '<app-root>'
+          curl -fsS http://127.0.0.1:18080/config.json | jq -e '.clientId == "ci"'
+          curl -fsSI http://127.0.0.1:18080/ | grep -qi "frame-ancestors 'none'"
+          test "$(docker exec frontend-smoke id -u)" != 0
+          docker exec frontend-smoke sh -c '! grep -r "CI issuer unavailable" /usr/share/nginx/html --include="*.js"'
+      - name: Export candidate
+        run: docker save -o image.tar rutaexpress-ci/${{ matrix.service }}:test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+          path: image.tar
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 3
+
+  tests:
+    needs: policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gradle cache identity
+        id: gradle-cache
+        env:
+          MODULE: ${{ matrix.service }}
+        run: |
+          identity="$(sha256sum "$MODULE/build.gradle.kts" "$MODULE/settings.gradle.kts" "$MODULE/gradle/wrapper/gradle-wrapper.properties" | sha256sum | cut -d ' ' -f 1)"
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .ci-gradle
+          key: strict-gradle-${{ runner.os }}-${{ matrix.service }}-${{ steps.gradle-cache.outputs.identity }}
+          restore-keys: strict-gradle-${{ runner.os }}-${{ matrix.service }}-
+      - name: Complete tests, real dependencies, no test-result cache
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/${{ matrix.service }}":/app -w /app \
+            -v "$PWD/.ci-gradle":/root/.gradle \
+            --add-host=host.docker.internal:host-gateway \
+            -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal -e RUN_DOCKER_TESTS=true \
+            eclipse-temurin:21-jdk \
+            sh -c 'chmod +x gradlew && ./gradlew --no-daemon --refresh-dependencies dependencies --configuration testRuntimeClasspath && ./gradlew --no-daemon --rerun-tasks clean test jacocoTestReport'
+      - name: Reject skipped, missing and regressing tests
+        run: |
+          module="${{ matrix.service }}"
+          module="${module#ms-rutaexpress-}"
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine \
+            python ci/gate.py "${{ matrix.service }}/build" --module "$module"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}/build/test-results
+            ${{ matrix.service }}/build/reports
+          if-no-files-found: error
+          retention-days: 7
+
+  compose:
+    needs: policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate every production and CI compose
+        run: |
+          cp infra/.env.example infra/.env
+          mkdir -p infra/secrets
+          echo ci-disposable-cookie > infra/secrets/erlang.cookie
+          for dir in mq apps kafka edge; do
+            docker compose --env-file infra/.env -f "infra/$dir/compose.yml" config -q
+          done
+          docker compose --env-file infra/.env -f infra/apps/compose.yml -f infra/apps/compose.dev.yml --profile ep1 config -q
+          docker compose config -q
+          docker compose config --format json | docker run --rm -i -v "$PWD":/repo -w /repo python:3.12-alpine python ci/compose_contract.py
+          docker build -t rutaexpress-ci/frontend-v2:test frontend-v2
+          docker compose --env-file tests/system/ci.env -f tests/system/compose.yml config -q
+          docker compose --env-file tests/system/ci.env -f infra/apps/compose.yml -f tests/system/apps.override.yml --profile ep1 config -q
+      - name: Fresh RabbitMQ cluster, credentials and restart
+        run: bash tests/system/mq-smoke.sh
+
+  system:
+    needs: [build, compose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk for the real stack (preinstalled toolchains are unused here)
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: images
+      - name: Load the exact candidate images
+        run: |
+          for image in images/*/image.tar; do docker load -i "$image"; rm -f "$image"; done
+      - uses: docker/setup-buildx-action@v3
+      - name: Build isolated browser frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: e2e
+          load: true
+          tags: rutaexpress-ci/frontend-e2e:test
+          cache-from: type=gha,scope=frontend
+      - name: Build browser runner
+        run: docker build -f tests/browser/Dockerfile -t rutaexpress-ci/browser-tests:test .
+      - name: Real stack, signed JWT, four browsers, concurrency and failure scenarios
+        run: bash tests/system/run.sh
+      - name: Reports, browser traces and service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-reports
+          path: work/system-reports
+          if-no-files-found: error
+          retention-days: 7
+
+  quality-gate:
+    if: always()
+    needs: [policy, build, tests, compose, system]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every required job must succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tests-*
+          path: verification
+      - uses: actions/download-artifact@v4
+        with:
+          name: system-reports
+          path: verification/system
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-reports-frontend
+          path: verification/frontend
+      - name: Verify complete suite and coverage floors
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo python:3.12-alpine python ci/gate.py verification
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-catalog, ms-rutaexpress-notify, ms-rutaexpress-rabbit-admin, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-kafka-admin, frontend]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish only the verified candidate
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          docker load -i image.tar
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          name="$SERVICE"
+          if [ "$name" = frontend ]; then name=frontend-rutaexpress; fi
+          image="ghcr.io/$owner/$name"
+          tag="sha-${GITHUB_SHA:0:7}"
+          docker tag "rutaexpress-ci/$SERVICE:test" "$image:$tag"
+          docker push "$image:$tag"
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            docker tag "rutaexpress-ci/$SERVICE:test" "$image:main"
+            docker push "$image:main"
+          fi

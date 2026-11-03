@@ -1,182 +1,177 @@
-import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { Observable } from 'rxjs';
-import { BffService, MqBindingRequest, MqExchangeRequest, MqQueueRequest } from '../../core/bff.service';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { forkJoin, timer } from 'rxjs';
+import { BffService } from '../../core/bff.service';
+import { interpretarError } from '../../core/http-error';
+import { MqMetricas, MqNodo } from '../../core/models';
+import { bytes, duracion, numero } from '../../shared/format';
+import { VistaEstadoComponent } from '../../shared/vista-estado.component';
+import { MqBindingsComponent } from './mq-bindings.component';
+import { MqColasComponent } from './mq-colas.component';
+import { MqExchangesComponent } from './mq-exchanges.component';
+import { MqPublicarComponent } from './mq-publicar.component';
+import { MqRetencionComponent } from './mq-retencion.component';
 
+type Pestana = 'resumen' | 'colas' | 'exchanges' | 'bindings' | 'retencion' | 'publicar';
+
+/** Ayuda junto a cada métrica: cómo se interpreta (sirve para la defensa). */
+export const AYUDA_METRICAS = {
+  activeQueues: 'Colas existentes en el vhost. Las tres colas de trabajo (command, notification, audit) más sus DLQ.',
+  messagesReady: 'Mensajes esperando a un consumidor (backlog). Si crece sin parar, falta consumo.',
+  messagesUnacknowledged: 'Mensajes entregados a un consumidor que aún no confirma (ACK): trabajo en proceso.',
+  consumers: 'Consumidores conectados. Una cola con 0 consumidores acumula mensajes sin control.',
+  dlqQueues: 'Colas de mensajes muertos: reciben lo que se rechazó (NACK sin reencolar), venció (TTL) o desbordó (maxlen).',
+  dlqMessages: 'Mensajes en las DLQ ahora. Una DLQ que se consume y se registra en log casi siempre está en 0.',
+  dlqArrivedTotal: 'Acumulado de mensajes que llegaron a las DLQ desde que arrancó el nodo: la métrica real de fallos.',
+} as const;
+
+/** Administración RabbitMQ (FE-11 a FE-16, solo Admin). */
 @Component({
   selector: 'app-admin-mq',
   standalone: true,
-  imports: [FormsModule],
+  imports: [VistaEstadoComponent, MqColasComponent, MqExchangesComponent, MqBindingsComponent, MqRetencionComponent, MqPublicarComponent],
   template: `
     <div class="space-y-6">
       <header class="flex flex-col justify-between gap-4 border-b border-zinc-200/60 pb-6 sm:flex-row sm:items-end">
         <div>
-          <h1 class="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">Administración RabbitMQ</h1>
-          <p class="mt-1 text-sm text-zinc-500">Administra colas, exchanges y bindings. Los errores del servicio se muestran aquí.</p>
+          <h1 class="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">Administración de RabbitMQ</h1>
+          <p class="mt-1 text-xs text-zinc-500">Colas, exchanges, bindings, retención y mensajes de prueba del clúster.</p>
         </div>
-        <button type="button" class="btn-secondary" (click)="cargarMetricas()" [disabled]="cargando">Actualizar métricas</button>
       </header>
 
-      @if (error) { <p class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{{ error }}</p> }
-      @if (exito) { <p class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{{ exito }}</p> }
-
-      <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Métricas RabbitMQ">
-        @for (item of metricas; track item.key) {
-          <article class="card">
-            <p class="label">{{ item.label }}</p>
-            <p class="font-mono text-2xl font-bold text-zinc-900">{{ valor(item.key) }}</p>
-          </article>
+      <div role="tablist" aria-label="Secciones de RabbitMQ" class="flex flex-wrap gap-1 border-b border-zinc-200">
+        @for (p of pestanas; track p.id) {
+          <button
+            type="button"
+            role="tab"
+            [id]="'tab-' + p.id"
+            [attr.aria-selected]="pestana() === p.id"
+            [attr.aria-controls]="'panel-' + p.id"
+            class="rounded-t-lg px-4 py-2 text-xs font-semibold transition"
+            [class]="pestana() === p.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'"
+            (click)="pestana.set(p.id)"
+          >
+            {{ p.etiqueta }}
+          </button>
         }
-      </section>
+      </div>
 
-      <div class="grid gap-5 lg:grid-cols-2">
-        <section class="card space-y-4">
-          <h2 class="font-semibold text-zinc-900">Crear cola</h2>
-          <form class="space-y-3" (ngSubmit)="crearCola()">
-            <label class="block"><span class="label">Nombre</span><input class="input" name="nombreCola" [(ngModel)]="nombreCola" required maxlength="255" /></label>
-            <button class="btn-primary" type="submit" [disabled]="cargando">Crear cola</button>
-          </form>
-          <form class="space-y-3 border-t border-zinc-100 pt-4" (ngSubmit)="eliminarCola()">
-            <label class="block"><span class="label">Cola a eliminar</span><input class="input" name="colaEliminar" [(ngModel)]="colaEliminar" required maxlength="255" /></label>
-            <label class="flex items-center gap-2 text-sm text-zinc-600"><input type="checkbox" name="forzarCola" [(ngModel)]="forzarCola" /> Forzar eliminación</label>
-            <button class="btn-secondary" type="submit" [disabled]="cargando">Eliminar cola</button>
-          </form>
-        </section>
+      <div role="tabpanel" [id]="'panel-' + pestana()" [attr.aria-labelledby]="'tab-' + pestana()">
+        @switch (pestana()) {
+          @case ('resumen') {
+            <div class="space-y-4">
+              <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" [checked]="auto()" (change)="auto.set($any($event.target).checked)" />
+                  Actualizar cada 10 s
+                </label>
+                <button type="button" class="btn-secondary" (click)="cargar()">Actualizar ahora</button>
+                @if (ultima()) { <span>Última consulta: {{ ultima() }}</span> }
+              </div>
 
-        <section class="card space-y-4">
-          <h2 class="font-semibold text-zinc-900">Crear exchange</h2>
-          <form class="space-y-3" (ngSubmit)="crearExchange()">
-            <label class="block"><span class="label">Nombre</span><input class="input" name="nombreExchange" [(ngModel)]="nombreExchange" required maxlength="255" /></label>
-            <label class="block"><span class="label">Tipo</span><select class="input" name="tipoExchange" [(ngModel)]="tipoExchange"><option value="direct">direct</option><option value="topic">topic</option><option value="fanout">fanout</option><option value="headers">headers</option></select></label>
-            <button class="btn-primary" type="submit" [disabled]="cargando">Crear exchange</button>
-          </form>
-          <form class="space-y-3 border-t border-zinc-100 pt-4" (ngSubmit)="eliminarExchange()">
-            <label class="block"><span class="label">Exchange a eliminar</span><input class="input" name="exchangeEliminar" [(ngModel)]="exchangeEliminar" required maxlength="255" /></label>
-            <label class="flex items-center gap-2 text-sm text-zinc-600"><input type="checkbox" name="forzarExchange" [(ngModel)]="forzarExchange" /> Forzar eliminación</label>
-            <button class="btn-secondary" type="submit" [disabled]="cargando">Eliminar exchange</button>
-          </form>
-        </section>
+              <app-vista-estado [cargando]="cargando()" [error]="error()" (reintentar)="cargar()">
+                <section aria-labelledby="titulo-nodos" class="space-y-2">
+                  <h2 id="titulo-nodos" class="text-sm font-bold text-zinc-800">Nodos del clúster</h2>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    @for (n of nodos(); track n.name) {
+                      <div class="card" [class]="n.running ? '' : 'border-rose-300'">
+                        <div class="flex items-center justify-between">
+                          <p class="font-mono text-sm font-semibold">{{ n.name }}</p>
+                          <span class="badge" [class]="n.running ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'">
+                            {{ n.running ? 'EN EJECUCIÓN' : 'CAÍDO' }}
+                          </span>
+                        </div>
+                        <p class="mt-2 text-xs text-zinc-500">
+                          Memoria {{ bytes(n.memUsed) }} / {{ bytes(n.memLimit) }} · activo {{ duracion(n.uptimeMs) }}
+                        </p>
+                        @if (n.memAlarm || n.diskFreeAlarm) {
+                          <p class="mt-1 text-xs font-semibold text-rose-600" role="alert">
+                            Alarma: {{ n.memAlarm ? 'memoria' : '' }}{{ n.memAlarm && n.diskFreeAlarm ? ' y ' : '' }}{{ n.diskFreeAlarm ? 'disco' : '' }}
+                          </p>
+                        }
+                      </div>
+                    } @empty {
+                      <p class="text-xs text-zinc-400">Sin información de nodos.</p>
+                    }
+                  </div>
+                </section>
 
-        <section class="card space-y-4 lg:col-span-2">
-          <h2 class="font-semibold text-zinc-900">Bindings</h2>
-          <form class="grid gap-3 sm:grid-cols-2" (ngSubmit)="crearBinding()">
-            <label class="block"><span class="label">Exchange origen</span><input class="input" name="source" [(ngModel)]="source" required /></label>
-            <label class="block"><span class="label">Cola destino</span><input class="input" name="destination" [(ngModel)]="destination" required /></label>
-            <label class="block"><span class="label">Routing key</span><input class="input" name="routingKey" [(ngModel)]="routingKey" /></label>
-            <div class="flex items-end"><button class="btn-primary" type="submit" [disabled]="cargando">Crear binding</button></div>
-          </form>
-          <form class="grid gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-2" (ngSubmit)="eliminarBinding()">
-            <label class="block"><span class="label">Exchange origen</span><input class="input" name="sourceEliminar" [(ngModel)]="sourceEliminar" required /></label>
-            <label class="block"><span class="label">Destino</span><input class="input" name="destinationEliminar" [(ngModel)]="destinationEliminar" required /></label>
-            <label class="block"><span class="label">Routing key</span><input class="input" name="routingKeyEliminar" [(ngModel)]="routingKeyEliminar" /></label>
-            <div class="flex items-end"><button class="btn-secondary" type="submit" [disabled]="cargando">Eliminar binding</button></div>
-          </form>
-        </section>
+                @if (metricas(); as m) {
+                  <section aria-labelledby="titulo-metricas" class="mt-6 space-y-2">
+                    <h2 id="titulo-metricas" class="text-sm font-bold text-zinc-800">Métricas</h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="card" [attr.title]="ayuda.activeQueues"><p class="label">Colas activas</p><p class="font-mono text-2xl font-bold">{{ numero(m.activeQueues) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.activeQueues }}</p></div>
+                      <div class="card" [attr.title]="ayuda.messagesReady"><p class="label">Mensajes listos</p><p class="font-mono text-2xl font-bold">{{ numero(m.messagesReady) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.messagesReady }}</p></div>
+                      <div class="card" [attr.title]="ayuda.messagesUnacknowledged"><p class="label">Sin confirmar</p><p class="font-mono text-2xl font-bold">{{ numero(m.messagesUnacknowledged) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.messagesUnacknowledged }}</p></div>
+                      <div class="card" [attr.title]="ayuda.consumers"><p class="label">Consumidores</p><p class="font-mono text-2xl font-bold">{{ numero(m.consumers) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.consumers }}</p></div>
+                      <div class="card" [attr.title]="ayuda.dlqQueues"><p class="label">Colas DLQ</p><p class="font-mono text-2xl font-bold">{{ numero(m.dlqQueues) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.dlqQueues }}</p></div>
+                      <div class="card" [attr.title]="ayuda.dlqMessages"><p class="label">En la DLQ ahora</p><p class="font-mono text-2xl font-bold">{{ numero(m.dlqMessages) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.dlqMessages }}</p></div>
+                      <div class="card border-rose-200" [attr.title]="ayuda.dlqArrivedTotal"><p class="label">Llegados a la DLQ</p><p class="font-mono text-2xl font-bold text-rose-600" data-testid="dlq-acumulado">{{ numero(m.dlqArrivedTotal) }}</p><p class="mt-1 text-[10px] text-zinc-400">{{ ayuda.dlqArrivedTotal }} Ritmo reciente: {{ m.dlqArrivedRate }} /s.</p></div>
+                    </div>
+                  </section>
+                }
+              </app-vista-estado>
+            </div>
+          }
+          @case ('colas') { <app-mq-colas /> }
+          @case ('exchanges') { <app-mq-exchanges /> }
+          @case ('bindings') { <app-mq-bindings /> }
+          @case ('retencion') { <app-mq-retencion /> }
+          @case ('publicar') { <app-mq-publicar /> }
+        }
       </div>
     </div>
   `,
 })
 export class AdminMqPage implements OnInit {
   private readonly bff = inject(BffService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  readonly metricas = [
-    { key: 'activeQueues', label: 'Colas activas' },
-    { key: 'messagesReady', label: 'Mensajes pendientes' },
-    { key: 'consumers', label: 'Consumidores' },
-    { key: 'dlqMessages', label: 'Mensajes en DLQ' },
+  readonly pestanas: { id: Pestana; etiqueta: string }[] = [
+    { id: 'resumen', etiqueta: 'Resumen' },
+    { id: 'colas', etiqueta: 'Colas' },
+    { id: 'exchanges', etiqueta: 'Exchanges' },
+    { id: 'bindings', etiqueta: 'Bindings' },
+    { id: 'retencion', etiqueta: 'Retención y topología' },
+    { id: 'publicar', etiqueta: 'Mensaje de prueba' },
   ];
-  estado: Record<string, unknown> | null = null;
-  error = '';
-  exito = '';
-  cargando = false;
-  nombreCola = '';
-  colaEliminar = '';
-  forzarCola = false;
-  nombreExchange = '';
-  tipoExchange: MqExchangeRequest['type'] = 'direct';
-  exchangeEliminar = '';
-  forzarExchange = false;
-  source = '';
-  destination = '';
-  routingKey = '';
-  sourceEliminar = '';
-  destinationEliminar = '';
-  routingKeyEliminar = '';
+  readonly pestana = signal<Pestana>('resumen');
+  readonly auto = signal(true);
+  readonly ultima = signal<string | null>(null);
+
+  readonly nodos = signal<MqNodo[]>([]);
+  readonly metricas = signal<MqMetricas | null>(null);
+  readonly cargando = signal(true);
+  readonly error = signal<string | null>(null);
+
+  readonly ayuda = AYUDA_METRICAS;
+  readonly numero = numero;
+  readonly bytes = bytes;
+  readonly duracion = duracion;
 
   ngOnInit(): void {
-    this.cargarMetricas();
+    // Refresco automático cada 10 s, que se puede desactivar. Solo consulta en la pestaña de resumen.
+    timer(0, 10_000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.auto() && this.pestana() === 'resumen') this.cargar(true);
+      });
   }
 
-  valor(key: string): number | string {
-    const value = this.estado?.[key];
-    return typeof value === 'number' ? value : '—';
-  }
-
-  cargarMetricas(): void {
-    this.bff.mqMetrics().subscribe({ next: (value) => (this.estado = value) });
-  }
-
-  crearCola(): void {
-    const solicitud: MqQueueRequest = { name: this.nombreCola.trim(), durable: true };
-    this.ejecutar(this.bff.crearCola(solicitud), 'Cola creada.');
-  }
-
-  eliminarCola(): void {
-    this.ejecutar(this.bff.eliminarCola(this.colaEliminar.trim(), this.forzarCola), 'Cola eliminada.');
-  }
-
-  crearExchange(): void {
-    const solicitud: MqExchangeRequest = { name: this.nombreExchange.trim(), type: this.tipoExchange, durable: true };
-    this.ejecutar(this.bff.crearExchange(solicitud), 'Exchange creado.');
-  }
-
-  eliminarExchange(): void {
-    this.ejecutar(this.bff.eliminarExchange(this.exchangeEliminar.trim(), this.forzarExchange), 'Exchange eliminado.');
-  }
-
-  crearBinding(): void {
-    const solicitud: MqBindingRequest = {
-      source: this.source.trim(),
-      destination: this.destination.trim(),
-      destinationType: 'queue',
-      routingKey: this.routingKey,
-    };
-    this.ejecutar(this.bff.crearBinding(solicitud), 'Binding creado.');
-  }
-
-  eliminarBinding(): void {
-    this.ejecutar(
-      this.bff.eliminarBinding(this.sourceEliminar.trim(), this.destinationEliminar.trim(), this.routingKeyEliminar),
-      'Binding eliminado.',
-    );
-  }
-
-  private ejecutar(request: Observable<unknown>, mensajeExito: string): void {
-    this.error = '';
-    this.exito = '';
-    this.cargando = true;
-    request.subscribe({
-      next: () => {
-        this.exito = mensajeExito;
-        this.cargando = false;
-        this.cargarMetricas();
+  cargar(silencioso = false): void {
+    if (!silencioso) this.cargando.set(true);
+    forkJoin({ nodos: this.bff.mqCluster(silencioso), metricas: this.bff.mqMetricas(silencioso) }).subscribe({
+      next: ({ nodos, metricas }) => {
+        this.nodos.set(nodos);
+        this.metricas.set(metricas);
+        this.error.set(null);
+        this.cargando.set(false);
+        this.ultima.set(new Date().toLocaleTimeString('es-CL'));
       },
-      error: (error: HttpErrorResponse) => {
-        const body = error.error as { detail?: string; message?: string } | string | null;
-        this.error = typeof body === 'string'
-          ? this.detalle(body) || body
-          : body?.detail || body?.message || error.message || 'No se pudo completar la operación.';
-        this.cargando = false;
+      error: (err: unknown) => {
+        this.error.set(interpretarError(err).mensaje);
+        this.cargando.set(false);
       },
     });
-  }
-
-  private detalle(body: string): string | undefined {
-    try {
-      return (JSON.parse(body) as { detail?: string }).detail;
-    } catch {
-      return undefined;
-    }
   }
 }

@@ -1,0 +1,5 @@
+FROM python:3.12-alpine
+RUN apk add --no-cache openssl
+COPY tests/system/oidc.py /app/oidc.py
+USER 10001
+CMD ["python", "/app/oidc.py"]
