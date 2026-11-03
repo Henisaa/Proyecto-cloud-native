@@ -26,7 +26,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Resource not found",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(IllegalArgumentException::class)
@@ -41,7 +41,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Invalid request argument",
             path = request.requestURI
         )
-        return ResponseEntity.status(status).body(error)
+        return ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(IllegalStateException::class)
@@ -53,7 +53,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "State conflict occurred",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
+        return ResponseEntity.status(HttpStatus.CONFLICT).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException::class)
@@ -65,7 +65,7 @@ class GlobalExceptionHandler {
             message = "Malformed or unreadable JSON request body",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
@@ -85,7 +85,7 @@ class GlobalExceptionHandler {
             path = request.requestURI,
             validationErrors = fieldErrors
         )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(AccessDeniedException::class)
@@ -97,7 +97,7 @@ class GlobalExceptionHandler {
             message = "Access denied: insufficient permissions or required role missing",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
 
     @ExceptionHandler(AuthenticationException::class)
@@ -109,18 +109,52 @@ class GlobalExceptionHandler {
             message = "Authentication required or invalid JWT token",
             path = request.requestURI
         )
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error)
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(error)
     }
+
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException::class)
+    fun handleOptimisticLock(ex: org.springframework.dao.OptimisticLockingFailureException, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> {
+        logger.warn("Optimistic lock conflict at {}: {}", request.requestURI, ex.message)
+        return respond(HttpStatus.CONFLICT, "La capacidad cambió mientras se editaba; recargue e intente de nuevo", request)
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException::class)
+    fun handleIntegrity(ex: org.springframework.dao.DataIntegrityViolationException, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> {
+        logger.warn("Integrity violation at {}: {}", request.requestURI, ex.message)
+        return respond(HttpStatus.CONFLICT, "La operación viola una restricción de datos", request)
+    }
+
+    @ExceptionHandler(
+        org.springframework.web.bind.MissingServletRequestParameterException::class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException::class,
+    )
+    fun handleBadParameter(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> {
+        logger.warn("Invalid parameter at {}: {}", request.requestURI, ex.message)
+        return respond(HttpStatus.BAD_REQUEST, "Parámetro de la solicitud ausente o con un tipo inválido", request)
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotAllowed(ex: org.springframework.web.HttpRequestMethodNotSupportedException, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> =
+        respond(HttpStatus.METHOD_NOT_ALLOWED, "Método HTTP no permitido para esta ruta", request)
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException::class)
+    fun handleNoResource(ex: org.springframework.web.servlet.resource.NoResourceFoundException, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> =
+        respond(HttpStatus.NOT_FOUND, "Ruta inexistente", request)
 
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> {
-        logger.error("Internal error at {}: {}", request.requestURI, ex.message, ex)
-        val error = ErrorResponseViewModel(
-            status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            error = HttpStatus.INTERNAL_SERVER_ERROR.reasonPhrase,
-            message = ex.message ?: "An unexpected error occurred",
-            path = request.requestURI
-        )
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error)
+        val correlationId = java.util.UUID.randomUUID().toString()
+        logger.error("Internal error [{}] at {}: {}", correlationId, request.requestURI, ex.message, ex)
+        return respond(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno. Referencia para soporte: $correlationId", request)
     }
+
+    private fun respond(status: HttpStatus, message: String, request: HttpServletRequest): ResponseEntity<ErrorResponseViewModel> =
+        ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(
+            ErrorResponseViewModel(
+                status = status.value(),
+                error = status.reasonPhrase,
+                message = message,
+                path = request.requestURI
+            )
+        )
 }

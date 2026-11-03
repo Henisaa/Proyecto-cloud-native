@@ -1,4 +1,5 @@
 package com.rutaexpress.audit.consumidor
+
 import com.rutaexpress.audit.dominio.EventoAuditoria
 import com.rutaexpress.audit.repositorio.AuditoriaRepositorio
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -16,6 +17,12 @@ class AuditoriaKafkaConsumidor(private val auditoriaRepositorio: AuditoriaReposi
         val data = mapper.readTree(registro.value())
         val eventId = data.path("eventId").asText("")
         require(eventId.isNotBlank()) { "Evento sin eventId" }
+
+        System.out.printf(
+            "[AUDITORIA KAFKA] 📍Partición: %d | Offset: %d | Key: %s | Tópico: %s | Evento: %s%n",
+            registro.partition(), registro.offset(), registro.key() ?: "(sin key)", registro.topic(), eventId
+        )
+
         if (auditoriaRepositorio.existsByEventId(eventId)) return
         val entity = data.path("shipmentId").asText(registro.key() ?: "")
         require(entity.isNotBlank()) { "Evento sin shipmentId" }

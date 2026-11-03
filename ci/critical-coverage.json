@@ -1,0 +1,8 @@
+{
+  "com/rutaexpress/catalog/messaging/CapacidadComandoProcesador": { "LINE": 100, "BRANCH": 80 },
+  "com/rutaexpress/shipments/dominio/EstadoEnvio": { "LINE": 100, "BRANCH": 85 },
+  "com/rutaexpress/shipments/servicio/EnvioServicio": { "LINE": 90, "BRANCH": 65 },
+  "com/rutaexpress/shipments/mensajeria/AuditoriaEnvioService": { "LINE": 75, "BRANCH": 70 },
+  "com/rutaexpress/notify/model/RedisIdempotencyStore": { "LINE": 68, "BRANCH": 60 },
+  "com/rutaexpress/mqadmin/RabbitAdminService": { "LINE": 76, "BRANCH": 50 }
+}

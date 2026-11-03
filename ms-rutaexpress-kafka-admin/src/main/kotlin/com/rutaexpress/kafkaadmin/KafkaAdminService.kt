@@ -3,18 +3,24 @@ package com.rutaexpress.kafkaadmin
 import jakarta.validation.constraints.*
 import org.apache.kafka.clients.admin.*
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
+import org.springframework.kafka.annotation.EnableKafka
+import org.springframework.kafka.core.DefaultKafkaProducerFactory
+import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.core.ProducerFactory
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.util.concurrent.TimeUnit
 
 data class TopicRequest(
-    @field:Pattern(regexp = "(shipments[.]events|audit[.]timeline|catalog[.]events|[a-zA-Z0-9._-]+[.]DLT)") val name: String,
+    @field:Pattern(regexp = "(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones|[a-zA-Z0-9._-]+[.]DLT)") val name: String,
     @field:Min(1) @field:Max(100) val partitions: Int = 3,
     @field:Min(1) @field:Max(3) val replicas: Short = 3,
     @field:Min(86400000) @field:Max(2592000000) val retentionMs: Long = 604800000,
@@ -25,11 +31,30 @@ data class TopicRetention(@field:Min(86400000) @field:Max(2592000000) val retent
     @field:Pattern(regexp = "delete|compact,delete") val cleanupPolicy: String = "delete")
 
 @Configuration
+@EnableKafka
 class KafkaClientConfig {
     @Bean(destroyMethod = "close")
     fun adminClient(@Value("\${spring.kafka.bootstrap-servers}") bootstrap: String): AdminClient =
-        AdminClient.create(mapOf(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
-            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG to 10000, AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG to 15000))
+        AdminClient.create(mapOf(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG to 10000,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG to 15000
+        ))
+
+    @Bean
+    fun producerFactory(@Value("\${spring.kafka.bootstrap-servers}") bootstrap: String): ProducerFactory<String, String> {
+        val props = mapOf<String, Any>(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrap,
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
+            ProducerConfig.PARTITIONER_CLASS_CONFIG to TutorialPartitioner::class.java
+        )
+        return DefaultKafkaProducerFactory(props)
+    }
+
+    @Bean
+    fun kafkaTemplate(producerFactory: ProducerFactory<String, String>): KafkaTemplate<String, String> =
+        KafkaTemplate(producerFactory)
 }
 
 @Service
@@ -79,17 +104,20 @@ class KafkaAdminService(private val admin: AdminClient,
     }
     fun reconcile(): List<String> {
         val existing = topics().toSet()
-        val defaults = listOf(TopicRequest("shipments.events", replicas=replicas),
+        val defaults = listOf(
+            TopicRequest("tutorial-particiones", partitions = 3, replicas = replicas.coerceAtMost(3.toShort())),
+            TopicRequest("shipments.events", replicas=replicas),
             TopicRequest("audit.timeline", replicas=replicas, retentionMs=2592000000, cleanupPolicy="compact,delete"),
             TopicRequest("catalog.events", replicas=replicas),
             TopicRequest("shipments.events.report.DLT", replicas=replicas, retentionMs=1209600000),
             TopicRequest("shipments.events.audit.DLT", replicas=replicas, retentionMs=1209600000),
-            TopicRequest("audit.timeline.audit.DLT", replicas=replicas, retentionMs=1209600000))
+            TopicRequest("audit.timeline.audit.DLT", replicas=replicas, retentionMs=1209600000)
+        )
         defaults.filter { it.name !in existing }.forEach(::create)
         return topics()
     }
     fun lag(group: String): List<Map<String, Any>> {
-        require(group.matches(Regex("ms-rutaexpress-(audit|report)-group"))) { "Grupo fuera del dominio RutaExpress" }
+        require(group.matches(Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo"))) { "Grupo fuera del dominio RutaExpress" }
         val offsets: Map<TopicPartition, OffsetAndMetadata> = admin.listConsumerGroupOffsets(group)
             .partitionsToOffsetAndMetadata().get(timeout, TimeUnit.SECONDS).filterKeys { managed(it.topic()) }
         if(offsets.isEmpty()) return emptyList()
@@ -98,7 +126,7 @@ class KafkaAdminService(private val admin: AdminClient,
             "committedOffset" to offset.offset(), "endOffset" to ends[partition]!!.offset(),
             "lag" to maxOf(0L, ends[partition]!!.offset()-offset.offset())) }
     }
-    private fun managed(name: String) = name in setOf("shipments.events", "audit.timeline", "catalog.events") ||
-        (name.endsWith(".DLT") && name.length <= 249 && name.matches(Regex("(shipments[.]events|audit[.]timeline|catalog[.]events)[.][a-zA-Z0-9._-]+[.]DLT")))
+    private fun managed(name: String) = name in setOf("shipments.events", "audit.timeline", "catalog.events", "tutorial-particiones") ||
+        (name.endsWith(".DLT") && name.length <= 249 && name.matches(Regex("(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones)[.][a-zA-Z0-9._-]+[.]DLT")))
     private fun requireManaged(name: String) = require(managed(name)) { "Tópico fuera del dominio RutaExpress" }
 }
