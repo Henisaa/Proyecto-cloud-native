@@ -3,6 +3,7 @@ package com.rutaexpress.shipments.dominio
 /**
  * Máquina de estados del envío.
  * Regla del caso: no se puede pasar a EN_RUTA sin haber pasado por ACEPTADO.
+ * Regla de capacidad: de ACEPTADO a EN_BODEGA solo se pasa con la capacidad confirmada (RESERVADA).
  */
 enum class EstadoEnvio {
     CREADO,
@@ -20,7 +21,12 @@ enum class EstadoEnvio {
         ENTREGADO, CANCELADO -> false
     }
 
+    /** Transiciones válidas según el diagrama de estados, sin mirar la capacidad. */
     fun transicionesPermitidas(): List<EstadoEnvio> = entries.filter { puedeTransicionarA(it) }
+
+    /** Transiciones que realmente se pueden hacer hoy: el despacho exige la capacidad confirmada. */
+    fun transicionesPermitidas(capacidad: EstadoCapacidad): List<EstadoEnvio> =
+        transicionesPermitidas().filter { !(this == ACEPTADO && it == EN_BODEGA) || capacidad.permiteDespacho }
 
     val esFinal: Boolean
         get() = this == ENTREGADO || this == CANCELADO

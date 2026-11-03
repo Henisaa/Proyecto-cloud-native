@@ -19,7 +19,7 @@ services:
         condition: service_healthy
 
   rabbitmq:
-    image: rabbitmq:4-management
+    image: rabbitmq:4.4-management
     hostname: rabbitmq
     ports:
       - "5672:5672"

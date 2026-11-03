@@ -1,0 +1,25 @@
+{
+	email {$ACME_EMAIL}
+	# Para probar sin gastar el límite de Let's Encrypt, defina ACME_CA con el entorno de pruebas (staging).
+	acme_ca {$ACME_CA}
+}
+
+# Aplicación Angular
+{$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:8080
+}
+
+# Origen del API Gateway: solo atiende peticiones que traen la cabecera secreta del Gateway.
+# Así nadie puede saltarse la validación del JWT llamando directo al BFF.
+{$ORIGIN_DOMAIN} {
+	@desdeGateway header X-Origin-Secret {$ORIGIN_SECRET}
+
+	handle @desdeGateway {
+		reverse_proxy bff:8080
+	}
+
+	handle {
+		respond "Acceso denegado" 403
+	}
+}

@@ -25,13 +25,20 @@ rutaexpress:
     azure-client-id: ${AZURE_CLIENT_ID:f3136620-804c-4b15-b22d-b6fad957937e}
     audience: ${AZURE_AD_AUDIENCE:api://f3136620-804c-4b15-b22d-b6fad957937e}
     scope: ${AZURE_SCOPE:api://f3136620-804c-4b15-b22d-b6fad957937e/access_as_user}
+  # Orígenes del frontend separados por coma. Vacío en la nube: el API Gateway resuelve CORS.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  http:
+    connect-timeout-ms: ${HTTP_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${HTTP_READ_TIMEOUT_MS:8000}
   services:
     catalog-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
     notify-url: ${NOTIFY_SERVICE_URL:http://localhost:8082}
-    audit-url: ${AUDIT_SERVICE_URL:http://localhost:8083}
-    report-url: ${REPORT_SERVICE_URL:http://localhost:8084}
+    # Vacío = servicio que este stack no despliega (audit, report y kafka-admin de EP1): no se consulta ni aparece en el estado.
+    audit-url: ${AUDIT_SERVICE_URL:}
+    report-url: ${REPORT_SERVICE_URL:}
     mq-admin-url: ${MQ_ADMIN_SERVICE_URL:http://localhost:8086}
-    kafka-admin-url: ${KAFKA_ADMIN_SERVICE_URL:http://localhost:8087}
+    kafka-admin-url: ${KAFKA_ADMIN_SERVICE_URL:}
     shipments-url: ${SHIPMENTS_SERVICE_URL:http://localhost:8085}
 
 management:
@@ -41,7 +48,9 @@ management:
         include: health,info,prometheus,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
+      probes:
+        enabled: true
 
 springdoc:
   api-docs:
