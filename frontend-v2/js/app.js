@@ -1111,7 +1111,122 @@
     kafkaTopicos();
     kafkaCluster();
     cargarKafkaMensajes();
+    cargarKafkaStreamsState();
     return Promise.resolve();
+  }
+
+  function cargarKafkaStreamsState() {
+    return RX.get('/api/admin/kafka/streams/state').then(function (st) {
+      pintarKafkaStreamsState(st);
+    }).catch(function () {});
+  }
+
+  function pintarKafkaStreamsState(st) {
+    if (!st) return;
+    var appId = document.getElementById('ks-app-id');
+    if (appId && st.applicationId) appId.textContent = st.applicationId;
+    var badge = document.getElementById('ks-state-badge');
+    if (badge && st.streamsState) badge.textContent = st.streamsState;
+    var total = document.getElementById('ks-total-processed');
+    if (total) total.textContent = num(st.totalProcessed || 0);
+    var topo = document.getElementById('ks-topology-pre');
+    if (topo && st.topologyDescription) topo.textContent = st.topologyDescription;
+
+    var ramas = st.branchCounts || {};
+    var bEst = document.getElementById('ks-branch-estandar');
+    if (bEst) bEst.textContent = num(ramas['rama-estandar'] || 0);
+    var bPrio = document.getElementById('ks-branch-prioritaria');
+    if (bPrio) bPrio.textContent = num(ramas['rama-prioritaria'] || 0);
+
+    var fList = document.getElementById('ks-filtered-list');
+    if (fList) {
+      var alertas = st.recentAlertsAndFiltered || [];
+      fList.innerHTML = alertas.length ? alertas.slice(0, 8).map(function (ev) {
+        return '<div class="flex items-center justify-between bg-[#1A1A1A] border border-white/[0.04] px-2 py-1 rounded-xs">' +
+          '<span><strong class="text-amber-300">' + esc(ev.serviceType) + '</strong> · ' + esc(ev.zone) + ' · ' + esc(ev.trackingCode) + '</span>' +
+          '<span class="text-zinc-400">' + dec(ev.weightKg, 1) + ' kg · ' + dinero(ev.price) + ' · ' + esc(ev.status) + '</span>' +
+          '</div>';
+      }).join('') : '<div class="text-zinc-500">Sin alertas filtradas aún.</div>';
+    }
+
+    var cServ = document.getElementById('ks-count-service');
+    if (cServ) {
+      var porServ = st.countsByService || {};
+      var ks = Object.keys(porServ);
+      cServ.innerHTML = ks.length ? ks.map(function (k) {
+        return '<div class="flex items-center justify-between bg-[#1A1A1A] px-2.5 py-1 rounded-xs border border-white/[0.04]">' +
+          '<span class="text-zinc-300">' + esc(k) + '</span>' +
+          '<strong class="text-white">' + num(porServ[k]) + ' eventos</strong></div>';
+      }).join('') : '<div class="text-zinc-500">Sin datos en el State Store.</div>';
+    }
+
+    var cStat = document.getElementById('ks-count-status');
+    if (cStat) {
+      var porEst = st.countsByStatus || {};
+      var ke = Object.keys(porEst);
+      cStat.innerHTML = ke.length ? ke.map(function (k) {
+        return '<div class="flex items-center justify-between bg-[#1A1A1A] px-2.5 py-1 rounded-xs border border-white/[0.04]">' +
+          '<span class="text-zinc-300">' + esc(k) + '</span>' +
+          '<strong class="text-white">' + num(porEst[k]) + '</strong></div>';
+      }).join('') : '<div class="text-zinc-500">Sin datos en el State Store.</div>';
+    }
+
+    var wList = document.getElementById('ks-windows-list');
+    if (wList) {
+      var wT = st.tumblingWindowsByZone || [];
+      var wH = st.hoppingWindowsByService || [];
+      var todas = wT.concat(wH);
+      wList.innerHTML = todas.length ? todas.map(function (w) {
+        var ini = (w.windowStart || '').slice(11, 19);
+        var fin = (w.windowEnd || '').slice(11, 19);
+        return '<div class="bg-[#1A1A1A] px-2 py-1 rounded-xs border border-white/[0.04] flex items-center justify-between">' +
+          '<span><span class="text-sky-300">' + esc(w.windowType) + '</span> · <strong>' + esc(w.key) + '</strong></span>' +
+          '<span class="text-zinc-400">[' + esc(ini) + '-' + esc(fin) + '] → <strong class="text-white">' + num(w.count) + '</strong></span>' +
+          '</div>';
+      }).join('') : '<div class="text-zinc-500">Sin ventanas activas aún.</div>';
+    }
+
+    var rTbody = document.getElementById('ks-reduce-zone-tbody');
+    if (rTbody) {
+      var zonas = st.reducedByZone || [];
+      rTbody.innerHTML = zonas.length ? zonas.map(function (z) {
+        return '<tr class="hover:bg-white/[0.01]">' +
+          '<td class="px-3 py-2 font-mono font-semibold text-white">' + esc(z.zone) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-zinc-200">' + num(z.totalShipments) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-zinc-300">' + num(z.totalPackages) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-zinc-300">' + dec(z.totalWeightKg, 1) + ' kg</td>' +
+          '<td class="px-3 py-2 font-mono text-emerald-300 font-semibold">' + dinero(z.totalRevenue) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-zinc-400">' + esc(z.lastStatus) + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="6" class="px-3 py-5 text-center text-zinc-500">Simula o crea un envío para observar cómo reduce() combina los eventos en el State Store local.</td></tr>';
+    }
+  }
+
+  function simularEscenarioStreams(escenario) {
+    return RX.post('/api/admin/kafka/streams/simulate', {}, { scenario: escenario }).then(function (res) {
+      if (res && res.state) pintarKafkaStreamsState(res.state);
+      toast('Kafka Streams procesó escenario «' + escenario + '» (' + (res.processedCount || 1) + ' eventos)');
+      setTimeout(cargarKafkaStreamsState, 700);
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  function enviarSimulacionStreams(ev) {
+    var cuerpo = {
+      serviceType: (document.getElementById('ks-service') || {}).value || 'EXPRESS',
+      zone: (document.getElementById('ks-zone') || {}).value || 'NORTE',
+      status: (document.getElementById('ks-status') || {}).value || 'ACEPTADO',
+      weightKg: parseFloat((document.getElementById('ks-weight') || {}).value) || 10.0,
+      packagesCount: parseInt((document.getElementById('ks-packages') || {}).value, 10) || 1,
+      price: parseFloat((document.getElementById('ks-price') || {}).value) || 15000.0,
+    };
+    return ejecutar(ev.submitter, function () {
+      return RX.post('/api/admin/kafka/streams/simulate', cuerpo);
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      if (r.valor && r.valor.state) pintarKafkaStreamsState(r.valor.state);
+      toast('Evento de envío emitido a shipments.events y procesado por Kafka Streams');
+      setTimeout(cargarKafkaStreamsState, 700);
+    });
   }
 
   function cargarKafkaMensajes() {
@@ -1310,6 +1425,14 @@
       kafkaRefrescarMensajes: function () { return cargarKafkaMensajes(); },
       kafkaPruebaSinKey: function () { return ejecutarPruebaSinKey(); },
       kafkaPruebaConKey: function () { return ejecutarPruebaConKey(); },
+      ksToggleTopology: function () {
+        var pre = document.getElementById('ks-topology-pre');
+        if (pre) pre.classList.toggle('hidden');
+      },
+      ksRefrescarEstado: function () { return cargarKafkaStreamsState(); },
+      ksSimularRafaga: function () { return simularEscenarioStreams('rafaga'); },
+      ksSimularPrioritario: function () { return simularEscenarioStreams('prioritario'); },
+      ksSimularEstandar: function () { return simularEscenarioStreams('estandar'); },
       topologia: function () { return aplicarTopologia(el); },
       borrarCola: function () { return borrarRecurso('/api/admin/mq/queues/' + encodeURIComponent(d.nombre), d.nombre, 'cola'); },
       borrarExchange: function () { return borrarRecurso('/api/admin/mq/exchanges/' + encodeURIComponent(d.nombre), d.nombre, 'exchange'); },
@@ -1339,6 +1462,7 @@
       'form-auditoria': buscarAuditoria,
       'form-lag': consultarLag,
       'form-kafka-send': enviarFormularioKafka,
+      'form-ks-simulate': enviarSimulacionStreams,
     };
     var fn = manejadores[ev.target.id];
     if (fn) {
