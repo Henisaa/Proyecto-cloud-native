@@ -52,6 +52,10 @@ class EnvioEventPublisher(
             status = envio.status.name,
             timestamp = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
             trackingCode = envio.trackingCode,
+            zone = envio.zone ?: "CENTRO",
+            weightKg = envio.weightKg.toDouble(),
+            packagesCount = envio.packagesCount,
+            price = envio.price?.toDouble() ?: 0.0,
             actor = actor
         )
 
