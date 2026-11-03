@@ -23,7 +23,7 @@ class ReporteControlador(
 
     @GetMapping("/kpis")
     @Operation(summary = "Obtener KPIs operacionales", description = "Calcula envíos totales, envíos por hora, lead time promedio y distribución de estados")
-    @Cacheable(value = ["kpis"], key = "#range")
+    @Cacheable(value = ["kpis"], key = "#range.toLowerCase()")
     fun obtenerKpis(
         @RequestParam(defaultValue = "last24h") range: String
     ): ResponseEntity<KpisRespuesta> {
@@ -45,7 +45,7 @@ class ReporteControlador(
 
     @GetMapping("/top-services")
     @Operation(summary = "Obtener servicios más demandados", description = "Lista los tipos de servicio ordenados por volumen con su porcentaje de uso")
-    @Cacheable(value = ["top-services"], key = "#range")
+    @Cacheable(value = ["top-services"], key = "#range.toLowerCase()")
     fun obtenerTopServicios(
         @RequestParam(defaultValue = "last7d") range: String
     ): ResponseEntity<List<TopServicioRespuesta>> {
@@ -71,7 +71,10 @@ class ReporteControlador(
             "last24h" -> ahora.minusHours(24) to 24.0
             "last7d" -> ahora.minusDays(7) to (7.0 * 24.0)
             "last30d" -> ahora.minusDays(30) to (30.0 * 24.0)
-            else -> ahora.minusHours(24) to 24.0
+            else -> throw org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "range inválido: use last1h, last24h, last7d o last30d",
+            )
         }
     }
 
