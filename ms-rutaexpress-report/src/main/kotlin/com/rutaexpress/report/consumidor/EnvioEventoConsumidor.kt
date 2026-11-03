@@ -44,8 +44,8 @@ class EnvioEventoConsumidor(
 
             if (evento.status.equals("ENTREGADO", ignoreCase = true) && snapshot.deliveredAt == null) {
                 snapshot.deliveredAt = ahora
-                val minutos = Duration.between(snapshot.createdAt, ahora).toMinutes().toDouble()
-                snapshot.leadTimeMinutes = if (minutos >= 0) minutos else 0.0
+                val minutos = Duration.between(snapshot.createdAt, ahora).toMinutes().coerceAtLeast(0)
+                snapshot.leadTimeMinutes = minutos.toBigDecimal()
             }
 
             repositorio.save(snapshot)

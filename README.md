@@ -1,43 +1,84 @@
-RutaExpress
-Plataforma de envíos de última milla del Caso 3.
+# RutaExpress
 
-Estructura y función
-frontend: Angular 19 con MSAL; login Azure AD, envíos, catálogo, reportes, auditoría y monitoreo de mensajería para Admin.
-ms-rutaexpress-bff: entrada segura y agregación, puerto 8080.
-ms-rutaexpress-catalog: servicios, tarifas y capacidad de flota, puerto 8081.
-ms-rutaexpress-notify: email, push y PDF por RabbitMQ, puerto 8082.
-ms-rutaexpress-audit: timeline inmutable e idempotente desde Kafka, puerto 8083.
-ms-rutaexpress-report: proyecciones de envíos y KPIs desde Kafka, puerto 8084.
-ms-rutaexpress-shipments: envíos, estados y coordinación del despacho, puerto 8085.
-ms-rutaexpress-mq-admin: topología, retención, DLQ y estado RabbitMQ, puerto 8086.
-ms-rutaexpress-kafka-admin: tópicos, particiones, retención y lag Kafka, puerto 8087.
-infra/apps, infra/mq e infra/kafka: tres stacks Docker Compose del caso.
+Plataforma de envíos de última milla del Caso 3. La EP2 incorpora reservas de capacidad asíncronas, notificaciones y auditoría sobre RabbitMQ, con un administrador REST y frontend Angular por rol.
 
-Tecnologías
-Kotlin 2.3.21 sobre JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, Oracle/JPA/Flyway, RabbitMQ 4, Kafka 3.9.2 con ZooKeeper 3.9, Redis, SMTP/Mailpit, OpenPDF y Firebase opcional. Se conserva Kotlin, que es el lenguaje del repositorio; la pauta general menciona Java. Frontend Angular con TypeScript y MSAL.
+```mermaid
+flowchart LR
+  Angular[Angular + MSAL] -->|JWT| Gateway[API Gateway + CORS]
+  Gateway --> Caddy
+  Caddy --> BFF
+  BFF --> Shipments
+  BFF --> Catalog
+  BFF --> Admin[Rabbit Admin]
+  Shipments --> RabbitMQ
+  RabbitMQ --> Catalog
+  RabbitMQ --> Notify
+  RabbitMQ --> Shipments
+  Shipments --> Oracle
+  Catalog --> Oracle
+  Notify --> Redis
+  Notify --> Mailpit
+```
 
-Arranque local
-Instale JDK 21 o superior, Node compatible con Angular 19 y Docker con Compose v2.
-Si Docker Desktop está instalado por usuario en Windows y docker no aparece en PATH, agregue su carpeta de herramientas a la sesión de PowerShell:
-$env:PATH="$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin;$env:PATH"
-docker version
-docker compose version
-Que docker no aparezca en PATH no significa que Docker Desktop no esté instalado; compruebe también la conexión con el motor.
-Desde la raíz siga infra/README.md para crear la red y levantar brokers. Arranque primero mq-admin y kafka-admin y ejecute POST topology en ambos. Después arranque catalog, notify, audit, report, shipments y bff usando los comandos de sus README. Por último siga frontend/README.md.
-El perfil local de los servicios con base usa H2 en memoria. Para persistencia Oracle use el perfil prod y los esquemas configurados. Las pruebas unitarias y HTTP no necesitan Docker; los tests de integración de notify se activan explícitamente con RUN_DOCKER_TESTS=true.
+## Componentes
 
-Seguridad
-Flujo: access token Azure AD -> AWS API Gateway -> BFF -> servicios internos. Cada servicio REST verifica JWT y roles; el BFF conserva Bearer. Admin administra y ve KPIs; Despachador opera envíos; Cliente crea y consulta; Auditor lee timeline. Las APIs administrativas son exclusivas de Admin. SECURITY_ENABLED=false es solo para desarrollo. No abra directamente las APIs internas en Internet.
+| Carpeta | Responsabilidad | Puerto interno |
+|---|---|---|
+| frontend | Angular 19, MSAL, envíos, catálogo y administración de colas | 8080 |
+| frontend-v2 | Consola JavaScript con MSAL y proxy nginx; interfaz del Compose local | 8080 |
+| ms-rutaexpress-bff | JWT, roles, agregación y proxy del dominio | 8080 |
+| ms-rutaexpress-catalog | Servicios, tarifas y reservas de capacidad | 8081 |
+| ms-rutaexpress-notify | Correos y PDF desde RabbitMQ | 8082 |
+| ms-rutaexpress-audit | Auditoría Kafka (EP1 opcional) | 8083 |
+| ms-rutaexpress-report | KPIs Kafka (EP1 opcional) | 8084 |
+| ms-rutaexpress-shipments | Envíos y coordinación asíncrona | 8085 |
+| ms-rutaexpress-rabbit-admin | Clúster, colas, exchanges, bindings, retención y métricas | 8086 |
+| ms-rutaexpress-kafka-admin | Administración Kafka (EP1 opcional) | 8087 |
+| infra | Compose por capas: mq, apps, kafka y edge | Solo Caddy publica 80/443 |
 
-Mensajería
-RabbitMQ usa `ex.rutaexpress.cmd` (direct) para `capacity.reserve` y `capacity.release`, y `ex.rutaexpress.events` (topic) para auditoría (`shipment.#`, `catalog.#`) y notificaciones (`notification.#`). Las colas `q.rutaexpress.command`, `q.rutaexpress.notification` y `q.rutaexpress.audit` tienen una DLQ propia enlazada mediante `ex.rutaexpress.dlx`. Los consumidores usan ACK manual; los errores no recuperables y los que agotan sus reintentos se envían a DLQ sin requeue. Notify usa idempotencia Redis y shipments espera confirmación del broker antes de responder. Las políticas `rutaexpress.trabajo` y `rutaexpress.dlq` aplican TTL y límites administrados por mq-admin.
-Kafka: shipments.events y catalog.events con delete y siete días; audit.timeline con compact,delete y treinta días. Los consumidores fallidos van a DLT independiente después de tres intentos. Los tópicos se crean con tres particiones y tres réplicas. Auditoría deduplica eventId y conserva identidad y timestamp originales.
+Kotlin 2.3.21, JVM 21, Spring Boot 4.1.1, Gradle Wrapper 9.7.1, Jackson 3, Oracle/JPA/Flyway, RabbitMQ 4, Kafka 3.9.2/ZooKeeper, Redis y Mailpit.
 
-Validación y limpieza
-Inventario actual: 136 métodos de prueba backend (shipments 23, catalog 26, notify 24, mq-admin 26, BFF 20, audit 8, report 5 y kafka-admin 4) y 3 pruebas frontend. Notify incluye 3 pruebas de integración con Docker, activadas con `RUN_DOCKER_TESTS=true`. El reporte previo registró 83 pruebas backend y 3 frontend aprobadas el 14 de octubre de 2026; la suite debe volver a ejecutarse después de estos cambios. Los tres Compose también pasaron `docker compose config --quiet` en esa validación; esa comprobación valida la configuración, no el arranque completo de los clústeres.
-En cada servicio ejecute .\gradlew.bat test bootJar. En frontend ejecute npm ci y npm run build. Para pruebas Docker de notify: $env:RUN_DOCKER_TESTS="true"; .\gradlew.bat test.
-Al terminar, use gradlew clean, detenga los daemons y elimine solamente build, .gradle, .kotlin, node_modules, dist y .angular creados durante la validación. La limpieza de contenedores, volúmenes e imágenes se explica en infra/README.md. No use docker system prune sobre recursos ajenos.
+## Ejecutar todo en local
 
-Ramas y documentación
-main integra el proyecto completo. Ramas de servicios: ms_catalog, ms_notify, ms-rutaexpress-audit, ms-rutaexpress-report, ms-rutaexpress-bff, ms-rutaexpress-shipments, ms-rutaexpress-mq-admin y ms-rutaexpress-kafka-admin. frontend corresponde al frontend Angular actual.
-docs contiene material de referencia local y está excluido de nuevos commits. Los archivos ya versionados de docs no se eliminan ni se actualizan en este trabajo. Cada servicio y frontend tienen README en texto plano con responsabilidades, configuración, comandos y limitaciones.
+Con Docker Desktop (contenedores Linux), desde la raíz:
+
+```sh
+docker compose up --build
+```
+
+Abre **http://localhost:4200**: este Compose sirve **frontend-v2** y levanta los ocho backends, Oracle, Redis, Mailpit, RabbitMQ (dos nodos), Kafka (tres brokers), ZooKeeper y Kafka UI. Crea automáticamente su red y cookie persistente. No requiere preparar `.env` ni ejecutar Bash; los valores públicos de Entra ID del proyecto vienen predeterminados.
+
+El login conserva **Microsoft Entra ID**, requiere internet y la URI `http://localhost:4200` registrada como SPA. Los recursos CDN de v2 también requieren internet. Asignar inicialmente 16 GiB de memoria a Docker. Comandos, credenciales locales, puertos, configuración opcional y matriz de permisos: [guía local](infra/LOCAL.md).
+
+## Construcción, pruebas y ejecución
+
+GitHub Actions ejecuta la suite completa en cada push y PR: diez compilaciones Docker (incluye frontend-v2), ocho suites backend con Testcontainers y cobertura, Karma/Chromium, smoke nginx y stack integrado con Playwright en cuatro navegadores/dispositivos. Solo publica las imágenes candidatas en GHCR con etiqueta `sha-<commit corto>` después de aprobar el control global. Fallos, omisiones, pruebas inestables y regresiones de cobertura bloquean la publicación. Alcance, artefactos y límites: [ci/README.md](ci/README.md). No instalar JDK, Gradle ni Node en el PC.
+
+En EC2, configurar `infra/.env` a partir de su ejemplo y ejecutar:
+
+```sh
+bash infra/scripts/up.sh
+bash infra/scripts/status.sh
+```
+
+Detalles y variables: [infra/README.md](infra/README.md). Interfaz y roles: [frontend/README.md](frontend/README.md). Aceptación HTTP y evidencia manual: [infra/acceptance/README.md](infra/acceptance/README.md).
+
+## Mensajería y seguridad
+
+Tres colas funcionales: command, notification y audit; cada una tiene su DLQ. Comandos por exchange direct, eventos por topic, ACK manual, reintentos acotados, NACK sin reencolar y registro de DLQ. El frontend muestra PENDIENTE → RESERVADA/RECHAZADA, permite reintento y visualiza la compensación. Catalog deduplica por commandId y reserva por shipmentId, con bloqueo y clave única.
+
+MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y conserva Bearer. Cliente solo consulta envíos de su oid. Solo Admin administra RabbitMQ. No exponer servicios internos ni desactivar seguridad en nube. La coordinación entre base y RabbitMQ usa confirmaciones y reconciliación; outbox sigue como mejora prevista en el plan.
+
+## Estado de la EP2
+
+CI verde certifica solo las comprobaciones automatizadas de su commit: no prueba el tenant, DNS, Gateway ni EC2.
+
+Modo local anterior con Angular (Docker Desktop): `bash infra/scripts/up.sh --dev` levanta RabbitMQ (2 nodos), datos, microservicios y el frontend en `http://localhost:4200`, que llama directo al BFF en `http://localhost:8080` (CORS local con `CORS_ALLOWED_ORIGINS`).
+
+Despliegue en una VPS (Azure, AWS EC2 u otra Linux): `bash deploy-vps.sh` instala Docker si falta y levanta el clúster RabbitMQ de dos nodos, Oracle, Redis, Mailpit y los cinco microservicios EP2 (sin frontend) con sus puertos publicados en `http://<ip>:<puerto>`. Configuración en `infra/vps/.env` (se genera la primera vez) y servicios en `infra/vps/compose.yml`.
+
+La migración V2 de shipments conserva su definición original; V3 amplía event_id a 100, V4 agrega versión, dueño e identificador de reserva y V5 amplía service_code a 50 (igual que el código de catalog). No editar migraciones publicadas.
+
+## Autores
+
+Equipo RutaExpress (Henisaa/Proyecto-cloud-native).

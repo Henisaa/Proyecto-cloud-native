@@ -55,6 +55,7 @@ class CatalogService(
     var capacities: MutableSet<FleetCapacity> = mutableSetOf(),
 
     @OneToMany(mappedBy = "service", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 50)
     var tariffs: MutableSet<Tariff> = mutableSetOf(),
 
     @Column(name = "created_at", nullable = false, updatable = false)

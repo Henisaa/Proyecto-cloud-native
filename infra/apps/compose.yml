@@ -1,299 +1,210 @@
-{
-  "services": {
-    "bff": {
-      "build": {
-        "context": "../../ms-rutaexpress-bff"
-      },
-      "environment": {
-        "PORT": "8080",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "CATALOG_SERVICE_URL": "http://catalog:8081",
-        "NOTIFY_SERVICE_URL": "http://notify:8082",
-        "AUDIT_SERVICE_URL": "http://audit:8083",
-        "REPORT_SERVICE_URL": "http://report:8084",
-        "SHIPMENTS_SERVICE_URL": "http://shipments:8085",
-        "MQ_ADMIN_SERVICE_URL": "http://mq-admin:8086",
-        "KAFKA_ADMIN_SERVICE_URL": "http://kafka-admin:8087"
-      },
-      "ports": [
-        "127.0.0.1:8080:8080"
-      ]
-    },
-    "catalog": {
-      "build": {
-        "context": "../../ms-rutaexpress-catalog"
-      },
-      "environment": {
-        "PORT": "8081",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
-        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
-        "SPRING_DATASOURCE_USERNAME": "ruta_catalog",
-        "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
-        "KAFKA_ENABLED": "true",
-        "RABBIT_ENABLED": "true",
-        "CATALOGO_ENABLED": "true",
-        "APP_SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "APP_KAFKA_ENABLED": "true",
-        "SPRING_KAFKA_ENABLED": "true"
-      },
-      "ports": [
-        "127.0.0.1:8081:8081"
-      ],
-      "depends_on": {
-        "oracle": {
-          "condition": "service_healthy"
-        }
-      }
-    },
-    "notify": {
-      "build": {
-        "context": "../../ms-rutaexpress-notify"
-      },
-      "environment": {
-        "PORT": "8082",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "REDIS_HOST": "redis",
-        "MAIL_HOST": "mailpit",
-        "MAIL_PORT": "1025"
-      },
-      "ports": [
-        "127.0.0.1:8082:8082"
-      ],
-      "depends_on": {
-        "redis": {
-          "condition": "service_healthy"
-        },
-        "mailpit": {
-          "condition": "service_started"
-        }
-      }
-    },
-    "audit": {
-      "build": {
-        "context": "../../ms-rutaexpress-audit"
-      },
-      "environment": {
-        "PORT": "8083",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
-        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
-        "SPRING_DATASOURCE_USERNAME": "ruta_audit",
-        "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
-        "KAFKA_ENABLED": "true",
-        "RABBIT_ENABLED": "true",
-        "CATALOGO_ENABLED": "true",
-        "APP_SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "APP_KAFKA_ENABLED": "true",
-        "SPRING_KAFKA_ENABLED": "true"
-      },
-      "ports": [
-        "127.0.0.1:8083:8083"
-      ],
-      "depends_on": {
-        "oracle": {
-          "condition": "service_healthy"
-        }
-      }
-    },
-    "report": {
-      "build": {
-        "context": "../../ms-rutaexpress-report"
-      },
-      "environment": {
-        "PORT": "8084",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
-        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
-        "SPRING_DATASOURCE_USERNAME": "ruta_report",
-        "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
-        "KAFKA_ENABLED": "true",
-        "RABBIT_ENABLED": "true",
-        "CATALOGO_ENABLED": "true",
-        "APP_SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "APP_KAFKA_ENABLED": "true",
-        "SPRING_KAFKA_ENABLED": "true"
-      },
-      "ports": [
-        "127.0.0.1:8084:8084"
-      ],
-      "depends_on": {
-        "oracle": {
-          "condition": "service_healthy"
-        }
-      }
-    },
-    "shipments": {
-      "build": {
-        "context": "../../ms-rutaexpress-shipments"
-      },
-      "environment": {
-        "PORT": "8085",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "SPRING_PROFILES_ACTIVE": "${SPRING_PROFILES_ACTIVE:-prod}",
-        "SPRING_DATASOURCE_URL": "${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}",
-        "SPRING_DATASOURCE_USERNAME": "ruta_shipments",
-        "SPRING_DATASOURCE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}",
-        "KAFKA_ENABLED": "true",
-        "RABBIT_ENABLED": "true",
-        "CATALOGO_ENABLED": "true",
-        "APP_SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "APP_KAFKA_ENABLED": "true",
-        "SPRING_KAFKA_ENABLED": "true",
-        "CATALOG_SERVICE_URL": "http://catalog:8081"
-      },
-      "ports": [
-        "127.0.0.1:8085:8085"
-      ],
-      "depends_on": {
-        "oracle": {
-          "condition": "service_healthy"
-        }
-      }
-    },
-    "mq-admin": {
-      "build": {
-        "context": "../../ms-rutaexpress-mq-admin"
-      },
-      "environment": {
-        "PORT": "8086",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}",
-        "RABBITMQ_MANAGEMENT_URLS": "http://rabbit1:15672,http://rabbit2:15672"
-      },
-      "ports": [
-        "127.0.0.1:8086:8086"
-      ]
-    },
-    "kafka-admin": {
-      "build": {
-        "context": "../../ms-rutaexpress-kafka-admin"
-      },
-      "environment": {
-        "PORT": "8087",
-        "SECURITY_ENABLED": "${SECURITY_ENABLED:-true}",
-        "AZURE_AD_ISSUER_URI": "${AZURE_AD_ISSUER_URI:-https://login.microsoftonline.com/bc307149-9a0a-45b8-9f7d-2dfc104f9a09/v2.0}",
-        "AZURE_AD_AUDIENCE": "${AZURE_AD_AUDIENCE:-api://f3136620-804c-4b15-b22d-b6fad957937e}",
-        "KAFKA_BOOTSTRAP_SERVERS": "kafka-1:29092,kafka-2:29092,kafka-3:29092",
-        "RABBITMQ_HOST": "rabbit1",
-        "RABBITMQ_ADDRESSES": "rabbit1:5672,rabbit2:5672",
-        "RABBITMQ_USERNAME": "${RABBITMQ_USERNAME:-rutaexpress}",
-        "RABBITMQ_PASSWORD": "${RABBITMQ_PASSWORD:-rutaexpress-local}"
-      },
-      "ports": [
-        "127.0.0.1:8087:8087"
-      ]
-    },
-    "redis": {
-      "image": "redis:8-alpine",
-      "command": [
-        "redis-server",
-        "--appendonly",
-        "yes"
-      ],
-      "ports": [
-        "127.0.0.1:6379:6379"
-      ],
-      "volumes": [
-        "redis:/data"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "redis-cli",
-          "ping"
-        ],
-        "interval": "5s",
-        "timeout": "3s",
-        "retries": 20
-      }
-    },
-    "mailpit": {
-      "image": "axllent/mailpit:v1.27",
-      "ports": [
-        "127.0.0.1:8025:8025",
-        "127.0.0.1:1025:1025"
-      ]
-    },
-    "oracle": {
-      "image": "gvenzl/oracle-free:23-slim",
-      "environment": {
-        "ORACLE_PASSWORD": "${DB_PASSWORD:-Rutaexpress123}"
-      },
-      "ports": [
-        "127.0.0.1:1521:1521"
-      ],
-      "volumes": [
-        "oracle:/opt/oracle/oradata",
-        "./oracle-init.sql:/container-entrypoint-initdb.d/001-users.sql:ro"
-      ],
-      "healthcheck": {
-        "test": [
-          "CMD",
-          "healthcheck.sh"
-        ],
-        "interval": "10s",
-        "timeout": "5s",
-        "retries": 60
-      }
-    }
-  },
-  "volumes": {
-    "redis": null,
-    "oracle": null
-  },
-  "networks": {
-    "default": {
-      "external": true,
-      "name": "rutaexpress"
-    }
-  }
-}
+# Datos y aplicaciones de RutaExpress. Las imágenes se descargan de GHCR (las construye el CI); este archivo no compila nada.
+# Servicios EP2: bff, shipments, catalog, notify, rabbit-admin. Servicios EP1 (perfil "ep1"): audit, report, kafka-admin.
+# Ningún servicio publica puertos: solo Caddy (infra/edge) es visible desde Internet.
+name: rutaexpress-apps
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-spring: &spring
+  restart: unless-stopped
+  logging: *logging
+  mem_limit: 768m
+
+x-auth: &auth
+  SECURITY_ENABLED: ${SECURITY_ENABLED:-true}
+  AZURE_AD_ISSUER_URI: ${AZURE_AD_ISSUER_URI:?defina AZURE_AD_ISSUER_URI en infra/.env}
+  AZURE_AD_AUDIENCE: ${AZURE_AD_AUDIENCE:?defina AZURE_AD_AUDIENCE en infra/.env}
+
+x-rabbit: &rabbit
+  RABBITMQ_ADDRESSES: rabbit1:5672,rabbit2:5672
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?defina RABBITMQ_USERNAME en infra/.env}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD en infra/.env}
+  RABBIT_PREFETCH: ${RABBIT_PREFETCH:-10}
+  RABBIT_RETRY_MAX_ATTEMPTS: ${RABBIT_RETRY_MAX_ATTEMPTS:-3}
+  RABBIT_RETRY_INITIAL_MS: ${RABBIT_RETRY_INITIAL_MS:-500}
+  RABBIT_DLQ_CONSUMER_ENABLED: ${RABBIT_DLQ_CONSUMER_ENABLED:-true}
+
+services:
+  # ---------------------------------------------------------------- Aplicaciones EP2
+  bff:
+    <<: *spring
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-bff:${BFF_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: *auth
+      PORT: "8080"
+      CATALOG_SERVICE_URL: http://catalog:8081
+      NOTIFY_SERVICE_URL: http://notify:8082
+      AUDIT_SERVICE_URL: http://audit:8083
+      REPORT_SERVICE_URL: http://report:8084
+      SHIPMENTS_SERVICE_URL: http://shipments:8085
+      MQ_ADMIN_SERVICE_URL: http://rabbit-admin:8086
+      KAFKA_ADMIN_SERVICE_URL: http://kafka-admin:8087
+    networks:
+      default:
+        aliases: [bff]
+
+  shipments:
+    <<: *spring
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-shipments:${SHIPMENTS_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: [*auth, *rabbit]
+      PORT: "8085"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_shipments
+      SPRING_DATASOURCE_PASSWORD: ${SHIPMENTS_DB_PASSWORD:?defina SHIPMENTS_DB_PASSWORD en infra/.env}
+      CATALOGO_ENABLED: "true"
+      CATALOG_SERVICE_URL: http://catalog:8081
+      NOTIFY_WAREHOUSE_EMAIL: ${NOTIFY_WAREHOUSE_EMAIL:-bodega@rutaexpress.local}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  catalog:
+    <<: *spring
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-catalog:${CATALOG_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: [*auth, *rabbit]
+      PORT: "8081"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_catalog
+      SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:?defina CATALOG_DB_PASSWORD en infra/.env}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  notify:
+    <<: *spring
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-notify:${NOTIFY_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: [*auth, *rabbit]
+      PORT: "8082"
+      REDIS_HOST: redis
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      NOTIFY_FROM: ${NOTIFY_FROM:-no-reply@rutaexpress.local}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  rabbit-admin:
+    <<: *spring
+    mem_limit: 512m
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-rabbit-admin:${RABBIT_ADMIN_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: [*auth, *rabbit]
+      PORT: "8086"
+      RABBITMQ_MANAGEMENT_URLS: http://rabbit1:15672,http://rabbit2:15672
+      MQ_COMMAND_TTL_MS: ${MQ_COMMAND_TTL_MS:-86400000}
+      MQ_DLQ_TTL_MS: ${MQ_DLQ_TTL_MS:-604800000}
+      MQ_MAX_LENGTH: ${MQ_MAX_LENGTH:-10000}
+      MQ_ALERT_THRESHOLD: ${MQ_ALERT_THRESHOLD:-1}
+
+  # ---------------------------------------------------------------- Aplicaciones EP1 (perfil ep1, junto a Kafka)
+  audit:
+    <<: *spring
+    profiles: [ep1]
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-audit:${AUDIT_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: *auth
+      PORT: "8083"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_audit
+      SPRING_DATASOURCE_PASSWORD: ${AUDIT_DB_PASSWORD:?defina AUDIT_DB_PASSWORD en infra/.env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  report:
+    <<: *spring
+    profiles: [ep1]
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-report:${REPORT_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: *auth
+      PORT: "8084"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:oracle:thin:@//oracle:1521/FREEPDB1}
+      SPRING_DATASOURCE_USERNAME: ruta_report
+      SPRING_DATASOURCE_PASSWORD: ${REPORT_DB_PASSWORD:?defina REPORT_DB_PASSWORD en infra/.env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  kafka-admin:
+    <<: *spring
+    profiles: [ep1]
+    mem_limit: 512m
+    image: ${REGISTRY:-ghcr.io/henisaa}/ms-rutaexpress-kafka-admin:${KAFKA_ADMIN_TAG:-${IMAGE_TAG:-main}}
+    environment:
+      <<: *auth
+      PORT: "8087"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+
+  # ---------------------------------------------------------------- Datos
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 3g
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_ADMIN_PASSWORD:?defina ORACLE_ADMIN_PASSWORD en infra/.env}
+      # Contraseñas de los usuarios de aplicación (una por esquema); las lee oracle-init/001-users.sh.
+      SHIPMENTS_DB_PASSWORD: ${SHIPMENTS_DB_PASSWORD:?defina SHIPMENTS_DB_PASSWORD en infra/.env}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?defina CATALOG_DB_PASSWORD en infra/.env}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?defina AUDIT_DB_PASSWORD en infra/.env}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?defina REPORT_DB_PASSWORD en infra/.env}
+    volumes:
+      - oracle:/opt/oracle/oradata
+      # Solo se ejecuta cuando el volumen está vacío (primera inicialización).
+      - ./oracle-init/001-users.sh:/container-entrypoint-initdb.d/001-users.sh:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    ports:
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  redis:
+  oracle:
+
+networks:
+  default:
+    external: true
+    name: rutaexpress

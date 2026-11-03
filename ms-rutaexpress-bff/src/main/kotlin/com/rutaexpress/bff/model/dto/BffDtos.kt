@@ -13,19 +13,28 @@ data class UserProfileDto(
     val authenticatedAt: Instant = Instant.now()
 )
 
+/** Un bloque del panel: si el servicio que lo alimenta no responde, solo ese bloque queda como no disponible. */
+data class DashboardBlock(
+    val available: Boolean,
+    val data: Any? = null,
+    val message: String? = null,
+)
+
 data class DashboardSummaryDto(
     val role: String,
     val greeting: String,
     val generatedAt: Instant = Instant.now(),
-    val catalogOverview: Any? = null,
-    val reportOverview: Any? = null,
-    val auditOverview: Any? = null,
+    val shipmentsOverview: DashboardBlock? = null,
+    val catalogOverview: DashboardBlock? = null,
+    val reportOverview: DashboardBlock? = null,
+    val auditOverview: DashboardBlock? = null,
     val notices: List<String> = emptyList()
 )
 
+/** Estado de cada servicio: solo nombre y UP/DOWN. No expone URLs ni detalles internos. */
 data class GatewayHealthDto(
     val service: String = "ms-rutaexpress-bff",
     val status: String = "UP",
     val azureIdaasConfigured: Boolean,
-    val downstreamServices: Map<String, String>
+    val services: Map<String, String>
 )

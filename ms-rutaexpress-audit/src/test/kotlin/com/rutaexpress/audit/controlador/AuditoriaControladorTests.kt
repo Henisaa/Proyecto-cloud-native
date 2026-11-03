@@ -44,7 +44,8 @@ class AuditoriaControladorTests {
     @WithMockUser(username = "auditor", roles = ["AUDITOR"])
     fun `listarTodos retorna lista de eventos de auditoria`() {
         val eventos = listOf(mockEvento(1L, "ENV-001"), mockEvento(2L, "ENV-002"))
-        `when`(auditoriaRepositorio.findAll()).thenReturn(eventos)
+        `when`(auditoriaRepositorio.findAll(org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable::class.java)))
+            .thenReturn(org.springframework.data.domain.PageImpl(eventos))
 
         mockMvc.perform(get("/api/audit"))
             .andExpect(status().isOk)
