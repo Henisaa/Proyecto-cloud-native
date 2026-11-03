@@ -704,6 +704,85 @@
         <p class="text-xs text-zinc-500">Retraso por grupo de consumo, tópicos y clúster</p>
       </div>
 
+      <!-- Tutorial de Particiones y Offsets -->
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="ti ti-chart-dots text-white"></i> Tutorial: Tópicos, Particiones y Offsets
+            </h3>
+            <p class="text-xs text-zinc-500">Tópico <code class="text-zinc-300">tutorial-particiones</code> (3 particiones) · Grupo <code class="text-zinc-300">mi-grupo-educativo</code></p>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" data-accion="kafkaReconciliar" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white transition-colors">Crear / Reconciliar Tópicos</button>
+            <button type="button" data-accion="kafkaRefrescarMensajes" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Refrescar Mensajes</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Formulario Enviar -->
+          <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider text-zinc-400">Productor REST (/api/kafka/send)</h4>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" data-accion="kafkaPruebaSinKey" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-1.5 rounded-xs text-zinc-300">
+                ⚡ Prueba 1: 3 mensajes sin key (Round Robin)
+              </button>
+              <button type="button" data-accion="kafkaPruebaConKey" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-1.5 rounded-xs text-zinc-300">
+                🎯 Prueba 2: Orden con key orden-555 (Misma partición)
+              </button>
+            </div>
+            <form id="form-kafka-send" class="space-y-2 pt-2">
+              <div>
+                <label class="block text-[11px] text-zinc-400 mb-1">Mensaje</label>
+                <input type="text" id="k-mensaje" required placeholder="Ej: Mensaje1 o Paso1-Creada" class="w-full bg-[#1A1A1A] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              </div>
+              <div>
+                <label class="block text-[11px] text-zinc-400 mb-1">Key (opcional - vacía para Round Robin)</label>
+                <input type="text" id="k-key" placeholder="Ej: orden-555 (dejar vacío para sin key)" class="w-full bg-[#1A1A1A] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200">
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Enviar mensaje</button>
+                <span id="k-send-resultado" class="text-xs text-zinc-400 font-mono"></span>
+              </div>
+            </form>
+          </div>
+
+          <!-- Información Guía -->
+          <div class="space-y-2 bg-[#151515] border border-white/[0.04] p-3 rounded-sm text-xs text-zinc-400">
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider text-zinc-400">Conceptos Guía Práctica</h4>
+            <ul class="space-y-1.5 text-[11px]">
+              <li><strong class="text-zinc-200">Sin Key:</strong> Kafka reparte los mensajes equitativamente entre las particiones 0, 1 y 2 (Round Robin).</li>
+              <li><strong class="text-zinc-200">Con Key:</strong> Kafka calcula el hash de la key (ej: <code class="text-zinc-300">orden-555</code>). Todos van siempre a la <em>misma partición</em>, garantizando el orden estricto de lectura.</li>
+              <li><strong class="text-zinc-200">Consumer Group:</strong> <code class="text-zinc-300">mi-grupo-educativo</code> almacena el último offset consumido por partición (persistencia tras reinicios).</li>
+            </ul>
+            <div class="pt-2 text-[11px] text-zinc-500 font-mono">
+              Endpoint directo: <span class="text-zinc-300">http://localhost:8888/api/kafka/send</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla en vivo de Mensajes Recibidos -->
+        <div class="space-y-2">
+          <h4 class="text-xs font-bold text-white uppercase tracking-wider text-zinc-400">Mensajes Recibidos en Tiempo Real (@KafkaListener)</h4>
+          <div class="overflow-x-auto bg-[#151515] border border-white/[0.06] rounded-sm">
+            <table class="w-full min-w-[580px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500 bg-white/[0.02]">
+                <tr>
+                  <th class="px-3 py-2">Partición</th>
+                  <th class="px-3 py-2">Offset</th>
+                  <th class="px-3 py-2">Key</th>
+                  <th class="px-3 py-2">Mensaje</th>
+                  <th class="px-3 py-2 text-right">Recibido</th>
+                </tr>
+              </thead>
+              <tbody id="kafka-mensajes-tbody" class="divide-y divide-white/[0.04]">
+                <tr><td colspan="5" class="px-3 py-6 text-center text-zinc-500">Sin mensajes consumidos aún. Envía uno arriba para observar la partición y el offset.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
         <h3 class="text-sm font-bold text-white">Consultar retraso</h3>
         <form id="form-lag" class="flex flex-wrap gap-2">

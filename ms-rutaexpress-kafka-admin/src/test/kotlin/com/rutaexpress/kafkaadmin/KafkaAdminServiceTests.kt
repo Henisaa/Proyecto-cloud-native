@@ -46,7 +46,7 @@ class KafkaAdminServiceTests {
 
     @Test
     fun `reconciliar es idempotente cuando la topologia ya existe`() {
-        val topics = setOf("shipments.events", "audit.timeline", "catalog.events", "shipments.events.report.DLT", "shipments.events.audit.DLT", "audit.timeline.audit.DLT")
+        val topics = setOf("tutorial-particiones", "shipments.events", "audit.timeline", "catalog.events", "shipments.events.report.DLT", "shipments.events.audit.DLT", "audit.timeline.audit.DLT")
         `when`(admin.listTopics().names()).thenReturn(KafkaFuture.completedFuture(topics))
         assertThat(service.reconcile()).containsExactlyElementsOf(topics.sorted())
     }
@@ -56,6 +56,13 @@ class KafkaAdminServiceTests {
         `when`(admin.listConsumerGroupOffsets("ms-rutaexpress-audit-group").partitionsToOffsetAndMetadata())
             .thenReturn(KafkaFuture.completedFuture(emptyMap()))
         assertThat(service.lag("ms-rutaexpress-audit-group")).isEmpty()
+    }
+
+    @Test
+    fun `permite consultar lag para mi-grupo-educativo`() {
+        `when`(admin.listConsumerGroupOffsets("mi-grupo-educativo").partitionsToOffsetAndMetadata())
+            .thenReturn(KafkaFuture.completedFuture(emptyMap()))
+        assertThat(service.lag("mi-grupo-educativo")).isEmpty()
     }
 
     @Test

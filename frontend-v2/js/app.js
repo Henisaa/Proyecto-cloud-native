@@ -1110,7 +1110,85 @@
   function cargarKafka() {
     kafkaTopicos();
     kafkaCluster();
+    cargarKafkaMensajes();
     return Promise.resolve();
+  }
+
+  function cargarKafkaMensajes() {
+    return RX.get('/api/admin/kafka/messages').then(function (mensajes) {
+      pintarKafkaMensajes(mensajes);
+    }).catch(function () {});
+  }
+
+  function pintarKafkaMensajes(mensajes) {
+    var tbody = document.getElementById('kafka-mensajes-tbody');
+    if (!tbody) return;
+    if (!mensajes || !mensajes.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-zinc-500">Sin mensajes consumidos aún. Envía uno arriba para observar la partición y el offset.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = mensajes.map(function (m) {
+      var badgePart = '<span class="font-mono px-2 py-0.5 rounded-xs border ' +
+        (m.partition === 0 ? 'border-sky-800 text-sky-300 bg-sky-950/30' :
+         m.partition === 1 ? 'border-amber-800 text-amber-300 bg-amber-950/30' :
+         'border-emerald-800 text-emerald-300 bg-emerald-950/30') + '">P' + m.partition + '</span>';
+      return '<tr class="hover:bg-white/[0.01]">' +
+        '<td class="px-3 py-2 font-mono">' + badgePart + '</td>' +
+        '<td class="px-3 py-2 font-mono font-semibold text-white">' + esc(m.offset) + '</td>' +
+        '<td class="px-3 py-2 font-mono text-zinc-300">' + esc(m.key || '(sin key)') + '</td>' +
+        '<td class="px-3 py-2 font-mono text-zinc-200">' + esc(m.message) + '</td>' +
+        '<td class="px-3 py-2 text-right font-mono text-zinc-500 text-[11px]">' + fecha(m.timestamp) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function enviarMensajeKafka(mensaje, key) {
+    var query = { message: mensaje };
+    if (key) query.key = key;
+    return RX.get('/api/admin/kafka/send', query).then(function (res) {
+      return res && res.message ? res.message : 'Mensaje enviado';
+    });
+  }
+
+  function ejecutarPruebaSinKey() {
+    var msgs = ['Mensaje1', 'Mensaje2', 'Mensaje3'];
+    var sec = Promise.resolve();
+    msgs.forEach(function (m) {
+      sec = sec.then(function () { return enviarMensajeKafka(m, null); });
+    });
+    return sec.then(function () {
+      toast('Prueba 1 enviada: Mensaje1, Mensaje2, Mensaje3 (distribución 0, 1, 2)');
+      setTimeout(cargarKafkaMensajes, 800);
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  function ejecutarPruebaConKey() {
+    var msgs = ['Paso1-Creada', 'Paso2-Pagada', 'Paso3-Enviada'];
+    var sec = Promise.resolve();
+    msgs.forEach(function (m) {
+      sec = sec.then(function () { return enviarMensajeKafka(m, 'orden-555'); });
+    });
+    return sec.then(function () {
+      toast('Prueba 2 enviada: orden-555 (orden garantizado en la misma partición)');
+      setTimeout(cargarKafkaMensajes, 800);
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  function enviarFormularioKafka(ev) {
+    var mensaje = (document.getElementById('k-mensaje') || {}).value;
+    var key = (document.getElementById('k-key') || {}).value;
+    mensaje = mensaje ? mensaje.trim() : '';
+    key = key ? key.trim() : null;
+    if (!mensaje) return toast('Escribe el mensaje a enviar.', true);
+    return ejecutar(ev.submitter, function () {
+      return enviarMensajeKafka(mensaje, key);
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      var span = document.getElementById('k-send-resultado');
+      if (span) span.textContent = r.valor;
+      toast('Mensaje enviado a Kafka');
+      setTimeout(cargarKafkaMensajes, 600);
+    });
   }
 
   function kafkaTopicos() {
@@ -1223,6 +1301,15 @@
       json: function () { var pre = document.getElementById(d.target); if (pre) pre.classList.toggle('hidden'); },
       mqJson: function () { $('#mq-politicas-json').classList.toggle('hidden'); },
       kafkaTopicos: function () { return kafkaTopicos(); },
+      kafkaReconciliar: function () {
+        return RX.post('/api/admin/kafka/topology', {}).then(function () {
+          toast('Topología Kafka aplicada: tutorial-particiones (3 particiones)');
+          return kafkaTopicos();
+        }).catch(function (e) { toast(e.message, true); });
+      },
+      kafkaRefrescarMensajes: function () { return cargarKafkaMensajes(); },
+      kafkaPruebaSinKey: function () { return ejecutarPruebaSinKey(); },
+      kafkaPruebaConKey: function () { return ejecutarPruebaConKey(); },
       topologia: function () { return aplicarTopologia(el); },
       borrarCola: function () { return borrarRecurso('/api/admin/mq/queues/' + encodeURIComponent(d.nombre), d.nombre, 'cola'); },
       borrarExchange: function () { return borrarRecurso('/api/admin/mq/exchanges/' + encodeURIComponent(d.nombre), d.nombre, 'exchange'); },
@@ -1251,6 +1338,7 @@
       'form-prueba': publicarPrueba,
       'form-auditoria': buscarAuditoria,
       'form-lag': consultarLag,
+      'form-kafka-send': enviarFormularioKafka,
     };
     var fn = manejadores[ev.target.id];
     if (fn) {

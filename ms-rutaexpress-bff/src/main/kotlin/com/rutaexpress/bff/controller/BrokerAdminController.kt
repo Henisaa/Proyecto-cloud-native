@@ -109,13 +109,71 @@ class BrokerAdminController(
     )
     @GetMapping("/kafka/{resource}")
     fun kafka(@PathVariable resource: String, @AuthenticationPrincipal jwt: Jwt?): Any {
-        requireResource(resource, setOf("cluster", "topics"))
-        return get(kafkaDisponible(), "/api/kafka-admin/$resource", jwt)
+        requireResource(resource, setOf("cluster", "topics", "messages", "health"))
+        return if (resource == "messages") {
+            get(kafkaDisponible(), "/api/kafka/messages", jwt)
+        } else if (resource == "health") {
+            try {
+                kafkaDisponible().get().uri("/api/kafka/health").retrieve().body(String::class.java) ?: ""
+            } catch (ex: Exception) {
+                mapOf("status" to "DOWN", "error" to (ex.message ?: "Unavailable"))
+            }
+        } else {
+            get(kafkaDisponible(), "/api/kafka-admin/$resource", jwt)
+        }
     }
     @GetMapping("/kafka/topics/{name}")
     fun topic(@PathVariable name: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/topics/{name}", jwt, name)
     @GetMapping("/kafka/groups/{group}/lag")
     fun lag(@PathVariable group: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
+    @PostMapping("/kafka/send")
+    fun sendKafkaPost(
+        @RequestParam("message") message: String,
+        @RequestParam(value = "key", required = false) key: String?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Map<String, Any> {
+        val respuesta = try {
+            kafkaDisponible().post()
+                .uri { uri ->
+                    val b = uri.path("/api/kafka/send").queryParam("message", message)
+                    if (!key.isNullOrBlank()) b.queryParam("key", key)
+                    b.build()
+                }
+                .retrieve().body(String::class.java) ?: ""
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo enviar mensaje a Kafka: ${e.message}", e)
+        }
+        return mapOf("success" to true, "message" to respuesta)
+    }
+    @GetMapping("/kafka/send")
+    fun sendKafkaGet(
+        @RequestParam("message") message: String,
+        @RequestParam(value = "key", required = false) key: String?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Map<String, Any> {
+        val respuesta = try {
+            kafkaDisponible().get()
+                .uri { uri ->
+                    val b = uri.path("/api/kafka/send").queryParam("message", message)
+                    if (!key.isNullOrBlank()) b.queryParam("key", key)
+                    b.build()
+                }
+                .retrieve().body(String::class.java) ?: ""
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo enviar mensaje a Kafka: ${e.message}", e)
+        }
+        return mapOf("success" to true, "message" to respuesta)
+    }
+    @PostMapping("/kafka/topology")
+    fun reconciliarKafkaTopology(@AuthenticationPrincipal jwt: Jwt?): Any {
+        return try {
+            kafkaDisponible().post().uri("/api/kafka-admin/topology")
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                .retrieve().body(Any::class.java) ?: emptyList<Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo reconciliar topología de Kafka: ${e.message}", e)
+        }
+    }
     private fun kafkaDisponible(): RestClient = kafka
         ?: throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Administrador de Kafka no desplegado")
 

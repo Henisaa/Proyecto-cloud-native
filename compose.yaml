@@ -378,6 +378,17 @@ services:
         max-file: "3"
         max-size: 10m
     mem_limit: "536870912"
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "8888"
+        target: 8087
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "8087"
+        target: 8087
     restart: unless-stopped
   kafka-ui:
     depends_on:
