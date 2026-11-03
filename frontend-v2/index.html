@@ -783,6 +783,166 @@
         </div>
       </div>
 
+      <!-- Kafka Streams: Procesamiento en Tiempo Real (shipments.events) -->
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="ti ti-bolt text-white"></i> Kafka Streams: Procesamiento en Tiempo Real (<code class="text-zinc-300">shipments.events</code>)
+            </h3>
+            <p class="text-xs text-zinc-500">
+              Consumer Group: <code id="ks-app-id" class="text-zinc-300">rutaexpress-streams-processor</code> ·
+              Estado: <span id="ks-state-badge" class="font-mono text-emerald-300">RUNNING</span> ·
+              Procesados: <strong id="ks-total-processed" class="text-white font-mono">0</strong>
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-accion="ksToggleTopology" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white transition-colors">Ver Topología</button>
+            <button type="button" data-accion="ksRefrescarEstado" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Consultar State Store</button>
+          </div>
+        </div>
+
+        <pre id="ks-topology-pre" class="hidden bg-[#151515] border border-white/[0.06] rounded-sm p-3 font-mono text-[11px] text-zinc-300 overflow-x-auto"></pre>
+
+        <!-- Simulador de Eventos de Envío para Kafka Streams -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Simulador de Flujo de Envíos (/api/kafka/streams/simulate)</h4>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" data-accion="ksSimularRafaga" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-1.5 rounded-xs text-zinc-300">
+                🚀 Ráfaga Multi-Zona (5 envíos)
+              </button>
+              <button type="button" data-accion="ksSimularPrioritario" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-1.5 rounded-xs text-zinc-300">
+                ⚡ Envío Prioritario EXPRESS (Filter + Branch)
+              </button>
+              <button type="button" data-accion="ksSimularEstandar" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] px-2.5 py-1.5 rounded-xs text-zinc-300">
+                📦 Envío Estándar Ligero
+              </button>
+            </div>
+            <form id="form-ks-simulate" class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-xs">
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Tipo Servicio</label>
+                <select id="ks-service" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+                  <option value="EXPRESS">EXPRESS</option>
+                  <option value="ESTANDAR">ESTANDAR</option>
+                  <option value="MISMO_DIA">MISMO_DIA</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Zona</label>
+                <select id="ks-zone" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+                  <option value="NORTE">NORTE</option>
+                  <option value="CENTRO">CENTRO</option>
+                  <option value="SUR">SUR</option>
+                  <option value="ORIENTE">ORIENTE</option>
+                  <option value="PONIENTE">PONIENTE</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Estado</label>
+                <select id="ks-status" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+                  <option value="ACEPTADO">ACEPTADO</option>
+                  <option value="EN_TRANSITO">EN_TRANSITO</option>
+                  <option value="ENTREGADO">ENTREGADO</option>
+                  <option value="CREADO">CREADO</option>
+                  <option value="CANCELADO">CANCELADO</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Peso (kg)</label>
+                <input type="number" id="ks-weight" step="0.5" min="0.5" value="14.5" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Paquetes</label>
+                <input type="number" id="ks-packages" min="1" value="3" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+              </div>
+              <div>
+                <label class="block text-[10px] text-zinc-400 mb-1">Monto ($)</label>
+                <input type="number" id="ks-price" step="500" min="1000" value="18500" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+              </div>
+              <div class="col-span-2 sm:col-span-3 flex items-center justify-between pt-1">
+                <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Emitir a shipments.events</button>
+                <span class="text-[11px] text-zinc-500 font-mono">Directo: <span class="text-zinc-300">http://localhost:8888/api/kafka/streams/state</span></span>
+              </div>
+            </form>
+          </div>
+
+          <!-- Stateless: branch() y filter() -->
+          <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">A. Operaciones Stateless: <code class="text-zinc-200">map()</code>, <code class="text-zinc-200">filter()</code> y <code class="text-zinc-200">branch()</code></h4>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-[#1A1A1A] border border-white/[0.06] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Branch 0 · Estándar (&lt; 10 kg)</span>
+                <span id="ks-branch-estandar" class="font-mono text-lg font-bold text-sky-300">0</span>
+                <span class="text-[10px] text-zinc-500 block font-mono">shipments.streams.estandar</span>
+              </div>
+              <div class="bg-[#1A1A1A] border border-white/[0.06] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Branch 1 · Prioritario (&gt;= 10 kg / EXPRESS)</span>
+                <span id="ks-branch-prioritaria" class="font-mono text-lg font-bold text-amber-300">0</span>
+                <span class="text-[10px] text-zinc-500 block font-mono">shipments.streams.prioritarios</span>
+              </div>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">Eventos capturados por <code class="text-zinc-300">filter()</code> (Alta Prioridad / Alertas)</span>
+              <div id="ks-filtered-list" class="space-y-1 max-h-28 overflow-y-auto text-[11px] font-mono text-zinc-300">
+                <div class="text-zinc-500">Sin alertas filtradas aún.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stateful: count() y reduce() en State Stores -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-[#151515] border border-white/[0.04] p-3 rounded-sm space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">B1. Stateful <code class="text-zinc-200">count()</code> por Servicio</h4>
+            <p class="text-[10px] text-zinc-500 font-mono">State Store: store-conteo-por-servicio</p>
+            <div id="ks-count-service" class="space-y-1.5 text-xs font-mono">
+              <div class="text-zinc-500">Sin datos en el State Store.</div>
+            </div>
+          </div>
+
+          <div class="bg-[#151515] border border-white/[0.04] p-3 rounded-sm space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">B2. Stateful <code class="text-zinc-200">count()</code> por Estado</h4>
+            <p class="text-[10px] text-zinc-500 font-mono">State Store: store-conteo-por-estado</p>
+            <div id="ks-count-status" class="space-y-1.5 text-xs font-mono">
+              <div class="text-zinc-500">Sin datos en el State Store.</div>
+            </div>
+          </div>
+
+          <div class="bg-[#151515] border border-white/[0.04] p-3 rounded-sm space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">C. Windowing (Tumbling 5m &amp; Hopping 10m/5m)</h4>
+            <p class="text-[10px] text-zinc-500 font-mono">Stores: store-ventana-tumbling-zona / hopping-servicio</p>
+            <div id="ks-windows-list" class="space-y-1.5 max-h-36 overflow-y-auto text-[11px] font-mono">
+              <div class="text-zinc-500">Sin ventanas activas aún.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla Stateful reduce() por Zona -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">B3. Stateful <code class="text-zinc-200">groupByKey().reduce()</code> Acumulado por Zona (State Store: <code class="text-zinc-300">store-acumulado-por-zona</code>)</h4>
+          </div>
+          <div class="overflow-x-auto bg-[#151515] border border-white/[0.06] rounded-sm">
+            <table class="w-full min-w-[600px] text-left text-xs">
+              <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500 bg-white/[0.02]">
+                <tr>
+                  <th class="px-3 py-2">Zona (Key)</th>
+                  <th class="px-3 py-2">Total Envíos</th>
+                  <th class="px-3 py-2">Paquetes Acumulados</th>
+                  <th class="px-3 py-2">Peso Acumulado (kg)</th>
+                  <th class="px-3 py-2">Monto Total ($)</th>
+                  <th class="px-3 py-2">Último Estado</th>
+                </tr>
+              </thead>
+              <tbody id="ks-reduce-zone-tbody" class="divide-y divide-white/[0.04]">
+                <tr><td colspan="6" class="px-3 py-5 text-center text-zinc-500">Simula o crea un envío para observar cómo reduce() combina los eventos en el State Store local.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
         <h3 class="text-sm font-bold text-white">Consultar retraso</h3>
         <form id="form-lag" class="flex flex-wrap gap-2">
