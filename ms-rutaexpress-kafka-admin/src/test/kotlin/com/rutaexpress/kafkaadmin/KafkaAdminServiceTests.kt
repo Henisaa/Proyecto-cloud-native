@@ -4,9 +4,6 @@ import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.TopicDescription
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.clients.admin.Config
-import org.apache.kafka.clients.admin.ConfigEntry
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -59,10 +56,13 @@ class KafkaAdminServiceTests {
     }
 
     @Test
-    fun `permite consultar lag para mi-grupo-educativo`() {
+    fun `permite consultar lag para mi-grupo-educativo y rutaexpress-streams-processor`() {
         `when`(admin.listConsumerGroupOffsets("mi-grupo-educativo").partitionsToOffsetAndMetadata())
             .thenReturn(KafkaFuture.completedFuture(emptyMap()))
+        `when`(admin.listConsumerGroupOffsets("rutaexpress-streams-processor").partitionsToOffsetAndMetadata())
+            .thenReturn(KafkaFuture.completedFuture(emptyMap()))
         assertThat(service.lag("mi-grupo-educativo")).isEmpty()
+        assertThat(service.lag("rutaexpress-streams-processor")).isEmpty()
     }
 
     @Test

@@ -1,20 +1,25 @@
 package com.rutaexpress.kafkaadmin
 
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.web.bind.annotation.*
 
 /**
- * Controlador REST que envía mensajes a Kafka según la guía tutorial de tópicos, particiones y offsets.
+ * Controlador REST que envía mensajes a Kafka según la guía tutorial de tópicos, particiones,
+ * offsets y procesamiento en tiempo real con Kafka Streams.
  *
- * Demuestra dos conceptos:
+ * Demuestra:
  * - Sin Key: Round Robin (distribuye entre particiones 0, 1, 2...)
  * - Con Key: Sticky Partitioning (todos a la misma partición según hash de la clave)
+ * - Kafka Streams sobre shipments.events: Stateless (map, filter, branch), Stateful (count, reduce),
+ *   Windowing (Tumbling 5m y Hopping 10m/5m) e Interactive Queries sobre State Stores.
  */
 @RestController
 @RequestMapping("/api/kafka")
 class KafkaController(
     private val kafkaTemplate: KafkaTemplate<String, String>,
-    private val consumer: KafkaTutorialConsumer
+    private val consumer: KafkaTutorialConsumer,
+    @Autowired(required = false) private val streamsService: KafkaStreamsService? = null
 ) {
     private val topicName = "tutorial-particiones"
 
@@ -75,4 +80,47 @@ class KafkaController(
      */
     @GetMapping("/messages")
     fun messages(): List<MensajeRecibido> = consumer.ultimosMensajes()
+
+    /**
+     * Interactive Queries: Consulta el estado en tiempo real de los State Stores de Kafka Streams
+     */
+    @GetMapping("/streams/state")
+    fun streamsState(): ResumenStreamsEstadoDto =
+        (streamsService ?: KafkaStreamsService(kafkaTemplate = kafkaTemplate)).consultarEstado()
+
+    /**
+     * Simula eventos de envíos hacia shipments.events para su procesamiento en tiempo real con Kafka Streams
+     */
+    @PostMapping("/streams/simulate")
+    fun simulateStreamsPost(
+        @RequestParam(required = false) scenario: String?,
+        @RequestBody(required = false) body: SimulacionEnvioRequest?
+    ): Map<String, Any> {
+        val processor = streamsService ?: KafkaStreamsService(kafkaTemplate = kafkaTemplate)
+        val procesados = if (!scenario.isNullOrBlank()) {
+            processor.simularEscenario(scenario)
+        } else {
+            listOf(processor.simularEnvio(body ?: SimulacionEnvioRequest()))
+        }
+        return mapOf(
+            "success" to true,
+            "processedCount" to procesados.size,
+            "events" to procesados,
+            "state" to processor.consultarEstado()
+        )
+    }
+
+    @GetMapping("/streams/simulate")
+    fun simulateStreamsGet(
+        @RequestParam(defaultValue = "rafaga") scenario: String
+    ): Map<String, Any> {
+        val processor = streamsService ?: KafkaStreamsService(kafkaTemplate = kafkaTemplate)
+        val procesados = processor.simularEscenario(scenario)
+        return mapOf(
+            "success" to true,
+            "processedCount" to procesados.size,
+            "events" to procesados,
+            "state" to processor.consultarEstado()
+        )
+    }
 }

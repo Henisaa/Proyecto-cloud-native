@@ -23,6 +23,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 	implementation("org.springframework.boot:spring-boot-starter-kafka")
+	implementation("org.apache.kafka:kafka-streams")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
@@ -32,6 +33,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-security-test")
     testImplementation("org.springframework.security:spring-security-test")
+    testImplementation("org.apache.kafka:kafka-streams-test-utils")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
