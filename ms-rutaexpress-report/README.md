@@ -2,7 +2,9 @@ ms-rutaexpress-report
 Reportería y métricas de envíos
 
 Funcionamiento
-Consume shipments.events con el grupo ms-rutaexpress-report-group y mantiene una proyección Oracle por shipmentId. Calcula envíos por hora, lead time desde creación hasta entrega, estados y servicios más usados. Los eventos anteriores al último timestamp no regresan el estado de la proyección. Usa Caffeine para lecturas. Permite acceso a Admin. Un error de procesamiento se reintenta tres veces en total y luego se publica en shipments.events.report.DLT; no se confirma como éxito silenciosamente.
+Consume shipments.events con el grupo ms-rutaexpress-report-group y mantiene una proyección Oracle por shipmentId. Calcula envíos por hora, lead time desde creación hasta entrega, estados y servicios más usados. Los eventos anteriores al último timestamp no regresan el estado de la proyección (idempotencia temporal). Usa Caffeine para lecturas y permite acceso a Admin.
+
+Deserializa mensajes con ErrorHandlingDeserializer, valida los campos obligatorios de EnvioEventoKafka mediante JSR-380 (LocalValidatorFactoryBean) y propaga X-Correlation-Id o X-Trace-Id hacia SLF4J MDC mediante RecordInterceptor para logging contextual. Ante fallos transitorios reintenta con DefaultErrorHandler y ExponentialBackOff (1 s, 2 s, 4 s); ante errores no recuperables o tras agotar intentos publica en shipments.events.report.DLT mediante DeadLetterPublishingRecoverer (con productor configurado con batch.size=32768, linger.ms=20 y compression.type=snappy) sin confirmar el offset silenciosamente como éxito.
 
 Requisitos
 JDK 21 o superior, JAVA_HOME configurado y acceso a Maven Central. El bytecode generado es Java 21. Se usa Kotlin 2.3.21, Spring Boot 4.1.1, Jackson 3 y Gradle 9.7.1 mediante el wrapper incluido. No se necesita Gradle instalado. En Linux/macOS sustituya .\gradlew.bat por ./gradlew y defina las variables con export.

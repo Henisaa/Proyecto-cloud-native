@@ -16,5 +16,9 @@ min.insync.replicas=2
 num.partitions=3
 auto.create.topics.enable=false
 zookeeper.connection.timeout.ms=60000
+log.retention.hours=${KAFKA_LOG_RETENTION_HOURS:-0}
+log.retention.minutes=${KAFKA_LOG_RETENTION_MINUTES:-5}
+log.retention.bytes=${KAFKA_LOG_RETENTION_BYTES:-52428800}
+log.retention.check.interval.ms=${KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:-60000}
 EOF
 exec /opt/kafka/bin/kafka-server-start.sh /tmp/rutaexpress-server.properties

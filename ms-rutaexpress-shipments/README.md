@@ -16,7 +16,7 @@ flowchart LR
 
 ## Mensajes, idempotencia y DLQ
 
-Produce capacity.reserve/release en ex.rutaexpress.cmd (direct), shipment.status.* y notification.* en ex.rutaexpress.events (topic). Consume q.rutaexpress.audit (shipment.# y catalog.#). ACK manual tras persistir, reintentos acotados, NACK sin reencolar a q.rutaexpress.audit.dlq, logs y contador. eventId deduplica resultados; lastReserveCommandId descarta reservas anteriores. Liberaciones usan UUID determinista.
+Produce capacity.reserve/release en ex.rutaexpress.cmd (direct), shipment.status.* y notification.* en ex.rutaexpress.events (topic). Publica además los cambios de estado en Kafka (tópicos shipments.events y audit.timeline) después del commit usando un productor configurado con batch.size=32768 (32 KB), linger.ms=20, compression.type=snappy, enable.idempotence=true y cabeceras X-Correlation-Id, X-Trace-Id y X-Event-Id junto con contexto SLF4J MDC. Consume q.rutaexpress.audit (shipment.# y catalog.#). ACK manual tras persistir, reintentos acotados, NACK sin reencolar a q.rutaexpress.audit.dlq, logs y contador. eventId deduplica resultados; lastReserveCommandId descarta reservas anteriores. Liberaciones usan UUID determinista.
 
 ## Variables de entorno
 
