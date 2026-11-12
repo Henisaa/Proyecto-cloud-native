@@ -1,13 +1,19 @@
 package com.rutaexpress.report.dominio
 
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import java.time.OffsetDateTime
 
 data class EnvioEventoKafka(
+    @field:Size(max = 100)
     val eventId: String? = null,
+    @field:NotBlank(message = "shipmentId es obligatorio")
     val shipmentId: String,
     val serviceType: String? = null,
+    @field:NotBlank(message = "status es obligatorio")
     val status: String,
-    val timestamp: OffsetDateTime? = null
+    val timestamp: OffsetDateTime? = null,
+    val correlationId: String? = null
 )
 
 data class KpisRespuesta(

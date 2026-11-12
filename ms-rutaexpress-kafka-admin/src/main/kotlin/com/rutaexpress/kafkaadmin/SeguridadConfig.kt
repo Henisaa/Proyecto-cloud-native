@@ -19,7 +19,7 @@ class SeguridadConfig {
         .csrf { it.disable() }
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
         .authorizeHttpRequests { auth ->
-            auth.requestMatchers("/actuator/health/**", "/actuator/info", "/api/kafka/**").permitAll()
+            auth.requestMatchers("/actuator/health/**", "/actuator/info", "/api/kafka/**", "/api/test/**").permitAll()
                 .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasRole("ADMIN")
                 .requestMatchers("/api/**").hasAnyRole("ADMIN")
                 .anyRequest().denyAll()
