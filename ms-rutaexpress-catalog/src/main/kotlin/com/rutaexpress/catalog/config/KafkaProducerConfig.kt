@@ -31,6 +31,10 @@ class KafkaProducerConfig(
         configProps[ProducerConfig.MAX_BLOCK_MS_CONFIG] = 3000
         configProps[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] = 5000
         configProps[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] = 10000
+        // --- TUNING DE ALTO RENDIMIENTO ---
+        configProps[ProducerConfig.BATCH_SIZE_CONFIG] = 32 * 1024
+        configProps[ProducerConfig.LINGER_MS_CONFIG] = 20
+        configProps[ProducerConfig.COMPRESSION_TYPE_CONFIG] = "snappy"
         configProps[JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS] = false
         return DefaultKafkaProducerFactory(configProps)
     }

@@ -943,6 +943,156 @@
         </div>
       </div>
 
+      <!-- Guía 3.3.2: Tuning (Buffers, Retention) y Pruebas de Carga -->
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="ti ti-gauge text-white"></i> Tuning (Buffers, Retention) y Pruebas de Carga (<code class="text-zinc-300">sensor-topic</code>)
+            </h3>
+            <p class="text-xs text-zinc-500">
+              Batching <code class="text-zinc-300">32 KB</code> · <code class="text-zinc-300">linger.ms=20</code> · Compresión <code class="text-zinc-300">snappy</code> · Retención broker <code class="text-zinc-300">5 min / 50 MB</code>
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-accion="ktInit" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white transition-colors">Inicializar Tópicos Tuning/DLT</button>
+            <button type="button" data-accion="ktRefrescar" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white transition-colors">Actualizar Estado</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Generador de Carga (<code class="text-zinc-300">/api/test/start</code>)</h4>
+            <form id="form-kt-load" class="flex flex-wrap items-end gap-2">
+              <div class="flex-1 min-w-[160px]">
+                <label class="block text-[10px] text-zinc-400 mb-1">Cantidad de mensajes</label>
+                <input type="number" id="kt-count" min="1" max="500000" value="10000" class="w-full bg-[#1A1A1A] border border-white/[0.08] text-xs px-3 py-2 rounded-sm text-zinc-200 font-mono">
+              </div>
+              <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-2 rounded-sm hover:bg-zinc-200 transition-colors">
+                🚀 Lanzar Prueba de Carga
+              </button>
+            </form>
+            <div class="grid grid-cols-3 gap-2 pt-1 text-xs">
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Última ráfaga</span>
+                <span id="kt-last-count" class="font-mono text-base font-bold text-white">0</span>
+              </div>
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Duración</span>
+                <span id="kt-last-duration" class="font-mono text-base font-bold text-zinc-200">0 ms</span>
+              </div>
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Throughput</span>
+                <span id="kt-last-throughput" class="font-mono text-base font-bold text-emerald-300">0 msg/s</span>
+              </div>
+            </div>
+            <p id="kt-summary" class="text-[11px] font-mono text-zinc-400">Ejecuta una carga para medir el throughput con batching 32 KB + snappy.</p>
+          </div>
+
+          <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">SlowConsumer (Simulación Consumer Lag)</h4>
+              <button type="button" data-accion="ktVerLagSlow" class="text-[11px] border border-white/[0.08] px-2.5 py-1 rounded-xs text-zinc-300 hover:text-white">Ver Lag analytics-group</button>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Grupo</span>
+                <span id="kt-slow-group" class="font-mono text-xs font-bold text-zinc-200">analytics-group</span>
+              </div>
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Procesados (10ms/msg)</span>
+                <span id="kt-slow-count" class="font-mono text-base font-bold text-amber-300">0</span>
+              </div>
+              <div class="bg-[#1A1A1A] border border-white/[0.04] p-2.5 rounded-xs">
+                <span class="text-[10px] uppercase text-zinc-500 block">Último Offset</span>
+                <span id="kt-slow-offset" class="font-mono text-xs text-zinc-300">—</span>
+              </div>
+            </div>
+            <p class="text-[11px] text-zinc-400">El productor emite más rápido que la tasa máxima del consumidor lento (100 msg/s), acumulando retraso visible en <code class="text-zinc-300">analytics-group</code>.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guía 3.3.3: Manejo de Errores en Streaming, DLT, Idempotencia y MDC -->
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="ti ti-shield-exclamation text-white"></i> Manejo de Errores en Streaming (<code class="text-zinc-300">ordenes-creadas</code> &rarr; <code class="text-zinc-300">.DLT</code>)
+            </h3>
+            <p class="text-xs text-zinc-500">Validación JSR-380 · ErrorHandlingDeserializer · ExponentialBackOff (1s, 2s, 4s) · Idempotencia (<code class="text-zinc-300">processed_messages</code>) · MDC Correlation ID</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-accion="keRefrescar" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white transition-colors">Refrescar Estado</button>
+            <button type="button" data-accion="keReprocesarTodo" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">Reprocesar toda la DLT</button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-accion="keSimular" data-scenario="valido" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-emerald-300">✓ Evento Válido</button>
+          <button type="button" data-accion="keSimular" data-scenario="duplicado" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-sky-300">♻ Duplicado (Idempotencia)</button>
+          <button type="button" data-accion="keSimular" data-scenario="payload-invalido" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-amber-300">⚠ Payload Inválido (JSR-380)</button>
+          <button type="button" data-accion="keSimular" data-scenario="poison-pill" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-rose-300">☠ Poison Pill (JSON Corrupto)</button>
+          <button type="button" data-accion="keSimular" data-scenario="error-transitorio" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-amber-200">↻ Error Transitorio (Backoff + Recuperación)</button>
+          <button type="button" data-accion="keSimular" data-scenario="error-definitivo-dlt" class="text-xs border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1.5 rounded-xs text-rose-400">✕ Fallo Definitivo (&rarr; .DLT)</button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">Recibidos</span><span id="ke-stat-received" class="font-mono text-lg font-bold text-white">0</span></div>
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">Procesados</span><span id="ke-stat-processed" class="font-mono text-lg font-bold text-emerald-300">0</span></div>
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">Duplicados Ignorados</span><span id="ke-stat-dups" class="font-mono text-lg font-bold text-sky-300">0</span></div>
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">Reintentos</span><span id="ke-stat-retries" class="font-mono text-lg font-bold text-amber-300">0</span></div>
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">En DLT</span><span id="ke-stat-dlt" class="font-mono text-lg font-bold text-rose-300">0</span></div>
+          <div class="bg-[#151515] border border-white/[0.04] p-2.5 rounded-xs"><span class="text-[10px] uppercase text-zinc-500 block">Reprocesados</span><span id="ke-stat-reprocessed" class="font-mono text-lg font-bold text-zinc-200">0</span></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Dead Letter Topic (<code class="text-zinc-200">ordenes-creadas.DLT</code>)</h4>
+            <div class="overflow-x-auto bg-[#151515] border border-white/[0.06] rounded-sm max-h-56 overflow-y-auto">
+              <table class="w-full min-w-[460px] text-left text-xs">
+                <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500 bg-white/[0.02]">
+                  <tr>
+                    <th class="px-3 py-2">Correlation ID</th>
+                    <th class="px-3 py-2">Excepción</th>
+                    <th class="px-3 py-2">Estado</th>
+                    <th class="px-3 py-2 text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="ke-dlt-tbody" class="divide-y divide-white/[0.04]">
+                  <tr><td colspan="4" class="px-3 py-4 text-center text-zinc-500">Sin mensajes en Dead Letter Topic.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Control de Idempotencia (<code class="text-zinc-200">processed_messages</code>)</h4>
+            <div class="overflow-x-auto bg-[#151515] border border-white/[0.06] rounded-sm max-h-56 overflow-y-auto">
+              <table class="w-full min-w-[400px] text-left text-xs">
+                <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500 bg-white/[0.02]">
+                  <tr>
+                    <th class="px-3 py-2">message_id</th>
+                    <th class="px-3 py-2">orderId</th>
+                    <th class="px-3 py-2 text-right">timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="ke-processed-tbody" class="divide-y divide-white/[0.04]">
+                  <tr><td colspan="3" class="px-3 py-4 text-center text-zinc-500">Aún no hay mensajes confirmados.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Logs Contextuales SLF4J MDC (<code class="text-zinc-200">[correlationId=...]</code>)</h4>
+          <div id="ke-logs-list" class="bg-[#151515] border border-white/[0.06] rounded-sm p-3 max-h-44 overflow-y-auto space-y-1 font-mono text-[11px]">
+            <div class="text-zinc-500">Simula un escenario para observar la trazabilidad MDC (INFO / WARN reintento / ERROR DLT).</div>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
         <h3 class="text-sm font-bold text-white">Consultar retraso</h3>
         <form id="form-lag" class="flex flex-wrap gap-2">

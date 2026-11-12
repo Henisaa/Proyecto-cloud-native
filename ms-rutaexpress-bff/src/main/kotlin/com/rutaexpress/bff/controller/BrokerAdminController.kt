@@ -213,6 +213,83 @@ class BrokerAdminController(
             throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo reconciliar topología de Kafka: ${e.message}", e)
         }
     }
+
+    @GetMapping("/kafka/tuning/status")
+    fun tuningStatus(@AuthenticationPrincipal jwt: Jwt?): Any = get(kafkaDisponible(), "/api/test/status", jwt)
+
+    @PostMapping("/kafka/tuning/load-test")
+    fun ejecutarPruebaCarga(
+        @RequestParam(value = "count", defaultValue = "10000") count: Int,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any {
+        return try {
+            kafkaDisponible().post()
+                .uri { uri -> uri.path("/api/test/start").queryParam("count", count).build() }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo ejecutar prueba de carga Kafka: ${e.message}", e)
+        }
+    }
+
+    @PostMapping("/kafka/tuning/init")
+    fun initTuningTopics(@AuthenticationPrincipal jwt: Jwt?): Any {
+        return try {
+            kafkaDisponible().post().uri("/api/kafka/tuning/init")
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudieron inicializar tópicos de tuning/errores: ${e.message}", e)
+        }
+    }
+
+    @GetMapping("/kafka/errors/state")
+    fun errorHandlingState(@AuthenticationPrincipal jwt: Jwt?): Any = get(kafkaDisponible(), "/api/kafka/errors/state", jwt)
+
+    @PostMapping("/kafka/errors/simulate")
+    fun simulateErrorScenario(
+        @RequestParam(value = "scenario", required = false) scenario: String?,
+        @RequestBody(required = false) body: Map<String, Any?>?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any {
+        return try {
+            val req = kafkaDisponible().post()
+                .uri { uri ->
+                    val b = uri.path("/api/kafka/errors/simulate")
+                    if (!scenario.isNullOrBlank()) b.queryParam("scenario", scenario)
+                    b.build()
+                }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+            if (body != null) {
+                req.contentType(MediaType.APPLICATION_JSON).body(body)
+            }
+            req.retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo simular escenario de error en Kafka: ${e.message}", e)
+        }
+    }
+
+    @GetMapping("/kafka/dlt")
+    fun listDlt(@AuthenticationPrincipal jwt: Jwt?): Any = get(kafkaDisponible(), "/api/kafka/dlt", jwt)
+
+    @PostMapping("/kafka/dlt/reprocess")
+    fun reprocessDlt(
+        @RequestParam(value = "dltId", required = false) dltId: String?,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any {
+        return try {
+            kafkaDisponible().post()
+                .uri { uri ->
+                    val b = uri.path("/api/kafka/dlt/reprocess")
+                    if (!dltId.isNullOrBlank()) b.queryParam("dltId", dltId)
+                    b.build()
+                }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+        } catch (e: Exception) {
+            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo reprocesar DLT de Kafka: ${e.message}", e)
+        }
+    }
     private fun kafkaDisponible(): RestClient = kafka
         ?: throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Administrador de Kafka no desplegado")
 
