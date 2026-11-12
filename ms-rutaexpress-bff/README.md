@@ -14,6 +14,8 @@ flowchart LR
 
 `/api/bff/auth/me` (autenticado); dashboard y envíos (cuatro roles); catálogo (Admin/Despachador/Cliente); reportes y status (Admin); auditoría (Admin/Auditor); administración de broker (Admin). Detalle de envío incluye transiciones; timeline permite Admin/Despachador/Auditor. Crear: Admin/Despachador/Cliente; cambiar estado y reintentar: Admin/Despachador.
 
+En administración Kafka (bajo /api/bff/admin/kafka/* y /api/admin/kafka/*, exclusivo Admin) reenvía consultas de clúster, tópicos, mensajes, lag de grupos, estado y simulación de Kafka Streams (/streams/state, /streams/simulate), pruebas de carga y tuning (/tuning/status, /tuning/load-test, /tuning/init) y manejo de errores en streaming con DLT reprocesable (/errors/state, /errors/simulate, /dlt, /dlt/reprocess).
+
 ## Mensajes, idempotencia y DLQ
 
 No produce ni consume RabbitMQ directamente. Solo llama APIs de shipments, catalog y administradores. Los errores de esos servicios conservan código y cuerpo; fallos de conexión se traducen a 503/504.

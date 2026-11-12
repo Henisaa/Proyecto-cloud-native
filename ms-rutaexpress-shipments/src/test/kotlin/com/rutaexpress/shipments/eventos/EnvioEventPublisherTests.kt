@@ -7,7 +7,10 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.*
+import org.mockito.Mockito.mock
+import org.mockito.kotlin.any
+import org.mockito.kotlin.verifyNoInteractions
+import org.mockito.kotlin.whenever
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 import java.nio.charset.StandardCharsets
@@ -34,7 +37,7 @@ class EnvioEventPublisherTests {
         @Suppress("UNCHECKED_CAST")
         val template = mock(KafkaTemplate::class.java) as KafkaTemplate<String, Any>
         val enviados = mutableListOf<ProducerRecord<String, Any>>()
-        `when`(template.send(any(ProducerRecord::class.java) as ProducerRecord<String, Any>)).thenAnswer { inv ->
+        whenever(template.send(any<ProducerRecord<String, Any>>())).thenAnswer { inv ->
             val rec = inv.getArgument<ProducerRecord<String, Any>>(0)
             enviados.add(rec)
             @Suppress("UNCHECKED_CAST")
