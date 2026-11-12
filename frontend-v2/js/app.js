@@ -1112,7 +1112,134 @@
     kafkaCluster();
     cargarKafkaMensajes();
     cargarKafkaStreamsState();
+    cargarKafkaTuningStatus();
+    cargarKafkaErrorState();
     return Promise.resolve();
+  }
+
+  function cargarKafkaTuningStatus() {
+    return RX.get('/api/admin/kafka/tuning/status').then(function (st) {
+      pintarKafkaTuningStatus(st);
+    }).catch(function () {});
+  }
+
+  function pintarKafkaTuningStatus(st) {
+    if (!st) return;
+    var c = document.getElementById('kt-last-count');
+    if (c) c.textContent = num(st.lastCount || 0);
+    var d = document.getElementById('kt-last-duration');
+    if (d) d.textContent = num(st.lastDurationMs || 0) + ' ms';
+    var tp = document.getElementById('kt-last-throughput');
+    if (tp) tp.textContent = dec(st.lastThroughputMsgSec || 0, 2) + ' msg/s';
+    var sum = document.getElementById('kt-summary');
+    if (sum && st.lastSummary) sum.textContent = st.lastSummary;
+
+    var sc = st.slowConsumer || {};
+    var sg = document.getElementById('kt-slow-group');
+    if (sg && sc.groupId) sg.textContent = sc.groupId;
+    var scCount = document.getElementById('kt-slow-count');
+    if (scCount) scCount.textContent = num(sc.processedCount || 0);
+    var scOff = document.getElementById('kt-slow-offset');
+    if (scOff) scOff.textContent = sc.lastOffset !== null && sc.lastOffset !== undefined ? ('P' + sc.lastPartition + ' #' + sc.lastOffset) : '—';
+  }
+
+  function inicializarTopicosTuning() {
+    return RX.post('/api/admin/kafka/tuning/init', {}).then(function () {
+      toast('Tópicos sensor-topic, ordenes-creadas y ordenes-creadas.DLT inicializados');
+      return kafkaTopicos();
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  function lanzarPruebaCargaKafka(ev) {
+    var countInput = document.getElementById('kt-count');
+    var count = Math.max(1, parseInt(countInput ? countInput.value : '10000', 10) || 10000);
+    return ejecutar(ev.submitter, function () {
+      return RX.post('/api/admin/kafka/tuning/load-test', {}, { count: count });
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      if (r.valor) pintarKafkaTuningStatus(r.valor);
+      toast('Prueba de carga completada (' + num(count) + ' mensajes a sensor-topic)');
+      setTimeout(cargarKafkaTuningStatus, 1000);
+    });
+  }
+
+  function cargarKafkaErrorState() {
+    return RX.get('/api/admin/kafka/errors/state').then(function (st) {
+      pintarKafkaErrorState(st);
+    }).catch(function () {});
+  }
+
+  function pintarKafkaErrorState(st) {
+    if (!st) return;
+    var mapIds = {
+      'ke-stat-received': st.totalReceived,
+      'ke-stat-processed': st.totalProcessed,
+      'ke-stat-dups': st.totalDuplicatesIgnored,
+      'ke-stat-retries': st.totalRetries,
+      'ke-stat-dlt': st.totalSentToDlt,
+      'ke-stat-reprocessed': st.totalReprocessed,
+    };
+    Object.keys(mapIds).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = num(mapIds[id] || 0);
+    });
+
+    var dltTbody = document.getElementById('ke-dlt-tbody');
+    if (dltTbody) {
+      var dlts = st.dltMessages || [];
+      dltTbody.innerHTML = dlts.length ? dlts.map(function (m) {
+        var estadoBadge = m.reprocessed
+          ? insignia('Reprocesado', 'border-emerald-800 text-emerald-300 bg-emerald-950/30')
+          : insignia('En DLT', 'border-rose-800 text-rose-300 bg-rose-950/30');
+        var btn = m.reprocessed ? '<span class="text-zinc-500">—</span>' : boton('keReprocesarUno', { dltid: m.dltId }, 'Reprocesar', 'bg-white text-black font-semibold hover:bg-zinc-200');
+        return '<tr class="hover:bg-white/[0.01]">' +
+          '<td class="px-3 py-2 font-mono text-zinc-200">' + esc(m.correlationId) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-rose-300">' + esc(m.exceptionClass) + '<div class="text-[10px] text-zinc-500 truncate max-w-[200px]">' + esc(m.exceptionMessage) + '</div></td>' +
+          '<td class="px-3 py-2">' + estadoBadge + '</td>' +
+          '<td class="px-3 py-2 text-right">' + btn + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="4" class="px-3 py-4 text-center text-zinc-500">Sin mensajes en Dead Letter Topic.</td></tr>';
+    }
+
+    var procTbody = document.getElementById('ke-processed-tbody');
+    if (procTbody) {
+      var procs = st.processedMessages || [];
+      procTbody.innerHTML = procs.length ? procs.map(function (p) {
+        return '<tr class="hover:bg-white/[0.01]">' +
+          '<td class="px-3 py-2 font-mono text-emerald-300">' + esc(p.messageId) + '</td>' +
+          '<td class="px-3 py-2 font-mono text-zinc-200">' + esc(p.orderId) + '</td>' +
+          '<td class="px-3 py-2 text-right font-mono text-zinc-500 text-[11px]">' + fecha(p.processedAt) + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="3" class="px-3 py-4 text-center text-zinc-500">Aún no hay mensajes confirmados.</td></tr>';
+    }
+
+    var logsList = document.getElementById('ke-logs-list');
+    if (logsList) {
+      var logs = st.contextualLogs || [];
+      logsList.innerHTML = logs.length ? logs.map(function (l) {
+        var lvlColor = l.level === 'ERROR' ? 'text-rose-400' : (l.level === 'WARN' ? 'text-amber-300' : 'text-emerald-300');
+        return '<div class="border-b border-white/[0.03] pb-1">' +
+          '<span class="' + lvlColor + ' font-bold">' + esc(l.level) + '</span> ' +
+          '<span class="text-sky-300">[correlationId=' + esc(l.correlationId) + ']</span> ' +
+          '<span class="text-zinc-300">' + esc(l.message) + '</span>' +
+          '</div>';
+      }).join('') : '<div class="text-zinc-500">Simula un escenario para observar la trazabilidad MDC (INFO / WARN reintento / ERROR DLT).</div>';
+    }
+  }
+
+  function simularErrorKafka(scenario) {
+    return RX.post('/api/admin/kafka/errors/simulate', {}, { scenario: scenario }).then(function (res) {
+      if (res && res.state) pintarKafkaErrorState(res.state);
+      toast('Escenario «' + scenario + '» ejecutado: ' + ((res && res.result && res.result.status) || 'OK'));
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  function reprocesarDltKafka(dltId) {
+    var query = dltId ? { dltId: dltId } : {};
+    return RX.post('/api/admin/kafka/dlt/reprocess', {}, query).then(function (res) {
+      if (res && res.state) pintarKafkaErrorState(res.state);
+      toast('DLT reprocesada (' + ((res && res.reprocessedCount) || 0) + ' mensajes re-inyectados)');
+    }).catch(function (e) { toast(e.message, true); });
   }
 
   function cargarKafkaStreamsState() {
@@ -1433,6 +1560,17 @@
       ksSimularRafaga: function () { return simularEscenarioStreams('rafaga'); },
       ksSimularPrioritario: function () { return simularEscenarioStreams('prioritario'); },
       ksSimularEstandar: function () { return simularEscenarioStreams('estandar'); },
+      ktInit: function () { return inicializarTopicosTuning(); },
+      ktRefrescar: function () { return cargarKafkaTuningStatus(); },
+      ktVerLagSlow: function () {
+        var inp = document.getElementById('kafka-grupo');
+        if (inp) inp.value = 'analytics-group';
+        return consultarLag();
+      },
+      keRefrescar: function () { return cargarKafkaErrorState(); },
+      keSimular: function () { return simularErrorKafka(d.scenario || 'valido'); },
+      keReprocesarTodo: function () { return reprocesarDltKafka(null); },
+      keReprocesarUno: function () { return reprocesarDltKafka(d.dltid); },
       topologia: function () { return aplicarTopologia(el); },
       borrarCola: function () { return borrarRecurso('/api/admin/mq/queues/' + encodeURIComponent(d.nombre), d.nombre, 'cola'); },
       borrarExchange: function () { return borrarRecurso('/api/admin/mq/exchanges/' + encodeURIComponent(d.nombre), d.nombre, 'exchange'); },
@@ -1463,6 +1601,7 @@
       'form-lag': consultarLag,
       'form-kafka-send': enviarFormularioKafka,
       'form-ks-simulate': enviarSimulacionStreams,
+      'form-kt-load': lanzarPruebaCargaKafka,
     };
     var fn = manejadores[ev.target.id];
     if (fn) {
