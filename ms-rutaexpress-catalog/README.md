@@ -16,7 +16,7 @@ flowchart LR
 
 ## Mensajes, idempotencia y DLQ
 
-Consume q.rutaexpress.command desde ex.rutaexpress.cmd (direct): capacity.reserve/release. Produce catalog.capacity.reserved/rejected/released en ex.rutaexpress.events (topic), con eventId commandId:resultado. ACK después del resultado confirmado; errores transitorios reintentan y luego NACK a command.dlq; errores inválidos no reencolan. Reserva única por shipmentId y registro por commandId; liberación usa la línea y paquetes guardados.
+Consume q.rutaexpress.command desde ex.rutaexpress.cmd (direct): capacity.reserve/release. Produce catalog.capacity.reserved/rejected/released en ex.rutaexpress.events (topic), con eventId commandId:resultado, y publica eventos de catálogo en Kafka con tuning de productor (batch.size=32768, linger.ms=20, compression.type=snappy, enable.idempotence=true). ACK después del resultado confirmado; errores transitorios reintentan y luego NACK a command.dlq; errores inválidos no reencolan. Reserva única por shipmentId y registro por commandId; liberación usa la línea y paquetes guardados.
 
 ## Variables de entorno
 

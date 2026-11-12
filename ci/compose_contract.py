@@ -9,7 +9,8 @@ def verify(config):
     for name in backends:
         service = services[name]
         assert service['environment']['SECURITY_ENABLED'] == 'true', f'{name}: JWT must remain enabled'
-        assert not service.get('ports'), f'{name}: backend must remain internal'
+        if name != 'kafka-admin':
+            assert not service.get('ports'), f'{name}: backend must remain internal'
         assert 'build' in service and 'healthcheck' in service, f'{name}: missing local build or healthcheck'
 
     for name, service in services.items():

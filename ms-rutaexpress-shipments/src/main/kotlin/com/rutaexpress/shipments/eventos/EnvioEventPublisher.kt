@@ -1,13 +1,16 @@
 package com.rutaexpress.shipments.eventos
 
 import com.rutaexpress.shipments.dominio.Envio
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -76,16 +79,29 @@ class EnvioEventPublisher(
     }
 
     private fun enviar(topic: String, key: String, evento: EventoEnvioKafka) {
+        val prevCorrelation = MDC.get("correlationId")
+        MDC.put("correlationId", evento.correlationId)
         try {
-            kafkaTemplate?.send(topic, key, evento)?.whenComplete { _, ex ->
-                if (ex != null) {
-                    logger.warn("No se pudo publicar en {}: {}", topic, ex.message)
-                } else {
-                    logger.info("Evento de envío {} publicado en {} (key={})", evento.status, topic, key)
+            val record = ProducerRecord<String, Any>(topic, key, evento)
+            record.headers().add("X-Correlation-Id", evento.correlationId.toByteArray(StandardCharsets.UTF_8))
+            record.headers().add("X-Trace-Id", evento.traceId.toByteArray(StandardCharsets.UTF_8))
+            record.headers().add("X-Event-Id", evento.eventId.toByteArray(StandardCharsets.UTF_8))
+            kafkaTemplate?.send(record)?.whenComplete { _, ex ->
+                MDC.put("correlationId", evento.correlationId)
+                try {
+                    if (ex != null) {
+                        logger.warn("No se pudo publicar en {} [correlationId={}]: {}", topic, evento.correlationId, ex.message)
+                    } else {
+                        logger.info("Evento de envío {} publicado en {} (key={}, correlationId={})", evento.status, topic, key, evento.correlationId)
+                    }
+                } finally {
+                    MDC.remove("correlationId")
                 }
             }
         } catch (ex: Exception) {
-            logger.warn("Error publicando evento en {}: {}", topic, ex.message)
+            logger.warn("Error publicando evento en {} [correlationId={}]: {}", topic, evento.correlationId, ex.message)
+        } finally {
+            if (prevCorrelation != null) MDC.put("correlationId", prevCorrelation) else MDC.remove("correlationId")
         }
     }
 }
