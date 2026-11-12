@@ -65,9 +65,11 @@ Detalles y variables: [infra/README.md](infra/README.md). Interfaz y roles: [fro
 
 ## Mensajería y seguridad
 
-Tres colas funcionales: command, notification y audit; cada una tiene su DLQ. Comandos por exchange direct, eventos por topic, ACK manual, reintentos acotados, NACK sin reencolar y registro de DLQ. El frontend muestra PENDIENTE → RESERVADA/RECHAZADA, permite reintento y visualiza la compensación. Catalog deduplica por commandId y reserva por shipmentId, con bloqueo y clave única.
+Tres colas funcionales en RabbitMQ: command, notification y audit; cada una tiene su DLQ. Comandos por exchange direct, eventos por topic, ACK manual, reintentos acotados, NACK sin reencolar y registro de DLQ. El frontend muestra PENDIENTE → RESERVADA/RECHAZADA, permite reintento y visualiza la compensación. Catalog deduplica por commandId y reserva por shipmentId, con bloqueo y clave única.
 
-MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y conserva Bearer. Cliente solo consulta envíos de su oid. Solo Admin administra RabbitMQ. No exponer servicios internos ni desactivar seguridad en nube. La coordinación entre base y RabbitMQ usa confirmaciones y reconciliación; outbox sigue como mejora prevista en el plan.
+En Apache Kafka, los productores de shipments, catalog, audit, report y kafka-admin utilizan batch.size=32768 (32 KB), linger.ms=20, compression.type=snappy e idempotencia, junto con retención por defecto de 5 minutos o 50 MB en los brokers. La plataforma incluye tutorial de particiones y offsets (tutorial-particiones), topología Kafka Streams en tiempo real sobre shipments.events (State Stores y ventanas Tumbling/Hopping), generador de pruebas de carga sobre sensor-topic con SlowConsumer (analytics-group) para medir Consumer Lag, y manejo de errores en streaming en audit, report y kafka-admin (ErrorHandlingDeserializer, validación JSR-380, ExponentialBackOff, DeadLetterPublishingRecoverer con reprocesamiento DLT, tabla PROCESSED_MESSAGES en audit y propagación de X-Correlation-Id con SLF4J MDC), todo operable desde frontend-v2 a través del BFF.
+
+MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y conserva Bearer. Cliente solo consulta envíos de su oid. Solo Admin administra RabbitMQ y Kafka. No exponer servicios internos ni desactivar seguridad en nube. La coordinación entre base y RabbitMQ usa confirmaciones y reconciliación; outbox sigue como mejora prevista en el plan.
 
 ## Estado de la EP2
 
