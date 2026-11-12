@@ -19,7 +19,9 @@ import org.springframework.web.bind.annotation.*
 class KafkaController(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val consumer: KafkaTutorialConsumer,
-    @Autowired(required = false) private val streamsService: KafkaStreamsService? = null
+    @Autowired(required = false) private val streamsService: KafkaStreamsService? = null,
+    @Autowired(required = false) private val errorHandlingService: KafkaErrorHandlingService? = null,
+    @Autowired(required = false) private val adminService: KafkaAdminService? = null
 ) {
     private val topicName = "tutorial-particiones"
 
@@ -123,4 +125,52 @@ class KafkaController(
             "state" to processor.consultarEstado()
         )
     }
+
+    /**
+     * Inicializa tópicos de Tuning (sensor-topic) y Manejo de Errores (ordenes-creadas / .DLT)
+     */
+    @PostMapping("/tuning/init")
+    fun initTuningTopics(): Map<String, Any> {
+        val topics = adminService?.reconcileTuningAndErrorTopics() ?: emptyList()
+        return mapOf("success" to true, "topics" to topics)
+    }
+
+    /**
+     * Estado en vivo de Validación, Reintentos, Idempotencia (processed_messages), DLT y Logs MDC
+     */
+    @GetMapping("/errors/state")
+    fun errorHandlingState(): ErrorHandlingStateDto =
+        (errorHandlingService ?: KafkaErrorHandlingService(kafkaTemplate = kafkaTemplate)).estado()
+
+    /**
+     * Simula escenarios de la guía Manejo de Errores en Streaming:
+     * valido, duplicado, payload-invalido, poison-pill, error-transitorio, error-definitivo-dlt
+     */
+    @PostMapping("/errors/simulate")
+    fun simulateErrorScenario(
+        @RequestParam(required = false) scenario: String?,
+        @RequestBody(required = false) body: SimulacionErrorRequest?
+    ): Map<String, Any> {
+        val svc = errorHandlingService ?: KafkaErrorHandlingService(kafkaTemplate = kafkaTemplate)
+        val request = if (!scenario.isNullOrBlank()) {
+            (body ?: SimulacionErrorRequest()).copy(scenario = scenario)
+        } else {
+            body ?: SimulacionErrorRequest()
+        }
+        return svc.simularEscenario(request)
+    }
+
+    /**
+     * Lista mensajes caídos en Dead Letter Topic (.DLT) con sus headers enriquecidos
+     */
+    @GetMapping("/dlt")
+    fun listDlt(): List<DeadLetterMensajeDto> =
+        (errorHandlingService ?: KafkaErrorHandlingService(kafkaTemplate = kafkaTemplate)).listarDlt()
+
+    /**
+     * Herramienta de Reprocesamiento: lee de la DLT y re-inyecta los mensajes corregidos al tópico principal
+     */
+    @PostMapping("/dlt/reprocess")
+    fun reprocessDlt(@RequestParam(required = false) dltId: String?): Map<String, Any> =
+        (errorHandlingService ?: KafkaErrorHandlingService(kafkaTemplate = kafkaTemplate)).reprocesarDlt(dltId)
 }
