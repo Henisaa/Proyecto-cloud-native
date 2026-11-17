@@ -18,18 +18,25 @@ data class SlowConsumerStats(
     val lastPartition: Int?,
     val lastOffset: Long?,
     val lastKey: String?,
-    val lastProcessedAt: Instant?
+    val lastProcessedAt: Instant?,
+    val concurrency: Int = 3,
+    val maxPollRecords: Int = 500
 )
 
 /**
  * Consumidor con Retardo Simulado (Guía Tuning y Pruebas de Carga):
- * Simula procesamiento pesado (10ms por mensaje = máx ~100 mensajes/segundo)
+ * Simula procesamiento pesado (10ms por mensaje = máx ~100 mensajes/segundo por hilo)
+ * con 3 hilos concurrentes para las 3 particiones de 'sensor-topic'
  * para observar Consumer Lag en el grupo 'analytics-group'.
  */
 @Service
 class SlowConsumer(
     @Value("\${app.kafka.tuning.slow-consumer-delay-ms:10}")
-    private val delayMs: Long = 10L
+    private val delayMs: Long = 10L,
+    @Value("\${app.kafka.tuning.slow-consumer-concurrency:3}")
+    private val concurrency: Int = 3,
+    @Value("\${spring.kafka.consumer.max-poll-records:500}")
+    private val maxPollRecords: Int = 500
 ) {
     private val processedCount = AtomicLong(0)
     private val lastPartition = AtomicReference<Int?>(null)
@@ -37,7 +44,11 @@ class SlowConsumer(
     private val lastKey = AtomicReference<String?>(null)
     private val lastProcessedAt = AtomicReference<Instant?>(null)
 
-    @KafkaListener(topics = ["sensor-topic"], groupId = "analytics-group")
+    @KafkaListener(
+        topics = ["sensor-topic"],
+        groupId = "analytics-group",
+        concurrency = "\${app.kafka.tuning.slow-consumer-concurrency:3}"
+    )
     fun listen(
         @Payload message: String,
         @Header(name = KafkaHeaders.RECEIVED_PARTITION, required = false) partition: Int? = null,
@@ -66,6 +77,8 @@ class SlowConsumer(
         lastPartition = lastPartition.get(),
         lastOffset = lastOffset.get(),
         lastKey = lastKey.get(),
-        lastProcessedAt = lastProcessedAt.get()
+        lastProcessedAt = lastProcessedAt.get(),
+        concurrency = concurrency,
+        maxPollRecords = maxPollRecords
     )
 }

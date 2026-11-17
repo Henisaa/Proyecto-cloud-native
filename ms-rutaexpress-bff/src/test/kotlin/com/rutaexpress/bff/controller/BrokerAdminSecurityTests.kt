@@ -105,7 +105,9 @@ class BrokerAdminSecurityTests {
 
     @Test
     fun `endpoints de tuning, errores y DLT de Kafka requieren autenticacion y rol ADMIN`() {
+        mvc.perform(get("/api/bff/admin/kafka/tuning/health")).andExpect(status().isUnauthorized)
         mvc.perform(get("/api/bff/admin/kafka/tuning/status")).andExpect(status().isUnauthorized)
+        mvc.perform(post("/api/bff/admin/kafka/tuning/sustained")).andExpect(status().isUnauthorized)
         mvc.perform(get("/api/bff/admin/kafka/errors/state")).andExpect(status().isUnauthorized)
         mvc.perform(post("/api/bff/admin/kafka/dlt/reprocess")).andExpect(status().isUnauthorized)
     }
@@ -113,7 +115,9 @@ class BrokerAdminSecurityTests {
     @Test
     @WithMockUser(roles = ["DESPACHADOR"])
     fun `endpoints de tuning, errores y DLT rechazan roles distintos a ADMIN`() {
+        mvc.perform(get("/api/bff/admin/kafka/tuning/health")).andExpect(status().isForbidden)
         mvc.perform(post("/api/bff/admin/kafka/tuning/load-test").param("count", "10")).andExpect(status().isForbidden)
+        mvc.perform(post("/api/bff/admin/kafka/tuning/sustained")).andExpect(status().isForbidden)
         mvc.perform(post("/api/bff/admin/kafka/errors/simulate").param("scenario", "valido")).andExpect(status().isForbidden)
         mvc.perform(get("/api/bff/admin/kafka/dlt")).andExpect(status().isForbidden)
     }
@@ -121,8 +125,10 @@ class BrokerAdminSecurityTests {
     @Test
     @WithMockUser(roles = ["ADMIN"])
     fun `ADMIN accede a endpoints de tuning, errores y DLT cuando kafka-admin no esta configurado devuelve 503`() {
+        mvc.perform(get("/api/bff/admin/kafka/tuning/health")).andExpect(status().isServiceUnavailable)
         mvc.perform(get("/api/bff/admin/kafka/tuning/status")).andExpect(status().isServiceUnavailable)
-        mvc.perform(post("/api/bff/admin/kafka/tuning/load-test").param("count", "5")).andExpect(status().isServiceUnavailable)
+        mvc.perform(post("/api/bff/admin/kafka/tuning/load-test").param("count", "5").param("topic", "sensor-topic")).andExpect(status().isServiceUnavailable)
+        mvc.perform(post("/api/bff/admin/kafka/tuning/sustained").param("messagesPerSecond", "100").param("seconds", "5")).andExpect(status().isServiceUnavailable)
         mvc.perform(post("/api/bff/admin/kafka/tuning/init")).andExpect(status().isServiceUnavailable)
         mvc.perform(get("/api/bff/admin/kafka/errors/state")).andExpect(status().isServiceUnavailable)
         mvc.perform(post("/api/bff/admin/kafka/errors/simulate").param("scenario", "valido")).andExpect(status().isServiceUnavailable)

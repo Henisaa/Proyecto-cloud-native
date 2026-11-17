@@ -27,6 +27,7 @@ class EnvioEventPublisherTests {
         assertThat(props[ProducerConfig.BATCH_SIZE_CONFIG]).isEqualTo(32 * 1024)
         assertThat(props[ProducerConfig.LINGER_MS_CONFIG]).isEqualTo(20)
         assertThat(props[ProducerConfig.COMPRESSION_TYPE_CONFIG]).isEqualTo("snappy")
+        assertThat(props[ProducerConfig.BUFFER_MEMORY_CONFIG]).isEqualTo(64 * 1024 * 1024)
         assertThat(props[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG]).isEqualTo(true)
         assertThat(props[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] as Int)
             .isGreaterThanOrEqualTo((props[ProducerConfig.LINGER_MS_CONFIG] as Int) + (props[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] as Int))

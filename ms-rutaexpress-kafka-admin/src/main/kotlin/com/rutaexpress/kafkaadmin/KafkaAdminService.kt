@@ -86,7 +86,9 @@ class KafkaClientConfig(
             ProducerConfig.LINGER_MS_CONFIG to 20,
             // 3. Compression: Snappy (Balance entre CPU y Red)
             ProducerConfig.COMPRESSION_TYPE_CONFIG to "snappy",
-            // 4. Observabilidad: Propagar X-Correlation-Id en Headers
+            // 4. Buffer Memory: 64MB (Default 32MB) para acumular ráfagas masivas
+            ProducerConfig.BUFFER_MEMORY_CONFIG to 64 * 1024 * 1024,
+            // 5. Observabilidad: Propagar X-Correlation-Id en Headers
             ProducerConfig.INTERCEPTOR_CLASSES_CONFIG to listOf(CorrelationIdProducerInterceptor::class.java.name)
         )
         return DefaultKafkaProducerFactory(props)

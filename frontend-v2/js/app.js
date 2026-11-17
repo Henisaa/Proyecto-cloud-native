@@ -1141,6 +1141,10 @@
     if (scCount) scCount.textContent = num(sc.processedCount || 0);
     var scOff = document.getElementById('kt-slow-offset');
     if (scOff) scOff.textContent = sc.lastOffset !== null && sc.lastOffset !== undefined ? ('P' + sc.lastPartition + ' #' + sc.lastOffset) : '—';
+
+    var sl = st.sustainedLoad || {};
+    var slSum = document.getElementById('kt-sustained-summary');
+    if (slSum && sl.summary) slSum.textContent = sl.summary;
   }
 
   function inicializarTopicosTuning() {
@@ -1150,16 +1154,33 @@
     }).catch(function (e) { toast(e.message, true); });
   }
 
-  function lanzarPruebaCargaKafka(ev) {
-    var countInput = document.getElementById('kt-count');
-    var count = Math.max(1, parseInt(countInput ? countInput.value : '10000', 10) || 10000);
-    return ejecutar(ev.submitter, function () {
+  function ejecutarCargaKafkaPorCantidad(count, btn) {
+    return ejecutar(btn, function () {
       return RX.post('/api/admin/kafka/tuning/load-test', {}, { count: count });
     }).then(function (r) {
       if (!r.ok) return toast(r.error.message, true);
       if (r.valor) pintarKafkaTuningStatus(r.valor);
       toast('Prueba de carga completada (' + num(count) + ' mensajes a sensor-topic)');
       setTimeout(cargarKafkaTuningStatus, 1000);
+    });
+  }
+
+  function lanzarPruebaCargaKafka(ev) {
+    var countInput = document.getElementById('kt-count');
+    var count = Math.max(1, parseInt(countInput ? countInput.value : '10000', 10) || 10000);
+    return ejecutarCargaKafkaPorCantidad(count, ev.submitter);
+  }
+
+  function lanzarCargaSostenidaKafka(ev) {
+    var rate = Math.max(1, parseInt((document.getElementById('kt-sustained-rate') || {}).value || '1000', 10) || 1000);
+    var seconds = Math.max(1, parseInt((document.getElementById('kt-sustained-sec') || {}).value || '15', 10) || 15);
+    return ejecutar(ev.submitter, function () {
+      return RX.post('/api/admin/kafka/tuning/sustained', {}, { messagesPerSecond: rate, seconds: seconds });
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      if (r.valor) pintarKafkaTuningStatus(r.valor);
+      toast('Carga sostenida iniciada (' + num(rate) + ' msg/s durante ' + seconds + ' s)');
+      setTimeout(cargarKafkaTuningStatus, 1500);
     });
   }
 
@@ -1562,6 +1583,12 @@
       ksSimularEstandar: function () { return simularEscenarioStreams('estandar'); },
       ktInit: function () { return inicializarTopicosTuning(); },
       ktRefrescar: function () { return cargarKafkaTuningStatus(); },
+      ktPreset: function () {
+        var cnt = Math.max(1, parseInt(d.count || '10000', 10) || 10000);
+        var inp = document.getElementById('kt-count');
+        if (inp) inp.value = String(cnt);
+        return ejecutarCargaKafkaPorCantidad(cnt, el);
+      },
       ktVerLagSlow: function () {
         var inp = document.getElementById('kafka-grupo');
         if (inp) inp.value = 'analytics-group';
@@ -1602,6 +1629,7 @@
       'form-kafka-send': enviarFormularioKafka,
       'form-ks-simulate': enviarSimulacionStreams,
       'form-kt-load': lanzarPruebaCargaKafka,
+      'form-kt-sustained': lanzarCargaSostenidaKafka,
     };
     var fn = manejadores[ev.target.id];
     if (fn) {

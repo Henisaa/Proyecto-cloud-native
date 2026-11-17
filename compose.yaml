@@ -214,6 +214,8 @@ services:
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: "60000"
       KAFKA_LOG_RETENTION_HOURS: "0"
       KAFKA_LOG_RETENTION_MINUTES: "5"
+      KAFKA_NUM_IO_THREADS: "8"
+      KAFKA_NUM_NETWORK_THREADS: "8"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
     healthcheck:
       interval: 15s
@@ -269,6 +271,8 @@ services:
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: "60000"
       KAFKA_LOG_RETENTION_HOURS: "0"
       KAFKA_LOG_RETENTION_MINUTES: "5"
+      KAFKA_NUM_IO_THREADS: "8"
+      KAFKA_NUM_NETWORK_THREADS: "8"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
     healthcheck:
       interval: 15s
@@ -324,6 +328,8 @@ services:
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: "60000"
       KAFKA_LOG_RETENTION_HOURS: "0"
       KAFKA_LOG_RETENTION_MINUTES: "5"
+      KAFKA_NUM_IO_THREADS: "8"
+      KAFKA_NUM_NETWORK_THREADS: "8"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
     healthcheck:
       interval: 15s

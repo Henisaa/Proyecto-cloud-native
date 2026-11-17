@@ -37,6 +37,7 @@ class KafkaProducerConfig(
         configProps[ProducerConfig.BATCH_SIZE_CONFIG] = 32 * 1024
         configProps[ProducerConfig.LINGER_MS_CONFIG] = 20
         configProps[ProducerConfig.COMPRESSION_TYPE_CONFIG] = "snappy"
+        configProps[ProducerConfig.BUFFER_MEMORY_CONFIG] = 64 * 1024 * 1024
         configProps[JacksonJsonSerializer.ADD_TYPE_INFO_HEADERS] = false
         return DefaultKafkaProducerFactory(configProps)
     }

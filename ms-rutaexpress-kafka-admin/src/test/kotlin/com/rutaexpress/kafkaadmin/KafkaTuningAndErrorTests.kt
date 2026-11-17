@@ -5,8 +5,10 @@ import jakarta.validation.Validation
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.KafkaFuture
+import org.springframework.web.server.ResponseStatusException
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
@@ -44,6 +46,8 @@ class KafkaTuningAndErrorTests {
         assertThat(stats.lastOffset).isEqualTo(45L)
         assertThat(stats.lastKey).isEqualTo("sensor-1")
         assertThat(stats.lastProcessedAt).isNotNull()
+        assertThat(stats.concurrency).isEqualTo(3)
+        assertThat(stats.maxPollRecords).isEqualTo(500)
     }
 
     @Test
@@ -88,7 +92,28 @@ class KafkaTuningAndErrorTests {
         assertThat(dto.topic).isEqualTo("sensor-topic")
         assertThat(dto.lastCount).isEqualTo(10)
         assertThat(dto.producerTuning["compression.type"]).isEqualTo("snappy")
+        assertThat(dto.producerTuning["buffer.memory"]).isEqualTo("64 MB (67108864 bytes)")
         assertThat(dto.brokerRetention["log.retention.minutes"]).isEqualTo(5)
+        assertThat(dto.brokerRetention["num.network.threads"]).isEqualTo(8)
+        assertThat(dto.brokerRetention["num.io.threads"]).isEqualTo(8)
+
+        assertThat(controller.health()).contains("Load Test Controller")
+
+        val tutorialSummary = controller.startLoadTestGet(5, "tutorial-particiones")
+        assertThat(tutorialSummary).contains("Carga completada: 5 mensajes enviados")
+        verify(template, times(5)).send(eq("tutorial-particiones"), anyString(), anyString())
+
+        assertThatThrownBy {
+            controller.startLoadTestGet(5, "topico-no-permitido")
+        }.isInstanceOf(ResponseStatusException::class.java)
+
+        val sustainedMsg = controller.sustainedLoadGet(messagesPerSecond = 3, seconds = 1)
+        assertThat(sustainedMsg).contains("Carga sostenida iniciada: 3 msg/sec durante 1 segundos")
+        val deadline = System.currentTimeMillis() + 3000
+        while (controller.status().sustainedLoad["active"] == true && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25)
+        }
+        verify(template, atLeast(3)).send(eq("sensor-topic"), anyString(), anyString())
     }
 
     @Test
@@ -183,6 +208,11 @@ class KafkaTuningAndErrorTests {
 
         val clientConfig = KafkaClientConfig(LocalValidatorFactoryBean())
         clientConfig.configureKafkaListeners(KafkaListenerEndpointRegistrar())
+        val producerProps = clientConfig.producerFactory("localhost:9092").configurationProperties
+        assertThat(producerProps[ProducerConfig.BATCH_SIZE_CONFIG]).isEqualTo(32 * 1024)
+        assertThat(producerProps[ProducerConfig.LINGER_MS_CONFIG]).isEqualTo(20)
+        assertThat(producerProps[ProducerConfig.COMPRESSION_TYPE_CONFIG]).isEqualTo("snappy")
+        assertThat(producerProps[ProducerConfig.BUFFER_MEMORY_CONFIG]).isEqualTo(64 * 1024 * 1024)
         val interceptor = clientConfig.kafkaMdcRecordInterceptor()
         @Suppress("UNCHECKED_CAST")
         val kafkaConsumer = mock(Consumer::class.java) as Consumer<Any, Any>
@@ -209,17 +239,33 @@ class KafkaTuningAndErrorWebMvcTests {
 
     @Test
     fun `endpoints de load test y manejo de errores responden correctamente via HTTP`() {
+        mvc.perform(get("/api/test/health"))
+            .andExpect(status().isOk)
+
         mvc.perform(get("/api/test/start").param("count", "5"))
             .andExpect(status().isOk)
+
+        mvc.perform(get("/api/test/start").param("count", "4").param("topic", "tutorial-particiones"))
+            .andExpect(status().isOk)
+
+        mvc.perform(get("/api/test/start").param("count", "4").param("topic", "topico-invalido"))
+            .andExpect(status().isBadRequest)
 
         mvc.perform(post("/api/test/start").param("count", "3"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.topic").value("sensor-topic"))
             .andExpect(jsonPath("$.lastCount").value(3))
 
+        mvc.perform(post("/api/test/sustained").param("messagesPerSecond", "2").param("seconds", "1"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.sustainedLoad.summary").exists())
+
         mvc.perform(get("/api/test/status"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.producerTuning['compression.type']").value("snappy"))
+            .andExpect(jsonPath("$.producerTuning['buffer.memory']").value("64 MB (67108864 bytes)"))
+            .andExpect(jsonPath("$.brokerRetention['num.network.threads']").value(8))
+            .andExpect(jsonPath("$.brokerRetention['num.io.threads']").value(8))
 
         mvc.perform(post("/api/kafka/errors/simulate").param("scenario", "error-definitivo-dlt"))
             .andExpect(status().isOk)

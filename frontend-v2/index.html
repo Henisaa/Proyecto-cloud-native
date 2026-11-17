@@ -951,7 +951,7 @@
               <i class="ti ti-gauge text-white"></i> Tuning (Buffers, Retention) y Pruebas de Carga (<code class="text-zinc-300">sensor-topic</code>)
             </h3>
             <p class="text-xs text-zinc-500">
-              Batching <code class="text-zinc-300">32 KB</code> · <code class="text-zinc-300">linger.ms=20</code> · Compresión <code class="text-zinc-300">snappy</code> · Retención broker <code class="text-zinc-300">5 min / 50 MB</code>
+              Batching <code class="text-zinc-300">32 KB</code> · <code class="text-zinc-300">linger.ms=20</code> · Compresión <code class="text-zinc-300">snappy</code> · <code class="text-zinc-300">buffer.memory=64 MB</code> · Broker <code class="text-zinc-300">5 min / 50 MB</code> (<code class="text-zinc-300">8</code> threads)
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -963,6 +963,17 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
             <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Generador de Carga (<code class="text-zinc-300">/api/test/start</code>)</h4>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" data-accion="ktPreset" data-count="1000" class="text-[11px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1 rounded-xs text-zinc-300">
+                Prueba 1: 1K (Pequeña)
+              </button>
+              <button type="button" data-accion="ktPreset" data-count="100000" class="text-[11px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1 rounded-xs text-amber-300">
+                Prueba 2: 100K (Burst / Lag)
+              </button>
+              <button type="button" data-accion="ktPreset" data-count="500000" class="text-[11px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] px-2.5 py-1 rounded-xs text-sky-300">
+                Prueba 3: 500K (Retención)
+              </button>
+            </div>
             <form id="form-kt-load" class="flex flex-wrap items-end gap-2">
               <div class="flex-1 min-w-[160px]">
                 <label class="block text-[10px] text-zinc-400 mb-1">Cantidad de mensajes</label>
@@ -986,7 +997,22 @@
                 <span id="kt-last-throughput" class="font-mono text-base font-bold text-emerald-300">0 msg/s</span>
               </div>
             </div>
-            <p id="kt-summary" class="text-[11px] font-mono text-zinc-400">Ejecuta una carga para medir el throughput con batching 32 KB + snappy.</p>
+            <p id="kt-summary" class="text-[11px] font-mono text-zinc-400">Ejecuta una carga para medir el throughput con batching 32 KB + snappy + buffer 64 MB.</p>
+
+            <form id="form-kt-sustained" class="border-t border-white/[0.06] pt-3 flex flex-wrap items-end gap-2">
+              <div class="w-28">
+                <label class="block text-[10px] text-zinc-400 mb-1">msg/seg</label>
+                <input type="number" id="kt-sustained-rate" min="1" max="10000" value="1000" class="w-full bg-[#1A1A1A] border border-white/[0.08] text-xs px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+              </div>
+              <div class="w-24">
+                <label class="block text-[10px] text-zinc-400 mb-1">Segundos</label>
+                <input type="number" id="kt-sustained-sec" min="1" max="300" value="15" class="w-full bg-[#1A1A1A] border border-white/[0.08] text-xs px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+              </div>
+              <button type="submit" class="text-xs border border-white/[0.12] px-3 py-1.5 rounded-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">
+                Carga Sostenida
+              </button>
+              <span id="kt-sustained-summary" class="text-[10px] font-mono text-zinc-500 w-full">Endpoint /api/test/sustained</span>
+            </form>
           </div>
 
           <div class="space-y-3 bg-[#151515] border border-white/[0.04] p-3 rounded-sm">
@@ -1008,7 +1034,7 @@
                 <span id="kt-slow-offset" class="font-mono text-xs text-zinc-300">—</span>
               </div>
             </div>
-            <p class="text-[11px] text-zinc-400">El productor emite más rápido que la tasa máxima del consumidor lento (100 msg/s), acumulando retraso visible en <code class="text-zinc-300">analytics-group</code>.</p>
+            <p class="text-[11px] text-zinc-400">El productor emite más rápido que la tasa del consumidor lento (<code class="text-zinc-300">concurrency=3</code>, <code class="text-zinc-300">max.poll.records=500</code>, ~300 msg/s en 3 particiones), acumulando lag observable en <code class="text-zinc-300">analytics-group</code>.</p>
           </div>
         </div>
       </div>

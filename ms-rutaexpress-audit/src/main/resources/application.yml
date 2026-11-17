@@ -43,6 +43,7 @@ spring:
         batch.size: 32768
         linger.ms: 20
         compression.type: snappy
+        buffer.memory: 67108864
 
   security:
     oauth2:

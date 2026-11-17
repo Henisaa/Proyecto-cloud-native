@@ -214,33 +214,67 @@ class BrokerAdminController(
         }
     }
 
+    @GetMapping("/kafka/tuning/health")
+    fun tuningHealth(@AuthenticationPrincipal jwt: Jwt?): Any = try {
+        val message = kafkaDisponible().get().uri("/api/test/health")
+            .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+            .retrieve().body(String::class.java) ?: ""
+        mapOf("status" to "UP", "message" to message)
+    } catch (ex: ResponseStatusException) {
+        throw ex
+    } catch (ex: Exception) {
+        throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo verificar salud de tuning Kafka: ${ex.message}", ex)
+    }
+
     @GetMapping("/kafka/tuning/status")
     fun tuningStatus(@AuthenticationPrincipal jwt: Jwt?): Any = get(kafkaDisponible(), "/api/test/status", jwt)
 
     @PostMapping("/kafka/tuning/load-test")
     fun ejecutarPruebaCarga(
         @RequestParam(value = "count", defaultValue = "10000") count: Int,
+        @RequestParam(value = "topic", required = false) topic: String? = null,
         @AuthenticationPrincipal jwt: Jwt?
-    ): Any {
-        return try {
-            kafkaDisponible().post()
-                .uri { uri -> uri.path("/api/test/start").queryParam("count", count).build() }
-                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
-                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
-        } catch (e: Exception) {
-            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo ejecutar prueba de carga Kafka: ${e.message}", e)
-        }
+    ): Any = postKafkaTuning("No se pudo ejecutar prueba de carga Kafka", jwt) { uri ->
+        val b = uri.path("/api/test/start").queryParam("count", count)
+        if (!topic.isNullOrBlank()) b.queryParam("topic", topic)
+        b.build()
+    }
+
+    @PostMapping("/kafka/tuning/sustained")
+    fun ejecutarCargaSostenida(
+        @RequestParam(value = "messagesPerSecond", defaultValue = "1000") messagesPerSecond: Int,
+        @RequestParam(value = "seconds", defaultValue = "60") seconds: Int,
+        @RequestParam(value = "topic", required = false) topic: String? = null,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): Any = postKafkaTuning("No se pudo iniciar carga sostenida en Kafka", jwt) { uri ->
+        val b = uri.path("/api/test/sustained")
+            .queryParam("messagesPerSecond", messagesPerSecond)
+            .queryParam("seconds", seconds)
+        if (!topic.isNullOrBlank()) b.queryParam("topic", topic)
+        b.build()
     }
 
     @PostMapping("/kafka/tuning/init")
-    fun initTuningTopics(@AuthenticationPrincipal jwt: Jwt?): Any {
-        return try {
-            kafkaDisponible().post().uri("/api/kafka/tuning/init")
-                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
-                .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
-        } catch (e: Exception) {
-            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudieron inicializar tópicos de tuning/errores: ${e.message}", e)
+    fun initTuningTopics(@AuthenticationPrincipal jwt: Jwt?): Any =
+        postKafkaTuning("No se pudieron inicializar tópicos de tuning/errores", jwt) { uri ->
+            uri.path("/api/kafka/tuning/init").build()
         }
+
+    private fun postKafkaTuning(
+        errorPrefix: String,
+        jwt: Jwt?,
+        uriFn: (org.springframework.web.util.UriBuilder) -> java.net.URI
+    ): Any = try {
+        kafkaDisponible().post()
+            .uri(uriFn)
+            .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+            .retrieve().body(Any::class.java) ?: emptyMap<String, Any>()
+    } catch (e: ResponseStatusException) {
+        throw e
+    } catch (e: RestClientResponseException) {
+        throw ResponseStatusException(e.statusCode, "$errorPrefix: ${e.message}", e)
+    } catch (e: Exception) {
+        throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "$errorPrefix: ${e.message}", e)
     }
 
     @GetMapping("/kafka/errors/state")

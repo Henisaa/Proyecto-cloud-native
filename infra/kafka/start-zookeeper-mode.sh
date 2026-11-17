@@ -20,5 +20,7 @@ log.retention.hours=${KAFKA_LOG_RETENTION_HOURS:-0}
 log.retention.minutes=${KAFKA_LOG_RETENTION_MINUTES:-5}
 log.retention.bytes=${KAFKA_LOG_RETENTION_BYTES:-52428800}
 log.retention.check.interval.ms=${KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:-60000}
+num.network.threads=${KAFKA_NUM_NETWORK_THREADS:-8}
+num.io.threads=${KAFKA_NUM_IO_THREADS:-8}
 EOF
 exec /opt/kafka/bin/kafka-server-start.sh /tmp/rutaexpress-server.properties

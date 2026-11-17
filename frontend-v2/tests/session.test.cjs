@@ -9,6 +9,7 @@ const vm = require('node:vm');
 async function session(roles, hash = '#/panel') {
   const nodes = new Map();
   const calls = [];
+  const posts = [];
   const documentEvents = {};
   function node(id) {
     if (!nodes.has(id)) {
@@ -27,15 +28,22 @@ async function session(roles, hash = '#/panel') {
   const appWindow = {
     RUTAEXPRESS_CONFIG: { authMode: 'msal', kafkaGroups: [] },
     RXAuth: { iniciarAutenticacion: async () => ({ redirigiendo: false }) },
-    RX: { get: async path => {
-      calls.push(path);
-      if (path === '/api/bff/auth/me') return { roles, name: 'Prueba' };
-      if (path.startsWith('/api/bff/audit/resolve/')) return { id: 'shipment-1', trackingCode: 'RX-TEST' };
-      if (path.endsWith('/timeline')) return { kafkaAvailable: true, events: [] };
-      if (path.endsWith('/shipments/summary')) return { total: 0, byStatus: {}, byCapacity: {}, recent: [] };
-      if (path.endsWith('/shipments')) return { content: [], totalPages: 0, totalElements: 0 };
-      return {};
-    } },
+    RX: {
+      get: async path => {
+        calls.push(path);
+        if (path === '/api/bff/auth/me') return { roles, name: 'Prueba' };
+        if (path.startsWith('/api/bff/audit/resolve/')) return { id: 'shipment-1', trackingCode: 'RX-TEST' };
+        if (path.endsWith('/timeline')) return { kafkaAvailable: true, events: [] };
+        if (path.endsWith('/shipments/summary')) return { total: 0, byStatus: {}, byCapacity: {}, recent: [] };
+        if (path.endsWith('/shipments')) return { content: [], totalPages: 0, totalElements: 0 };
+        if (path === '/api/admin/kafka/topics' || path === '/api/admin/kafka/messages') return [];
+        return {};
+      },
+      post: async (path, body, query) => {
+        posts.push({ path, body, query });
+        return {};
+      },
+    },
     addEventListener: () => {},
   };
   const context = vm.createContext({ window: appWindow,
@@ -50,7 +58,7 @@ async function session(roles, hash = '#/panel') {
   if (roles.some(r => appWindow.RXRoles.normalizar(r))) {
     assert.equal(node('#aviso-global').textContent, '', 'application should boot without exceptions');
   }
-  return { calls, node, documentEvents };
+  return { calls, posts, node, documentEvents };
 }
 
 test('Auditor boots without requesting operational shipment data', async () => {
@@ -77,4 +85,26 @@ test('unknown roles do not fall back to Cliente', async () => {
   const { calls, node } = await session(['SUPERADMIN']);
   assert.deepEqual(calls, ['/api/bff/auth/me']);
   assert.match(node('#aviso-global').textContent, /no tiene un rol válido/);
+});
+
+test('Admin can trigger Kafka tuning preset and sustained load forms', async () => {
+  const { posts, node, documentEvents } = await session(['ADMIN'], '#/kafka');
+  const presetBtn = {
+    tagName: 'BUTTON',
+    dataset: { accion: 'ktPreset', count: '100000' },
+    closest: sel => (sel === '[data-accion]' ? presetBtn : null),
+  };
+  documentEvents.click({ target: presetBtn, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+
+  node('#kt-sustained-rate').value = '500';
+  node('#kt-sustained-sec').value = '10';
+  documentEvents.submit({ target: { id: 'form-kt-sustained' }, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(posts[0].path, '/api/admin/kafka/tuning/load-test');
+  assert.equal(posts[0].query.count, 100000);
+  assert.equal(posts[1].path, '/api/admin/kafka/tuning/sustained');
+  assert.equal(posts[1].query.messagesPerSecond, 500);
+  assert.equal(posts[1].query.seconds, 10);
 });
