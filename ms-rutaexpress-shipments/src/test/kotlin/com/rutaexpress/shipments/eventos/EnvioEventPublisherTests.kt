@@ -31,6 +31,23 @@ class EnvioEventPublisherTests {
         assertThat(props[ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG]).isEqualTo(true)
         assertThat(props[ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG] as Int)
             .isGreaterThanOrEqualTo((props[ProducerConfig.LINGER_MS_CONFIG] as Int) + (props[ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG] as Int))
+
+        val shipmentsTopic = config.shipmentsEventsTopic()
+        assertThat(shipmentsTopic.name()).isEqualTo("shipments.events")
+        assertThat(shipmentsTopic.numPartitions()).isEqualTo(3)
+        assertThat(shipmentsTopic.replicationFactor()).isEqualTo(3.toShort())
+        assertThat(shipmentsTopic.configs()["retention.ms"]).isEqualTo("604800000")
+        assertThat(shipmentsTopic.configs()["cleanup.policy"]).isEqualTo("delete")
+        assertThat(shipmentsTopic.configs()["min.insync.replicas"]).isEqualTo("2")
+
+        val timelineTopic = config.auditTimelineTopic()
+        assertThat(timelineTopic.name()).isEqualTo("audit.timeline")
+        assertThat(timelineTopic.configs()["cleanup.policy"]).isEqualTo("compact,delete")
+        assertThat(timelineTopic.configs()["retention.ms"]).isEqualTo("2592000000")
+
+        val singleBroker = KafkaProducerConfig("localhost:9092", 1)
+        assertThat(singleBroker.shipmentsEventsTopic().configs()["min.insync.replicas"]).isEqualTo("1")
+        assertThat(singleBroker.auditTimelineTopic().configs()["min.insync.replicas"]).isEqualTo("1")
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.rutaexpress.catalog.config
 
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.kafka.config.TopicBuilder
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.core.ProducerFactory
@@ -15,7 +17,9 @@ import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 @ConditionalOnProperty(name = ["app.kafka.enabled"], havingValue = "true", matchIfMissing = true)
 class KafkaProducerConfig(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
-    private val bootstrapServers: String
+    private val bootstrapServers: String,
+    @Value("\${app.kafka.replication-factor:3}")
+    private val replicationFactor: Int = 3
 ) {
 
     @Bean
@@ -43,5 +47,17 @@ class KafkaProducerConfig(
     @Bean
     fun kafkaTemplate(): KafkaTemplate<String, Any> {
         return KafkaTemplate(producerFactory())
+    }
+
+    @Bean
+    fun catalogEventsTopic(): NewTopic {
+        val replicas = replicationFactor.coerceIn(1, 3)
+        return TopicBuilder.name("catalog.events")
+            .partitions(3)
+            .replicas(replicas)
+            .config("retention.ms", "604800000")
+            .config("cleanup.policy", "delete")
+            .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
+            .build()
     }
 }

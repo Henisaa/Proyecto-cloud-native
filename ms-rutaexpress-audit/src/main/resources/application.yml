@@ -24,16 +24,21 @@ spring:
     baseline-on-migrate: true
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
     consumer:
       enable-auto-commit: false
       group-id: ms-rutaexpress-audit-group
       auto-offset-reset: earliest
+      max-poll-records: ${KAFKA_MAX_POLL_RECORDS:100}
+      isolation-level: read_committed
       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
         spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -72,6 +77,12 @@ springdoc:
 app:
   security:
     enabled: ${SECURITY_ENABLED:true}
+  kafka:
+    replication-factor: ${KAFKA_REPLICATION_FACTOR:3}
+    listener:
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+    topics:
+      auto-create: ${KAFKA_TOPICS_AUTO_CREATE:true}
 
 logging:
   pattern:

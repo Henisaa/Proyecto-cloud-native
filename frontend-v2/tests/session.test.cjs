@@ -10,6 +10,8 @@ async function session(roles, hash = '#/panel') {
   const nodes = new Map();
   const calls = [];
   const posts = [];
+  const puts = [];
+  const dels = [];
   const documentEvents = {};
   function node(id) {
     if (!nodes.has(id)) {
@@ -36,12 +38,21 @@ async function session(roles, hash = '#/panel') {
         if (path.endsWith('/timeline')) return { kafkaAvailable: true, events: [] };
         if (path.endsWith('/shipments/summary')) return { total: 0, byStatus: {}, byCapacity: {}, recent: [] };
         if (path.endsWith('/shipments')) return { content: [], totalPages: 0, totalElements: 0 };
-        if (path === '/api/admin/kafka/topics' || path === '/api/admin/kafka/messages') return [];
+        if (path === '/api/admin/kafka/topics' || path === '/api/admin/kafka/messages' || path === '/api/admin/kafka/groups') return [];
+        if (path.startsWith('/api/admin/kafka/groups/')) return { groupId: 'ms-rutaexpress-audit-group', state: 'STABLE', partitionAssignor: 'CooperativeStickyAssignor', members: [], partitions: [], totalLag: 0 };
         return {};
       },
       post: async (path, body, query) => {
         posts.push({ path, body, query });
         return {};
+      },
+      put: async (path, body) => {
+        puts.push({ path, body });
+        return { name: 'rutaexpress.demo.ep5', protected: false, partitions: [], configs: { 'retention.ms': '300000' } };
+      },
+      del: async (path, query) => {
+        dels.push({ path, query });
+        return { deleted: true };
       },
     },
     addEventListener: () => {},
@@ -58,7 +69,7 @@ async function session(roles, hash = '#/panel') {
   if (roles.some(r => appWindow.RXRoles.normalizar(r))) {
     assert.equal(node('#aviso-global').textContent, '', 'application should boot without exceptions');
   }
-  return { calls, posts, node, documentEvents };
+  return { calls, posts, puts, dels, node, documentEvents };
 }
 
 test('Auditor boots without requesting operational shipment data', async () => {
@@ -107,4 +118,52 @@ test('Admin can trigger Kafka tuning preset and sustained load forms', async () 
   assert.equal(posts[1].path, '/api/admin/kafka/tuning/sustained');
   assert.equal(posts[1].query.messagesPerSecond, 500);
   assert.equal(posts[1].query.seconds, 10);
+});
+
+test('Admin can create, configure, delete Kafka topics and inspect consumer groups', async () => {
+  const { calls, posts, puts, dels, node, documentEvents } = await session(['ADMIN'], '#/kafka');
+
+  node('#ktp-name').value = 'rutaexpress.demo.ep5';
+  node('#ktp-partitions').value = '3';
+  node('#ktp-replicas').value = '3';
+  node('#ktp-cleanup').value = 'delete';
+  node('#ktp-retention-ms').value = '300000';
+  documentEvents.submit({ target: { id: 'form-kafka-topic' }, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(posts[0].path, '/api/admin/kafka/topics');
+  assert.equal(posts[0].body.name, 'rutaexpress.demo.ep5');
+
+  const inspectBtn = {
+    tagName: 'BUTTON',
+    dataset: { accion: 'kafkaInspeccionarTopico', topic: 'rutaexpress.demo.ep5' },
+    closest: sel => (sel === '[data-accion]' ? inspectBtn : null),
+  };
+  documentEvents.click({ target: inspectBtn, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+
+  node('#kcfg-key').value = 'retention.ms';
+  node('#kcfg-value').value = '600000';
+  documentEvents.submit({ target: { id: 'form-kafka-config' }, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(puts[0].path, '/api/admin/kafka/topics/rutaexpress.demo.ep5/configs');
+  assert.deepEqual(puts[0].body, { configs: { 'retention.ms': '600000' } });
+
+  const delBtn = {
+    tagName: 'BUTTON',
+    dataset: { accion: 'kafkaEliminarTopico', topic: 'rutaexpress.demo.ep5' },
+    closest: sel => (sel === '[data-accion]' ? delBtn : null),
+  };
+  documentEvents.click({ target: delBtn, preventDefault() {} });
+  await node('#confirmar-si').events.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(dels[0].path, '/api/admin/kafka/topics/rutaexpress.demo.ep5');
+
+  const groupBtn = {
+    tagName: 'BUTTON',
+    dataset: { accion: 'kafkaInspeccionarGrupo', group: 'ms-rutaexpress-audit-group' },
+    closest: sel => (sel === '[data-accion]' ? groupBtn : null),
+  };
+  documentEvents.click({ target: groupBtn, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(calls.includes('/api/admin/kafka/groups/ms-rutaexpress-audit-group'));
 });

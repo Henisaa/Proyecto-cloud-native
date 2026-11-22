@@ -1,12 +1,18 @@
 package com.rutaexpress.kafkaadmin
 
+import org.apache.kafka.clients.admin.AdminClient
+import org.apache.kafka.clients.admin.CreateTopicsResult
+import org.apache.kafka.clients.admin.ListTopicsResult
+import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.TopologyTestDriver
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore
 import org.apache.kafka.streams.state.ReadOnlyWindowStore
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.mock
+import org.mockito.ArgumentCaptor
+import org.mockito.Mockito.*
 import org.springframework.kafka.core.KafkaTemplate
 import java.time.Instant
 
@@ -140,5 +146,29 @@ class KafkaStreamsServiceTests {
         assertThat(estado.hoppingWindowsByService).isNotEmpty
         assertThat(estado.branchCounts["rama-estandar"]).isGreaterThan(0L)
         assertThat(estado.branchCounts["rama-prioritaria"]).isGreaterThan(0L)
+    }
+
+    @Test
+    fun `asegurarTopicosStreams crea topicos faltantes con factor de replicacion configurado y min insync replicas`() {
+        val admin = mock(AdminClient::class.java)
+        val listResult = mock(ListTopicsResult::class.java)
+        val createResult = mock(CreateTopicsResult::class.java)
+        `when`(admin.listTopics()).thenReturn(listResult)
+        `when`(listResult.names()).thenReturn(KafkaFuture.completedFuture(emptySet()))
+        `when`(admin.createTopics(anyCollection())).thenReturn(createResult)
+        `when`(createResult.all()).thenReturn(KafkaFuture.completedFuture(null))
+
+        val service = KafkaStreamsService(adminClient = admin, autoStartup = false, replicationFactor = 3)
+        service.asegurarTopicosStreams()
+
+        @Suppress("UNCHECKED_CAST")
+        val captor = ArgumentCaptor.forClass(Collection::class.java) as ArgumentCaptor<Collection<NewTopic>>
+        verify(admin).createTopics(captor.capture())
+        assertThat(captor.value).hasSize(7)
+        assertThat(captor.value).allSatisfy { topic ->
+            assertThat(topic.replicationFactor()).isEqualTo(3.toShort())
+            assertThat(topic.numPartitions()).isEqualTo(3)
+            assertThat(topic.configs()["min.insync.replicas"]).isEqualTo("2")
+        }
     }
 }

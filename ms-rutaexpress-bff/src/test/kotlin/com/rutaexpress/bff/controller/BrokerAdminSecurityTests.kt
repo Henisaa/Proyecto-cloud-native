@@ -18,10 +18,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 @WebMvcTest(BrokerAdminController::class)
@@ -134,5 +136,21 @@ class BrokerAdminSecurityTests {
         mvc.perform(post("/api/bff/admin/kafka/errors/simulate").param("scenario", "valido")).andExpect(status().isServiceUnavailable)
         mvc.perform(get("/api/bff/admin/kafka/dlt")).andExpect(status().isServiceUnavailable)
         mvc.perform(post("/api/bff/admin/kafka/dlt/reprocess")).andExpect(status().isServiceUnavailable)
+        mvc.perform(post("/api/bff/admin/kafka/topics").contentType(MediaType.APPLICATION_JSON).content("""{"name":"rutaexpress.demo"}""")).andExpect(status().isServiceUnavailable)
+        mvc.perform(delete("/api/bff/admin/kafka/topics/rutaexpress.demo")).andExpect(status().isServiceUnavailable)
+        mvc.perform(put("/api/bff/admin/kafka/topics/rutaexpress.demo/configs").contentType(MediaType.APPLICATION_JSON).content("""{"configs":{"retention.ms":"300000"}}""")).andExpect(status().isServiceUnavailable)
+        mvc.perform(delete("/api/bff/admin/kafka/topics/rutaexpress.demo/configs/retention.ms")).andExpect(status().isServiceUnavailable)
+        mvc.perform(get("/api/bff/admin/kafka/groups")).andExpect(status().isServiceUnavailable)
+        mvc.perform(get("/api/bff/admin/kafka/groups/ms-rutaexpress-audit-group")).andExpect(status().isServiceUnavailable)
+    }
+
+    @Test
+    @WithMockUser(roles = ["DESPACHADOR"])
+    fun `endpoints CRUD de topicos y grupos Kafka rechazan roles distintos a ADMIN`() {
+        mvc.perform(post("/api/admin/kafka/topics").contentType(MediaType.APPLICATION_JSON).content("""{"name":"rutaexpress.demo"}""")).andExpect(status().isForbidden)
+        mvc.perform(delete("/api/admin/kafka/topics/rutaexpress.demo")).andExpect(status().isForbidden)
+        mvc.perform(put("/api/admin/kafka/topics/rutaexpress.demo/partitions").contentType(MediaType.APPLICATION_JSON).content("""{"partitions":6}""")).andExpect(status().isForbidden)
+        mvc.perform(put("/api/admin/kafka/topics/rutaexpress.demo/configs").contentType(MediaType.APPLICATION_JSON).content("""{"configs":{"retention.ms":"300000"}}""")).andExpect(status().isForbidden)
+        mvc.perform(get("/api/admin/kafka/groups")).andExpect(status().isForbidden)
     }
 }

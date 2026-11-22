@@ -17,7 +17,9 @@ import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 @ConditionalOnProperty(name = ["app.kafka.enabled"], havingValue = "true", matchIfMissing = true)
 class KafkaProducerConfig(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
-    private val bootstrapServers: String
+    private val bootstrapServers: String,
+    @Value("\${app.kafka.replication-factor:3}")
+    private val replicationFactor: Int = 3
 ) {
 
     @Bean
@@ -50,8 +52,26 @@ class KafkaProducerConfig(
      * los crea al arrancar si faltan, así los eventos llegan a audit tanto en CI como en el EC2.
      */
     @Bean
-    fun shipmentsEventsTopic(): NewTopic = TopicBuilder.name("shipments.events").partitions(3).replicas(3).build()
+    fun shipmentsEventsTopic(): NewTopic {
+        val replicas = replicationFactor.coerceIn(1, 3)
+        return TopicBuilder.name("shipments.events")
+            .partitions(3)
+            .replicas(replicas)
+            .config("retention.ms", "604800000")
+            .config("cleanup.policy", "delete")
+            .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
+            .build()
+    }
 
     @Bean
-    fun auditTimelineTopic(): NewTopic = TopicBuilder.name("audit.timeline").partitions(3).replicas(3).build()
+    fun auditTimelineTopic(): NewTopic {
+        val replicas = replicationFactor.coerceIn(1, 3)
+        return TopicBuilder.name("audit.timeline")
+            .partitions(3)
+            .replicas(replicas)
+            .config("retention.ms", "2592000000")
+            .config("cleanup.policy", "compact,delete")
+            .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
+            .build()
+    }
 }

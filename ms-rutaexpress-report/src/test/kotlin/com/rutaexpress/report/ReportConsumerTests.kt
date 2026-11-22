@@ -73,5 +73,35 @@ class ReportConsumerTests {
         @Suppress("UNCHECKED_CAST")
         val template = mock(KafkaTemplate::class.java) as KafkaTemplate<Any, Any>
         assertThat(config.kafkaErrorHandler(template)).isNotNull()
+
+        val dlt = config.shipmentsEventsReportDltTopic(3)
+        assertThat(dlt.name()).isEqualTo("shipments.events.report.DLT")
+        assertThat(dlt.numPartitions()).isEqualTo(3)
+        assertThat(dlt.replicationFactor()).isEqualTo(3.toShort())
+        assertThat(dlt.configs()["min.insync.replicas"]).isEqualTo("2")
+
+        val singleDlt = config.shipmentsEventsReportDltTopic(1)
+        assertThat(singleDlt.configs()["min.insync.replicas"]).isEqualTo("1")
+    }
+
+    @Test fun `consumirRegistro lee header X-Correlation-Id y delega al servicio de dominio`() {
+        val repo = mock(ReporteEnvioRepositorio::class.java)
+        val validator = Validation.buildDefaultValidatorFactory().validator
+        val consumer = EnvioEventoConsumidor(repo, JsonMapper.builder().findAndAddModules().build(), validator)
+        `when`(repo.findById("env-header-1")).thenReturn(Optional.empty())
+
+        val record = ConsumerRecord(
+            "shipments.events",
+            1,
+            42L,
+            "env-header-1",
+            """{"eventId":"evt-h1","shipmentId":"env-header-1","serviceType":"ESTANDAR","status":"CREADO","timestamp":"2026-10-14T12:00:00Z"}"""
+        ).apply {
+            headers().add("X-Correlation-Id", "corr-hdr-42".toByteArray(StandardCharsets.UTF_8))
+        }
+
+        consumer.consumirRegistro(record)
+        verify(repo).save(any(SnapshotEnvio::class.java))
+        assertThat(MDC.get("correlationId")).isNull()
     }
 }

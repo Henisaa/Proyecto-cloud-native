@@ -121,6 +121,7 @@
     capacidadEditandoId: null,
     auditoria: null,
     mq: { tab: 'resumen', exchanges: [], colas: [], bindings: [], politicas: [], muestras: [] },
+    kafkaTopicoSeleccionado: null,
   };
 
   /* ------------------------------------------------------------------ Mensajes, modales y botones */
@@ -1110,6 +1111,7 @@
   function cargarKafka() {
     kafkaTopicos();
     kafkaCluster();
+    cargarKafkaGrupos();
     cargarKafkaMensajes();
     cargarKafkaStreamsState();
     cargarKafkaTuningStatus();
@@ -1456,11 +1458,183 @@
 
   function kafkaTopicos() {
     return RX.get('/api/admin/kafka/topics').then(function (lista) {
-      $('#kafka-topicos').innerHTML = (lista || []).map(function (t) {
-        return '<li class="px-2 py-1 bg-[#151515] border border-white/[0.04] rounded-xs">' + esc(t) + '</li>';
+      var arr = Array.isArray(lista) ? lista : [];
+      $('#kafka-topicos').innerHTML = arr.map(function (t) {
+        return '<li class="px-2.5 py-1.5 bg-[#151515] border border-white/[0.04] rounded-xs flex items-center justify-between gap-2">' +
+          '<span class="truncate">' + esc(t) + '</span>' +
+          '<span class="flex items-center gap-1.5 shrink-0">' +
+            boton('kafkaInspeccionarTopico', { topic: t }, 'Inspeccionar', 'border border-white/[0.08] text-zinc-300 hover:text-white') +
+            boton('kafkaEliminarTopico', { topic: t }, 'Eliminar', 'border border-rose-900/60 text-rose-300 hover:bg-rose-950/40') +
+          '</span>' +
+        '</li>';
       }).join('') || '<li class="text-zinc-500">Sin tópicos.</li>';
     }, function (e) {
       $('#kafka-topicos').innerHTML = '<li class="text-rose-300">' + esc(e.message) + '</li>';
+    });
+  }
+
+  function inspeccionarTopicoKafka(topic) {
+    if (!topic) return Promise.resolve();
+    return RX.get('/api/admin/kafka/topics/' + encodeURIComponent(topic)).then(function (det) {
+      pintarDetalleTopicoKafka(det);
+    }, function (e) {
+      toast(e.message, true);
+    });
+  }
+
+  function pintarDetalleTopicoKafka(det) {
+    if (!det) return;
+    estado.kafkaTopicoSeleccionado = det.name;
+    var box = document.getElementById('kafka-topic-detalle');
+    if (box) box.classList.remove('hidden');
+    var title = document.getElementById('ktd-name');
+    if (title) title.textContent = det.name;
+    var badge = document.getElementById('ktd-badge');
+    if (badge) badge.textContent = det.protected ? 'Tópico núcleo protegido' : 'Tópico administrable';
+
+    var partEl = document.getElementById('ktd-partitions');
+    if (partEl) {
+      var parts = det.partitions || [];
+      partEl.innerHTML = parts.map(function (p) {
+        return '<div class="flex items-center justify-between bg-[#151515] border border-white/[0.04] px-2.5 py-1 rounded-xs">' +
+          '<span>Partición <strong class="text-white">P' + num(p.partition) + '</strong> · Leader Broker ' + esc(p.leader) + '</span>' +
+          '<span class="text-zinc-400">Replicas [' + esc((p.replicas || []).join(',')) + '] · ISR [' + esc((p.inSyncReplicas || []).join(',')) + ']</span>' +
+        '</div>';
+      }).join('') || '<div class="text-zinc-500">Sin particiones reportadas.</div>';
+      var kpd = document.getElementById('kpd-partitions');
+      if (kpd && parts.length) kpd.value = String(parts.length + 1);
+    }
+
+    var cfgEl = document.getElementById('ktd-configs');
+    if (cfgEl) {
+      var configs = det.configs || {};
+      var keys = Object.keys(configs).sort();
+      if (!keys.length) {
+        if (det.retentionMs) configs['retention.ms'] = det.retentionMs;
+        if (det.cleanupPolicy) configs['cleanup.policy'] = det.cleanupPolicy;
+        keys = Object.keys(configs).sort();
+      }
+      cfgEl.innerHTML = keys.map(function (k) {
+        return '<div class="flex items-center justify-between gap-2 bg-[#151515] border border-white/[0.04] px-2.5 py-1 rounded-xs">' +
+          '<span><span class="text-zinc-400">' + esc(k) + ':</span> <strong class="text-white">' + esc(configs[k]) + '</strong></span>' +
+          boton('kafkaResetConfig', { topic: det.name, key: k }, 'Restablecer', 'border border-white/[0.08] text-zinc-400 hover:text-white') +
+        '</div>';
+      }).join('') || '<div class="text-zinc-500">Sin configuraciones personalizadas.</div>';
+    }
+  }
+
+  function crearTopicoKafka(ev) {
+    var name = (document.getElementById('ktp-name') || {}).value || '';
+    var partitions = parseInt((document.getElementById('ktp-partitions') || {}).value || '3', 10) || 3;
+    var replicas = parseInt((document.getElementById('ktp-replicas') || {}).value || '3', 10) || 3;
+    var cleanupPolicy = (document.getElementById('ktp-cleanup') || {}).value || 'delete';
+    var retentionMs = parseInt((document.getElementById('ktp-retention-ms') || {}).value || '604800000', 10) || 604800000;
+    var retentionBytesRaw = (document.getElementById('ktp-retention-bytes') || {}).value || '';
+    var body = {
+      name: name.trim(),
+      partitions: partitions,
+      replicas: replicas,
+      retentionMs: retentionMs,
+      cleanupPolicy: cleanupPolicy,
+    };
+    if (String(retentionBytesRaw).trim()) body.retentionBytes = Number(retentionBytesRaw);
+    if (!body.name) return toast('Indica el nombre del tópico.', true);
+
+    return ejecutar(ev.submitter, function () {
+      return RX.post('/api/admin/kafka/topics', body);
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      if (ev.target && ev.target.reset) ev.target.reset();
+      if (ev.target && ev.target.classList) ev.target.classList.add('hidden');
+      toast('Tópico «' + body.name + '» creado');
+      if (r.valor && r.valor.name) pintarDetalleTopicoKafka(r.valor);
+      return kafkaTopicos();
+    });
+  }
+
+  function eliminarTopicoKafka(topic) {
+    if (!topic) return;
+    var ruta = '/api/admin/kafka/topics/' + encodeURIComponent(topic);
+    confirmar('¿Eliminar el tópico Kafka «' + topic + '»?', function () {
+      return RX.del(ruta).then(function () {
+        toast('Tópico «' + topic + '» eliminado');
+        if (estado.kafkaTopicoSeleccionado === topic) {
+          estado.kafkaTopicoSeleccionado = null;
+          var box = document.getElementById('kafka-topic-detalle');
+          if (box) box.classList.add('hidden');
+        }
+        return kafkaTopicos();
+      }, function (e) {
+        if (e.status !== 409) return toast(e.message, true);
+        confirmar(e.message + ' ¿Forzar eliminación?', function () {
+          return RX.del(ruta, { force: true }).then(function () {
+            toast('Tópico eliminado (forzado)');
+            if (estado.kafkaTopicoSeleccionado === topic) {
+              estado.kafkaTopicoSeleccionado = null;
+              var box = document.getElementById('kafka-topic-detalle');
+              if (box) box.classList.add('hidden');
+            }
+            return kafkaTopicos();
+          }, function (e2) { toast(e2.message, true); });
+        }, 'Forzar');
+      });
+    }, 'Sí, eliminar');
+  }
+
+  function ampliarParticionesKafka(ev) {
+    var topic = estado.kafkaTopicoSeleccionado;
+    if (!topic) return toast('Selecciona un tópico primero.', true);
+    var count = parseInt((document.getElementById('kpd-partitions') || {}).value || '0', 10);
+    return ejecutar(ev.submitter, function () {
+      return RX.put('/api/admin/kafka/topics/' + encodeURIComponent(topic) + '/partitions', { partitions: count });
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      toast('Particiones de «' + topic + '» actualizadas a ' + count);
+      pintarDetalleTopicoKafka(r.valor);
+    });
+  }
+
+  function actualizarConfigKafka(ev) {
+    var topic = estado.kafkaTopicoSeleccionado;
+    if (!topic) return toast('Selecciona un tópico primero.', true);
+    var key = (document.getElementById('kcfg-key') || {}).value || '';
+    var val = ((document.getElementById('kcfg-value') || {}).value || '').trim();
+    if (!key || !val) return toast('Indica la clave y el valor de configuración.', true);
+    var configs = {};
+    configs[key] = val;
+    return ejecutar(ev.submitter, function () {
+      return RX.put('/api/admin/kafka/topics/' + encodeURIComponent(topic) + '/configs', { configs: configs });
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      toast('Configuración ' + key + '=' + val + ' aplicada');
+      pintarDetalleTopicoKafka(r.valor);
+    });
+  }
+
+  function restablecerConfigKafka(topic, key) {
+    if (!topic || !key) return Promise.resolve();
+    return RX.del('/api/admin/kafka/topics/' + encodeURIComponent(topic) + '/configs/' + encodeURIComponent(key)).then(function (det) {
+      toast('Configuración «' + key + '» restablecida');
+      pintarDetalleTopicoKafka(det);
+    }, function (e) {
+      toast(e.message, true);
+    });
+  }
+
+  function cargarKafkaGrupos() {
+    var box = document.getElementById('kafka-groups-list');
+    if (!box) return Promise.resolve();
+    return RX.get('/api/admin/kafka/groups').then(function (grupos) {
+      var arr = Array.isArray(grupos) ? grupos : [];
+      box.innerHTML = arr.map(function (g) {
+        return '<button type="button" data-accion="kafkaInspeccionarGrupo" data-group="' + esc(g.groupId) + '" ' +
+          'class="px-2.5 py-1 bg-[#151515] border border-white/[0.08] hover:border-white/[0.25] rounded-xs font-mono text-zinc-200 flex items-center gap-2">' +
+          '<span>' + esc(g.groupId) + '</span>' +
+          '<span class="text-[10px] text-emerald-300">' + esc(g.state || 'UNKNOWN') + '</span>' +
+        '</button>';
+      }).join('') || '<span class="text-zinc-500">Sin consumer groups activos en el clúster.</span>';
+    }, function (e) {
+      box.innerHTML = '<span class="text-rose-300">' + esc(e.message) + '</span>';
     });
   }
 
@@ -1475,12 +1649,34 @@
     });
   }
 
+  function pintarDetalleGrupoKafka(det) {
+    var box = document.getElementById('kafka-group-detalle');
+    if (!box || !det) return;
+    box.classList.remove('hidden');
+    var coord = det.coordinator && det.coordinator.host ? ('Broker ' + det.coordinator.id + ' (' + det.coordinator.host + ':' + det.coordinator.port + ')') : '—';
+    var miembros = det.members || [];
+    box.innerHTML = '<div class="flex flex-wrap items-center justify-between gap-2">' +
+      '<div class="font-mono"><strong class="text-white">' + esc(det.groupId) + '</strong> · Estado: <span class="text-emerald-300">' + esc(det.state) + '</span> · Assignor: <span class="text-sky-300">' + esc(det.partitionAssignor || '—') + '</span></div>' +
+      '<div class="font-mono text-zinc-400">Coordinador: ' + esc(coord) + ' · Lag total: <strong class="text-white">' + num(det.totalLag || 0) + '</strong></div>' +
+    '</div>' +
+    '<div class="space-y-1">' +
+      (miembros.length ? miembros.map(function (m) {
+        return '<div class="bg-[#1A1A1A] border border-white/[0.04] px-2.5 py-1 rounded-xs font-mono text-[11px] flex flex-wrap justify-between gap-2">' +
+          '<span class="text-zinc-200">' + esc(m.clientId || m.memberId) + ' <span class="text-zinc-500">(' + esc(m.host) + ')</span></span>' +
+          '<span class="text-amber-300">' + esc((m.assignedPartitions || []).join(', ') || 'Sin particiones') + '</span>' +
+        '</div>';
+      }).join('') : '<div class="text-zinc-500 text-[11px]">Grupo sin consumidores conectados actualmente (EMPTY).</div>') +
+    '</div>';
+  }
+
   function consultarLag() {
     var grupo = $('#kafka-grupo').value.trim();
     if (!grupo) return toast('Escribe el grupo de consumo.', true);
     ocultarAviso('#kafka-lag-aviso');
-    return RX.get('/api/admin/kafka/groups/' + encodeURIComponent(grupo) + '/lag').then(function (filas) {
-      $('#kafka-lag-tbody').innerHTML = (filas || []).map(function (p) {
+    return RX.get('/api/admin/kafka/groups/' + encodeURIComponent(grupo)).then(function (det) {
+      pintarDetalleGrupoKafka(det);
+      var filas = (det && det.partitions) || [];
+      $('#kafka-lag-tbody').innerHTML = filas.map(function (p) {
         return '<tr>' +
           '<td class="px-3 py-2 font-mono">' + esc(p.topic) + '</td>' +
           '<td class="px-3 py-2 font-mono">' + num(p.partition) + '</td>' +
@@ -1488,8 +1684,10 @@
           '<td class="px-3 py-2 font-mono">' + num(p.endOffset) + '</td>' +
           '<td class="px-3 py-2 font-mono font-semibold ' + (p.lag > 0 ? 'text-rose-300' : 'text-white') + '">' + num(p.lag) + '</td>' +
           '</tr>';
-      }).join('') || vacioFila(5, 'El grupo no tiene particiones asignadas.');
+      }).join('') || vacioFila(5, 'El grupo no tiene offsets registrados aún.');
     }, function (e) {
+      var box = document.getElementById('kafka-group-detalle');
+      if (box) box.classList.add('hidden');
       $('#kafka-lag-tbody').innerHTML = '';
       mostrarAviso('#kafka-lag-aviso', e.message);
     });
@@ -1564,6 +1762,20 @@
       json: function () { var pre = document.getElementById(d.target); if (pre) pre.classList.toggle('hidden'); },
       mqJson: function () { $('#mq-politicas-json').classList.toggle('hidden'); },
       kafkaTopicos: function () { return kafkaTopicos(); },
+      kafkaInspeccionarTopico: function () { return inspeccionarTopicoKafka(d.topic); },
+      kafkaEliminarTopico: function () { return eliminarTopicoKafka(d.topic); },
+      kafkaResetConfig: function () { return restablecerConfigKafka(d.topic, d.key); },
+      kafkaCerrarDetalle: function () {
+        estado.kafkaTopicoSeleccionado = null;
+        var box = document.getElementById('kafka-topic-detalle');
+        if (box) box.classList.add('hidden');
+      },
+      kafkaGrupos: function () { return cargarKafkaGrupos(); },
+      kafkaInspeccionarGrupo: function () {
+        var inp = document.getElementById('kafka-grupo');
+        if (inp) inp.value = d.group || '';
+        return consultarLag();
+      },
       kafkaReconciliar: function () {
         return RX.post('/api/admin/kafka/topology', {}).then(function () {
           toast('Topología Kafka aplicada: tutorial-particiones (3 particiones)');
@@ -1626,6 +1838,9 @@
       'form-prueba': publicarPrueba,
       'form-auditoria': buscarAuditoria,
       'form-lag': consultarLag,
+      'form-kafka-topic': crearTopicoKafka,
+      'form-kafka-partitions': ampliarParticionesKafka,
+      'form-kafka-config': actualizarConfigKafka,
       'form-kafka-send': enviarFormularioKafka,
       'form-ks-simulate': enviarSimulacionStreams,
       'form-kt-load': lanzarPruebaCargaKafka,

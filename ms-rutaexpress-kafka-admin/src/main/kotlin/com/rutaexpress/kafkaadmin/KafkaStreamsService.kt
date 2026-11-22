@@ -123,7 +123,8 @@ class KafkaStreamsService(
     @Autowired(required = false) objectMapper: ObjectMapper? = null,
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}") private val bootstrapServers: String = "localhost:9092",
     @Value("\${app.kafka.streams.application-id:rutaexpress-streams-processor}") private val applicationId: String = APPLICATION_ID,
-    @Value("\${app.kafka.streams.auto-startup:true}") private val autoStartup: Boolean = false
+    @Value("\${app.kafka.streams.auto-startup:true}") private val autoStartup: Boolean = false,
+    @Value("\${app.kafka.replication-factor:3}") private val replicationFactor: Short = 3
 ) {
     private val logger = LoggerFactory.getLogger(KafkaStreamsService::class.java)
     private val mapper: ObjectMapper = objectMapper ?: JsonMapper.builder().findAndAddModules().build()
@@ -656,8 +657,10 @@ class KafkaStreamsService(
         }
     }
 
-    private fun asegurarTopicosStreams() {
+    internal fun asegurarTopicosStreams() {
         val admin = adminClient ?: return
+        val replicas = replicationFactor.coerceIn(1, 3)
+        val minIsr = if (replicas >= 3) "2" else "1"
         val requeridos = listOf(
             INPUT_TOPIC,
             TOPIC_ALERTAS_FILTRADAS,
@@ -668,7 +671,16 @@ class KafkaStreamsService(
             TOPIC_ACUMULADO_ZONA
         )
         val existentes = admin.listTopics().names().get(10, TimeUnit.SECONDS)
-        val faltantes = requeridos.filter { it !in existentes }.map { NewTopic(it, 3, 1.toShort()) }
+        val faltantes = requeridos.filter { it !in existentes }.map { topic ->
+            val retencion = if (topic == INPUT_TOPIC) "604800000" else "86400000"
+            NewTopic(topic, 3, replicas).configs(
+                mapOf(
+                    "retention.ms" to retencion,
+                    "cleanup.policy" to "delete",
+                    "min.insync.replicas" to minIsr
+                )
+            )
+        }
         if (faltantes.isNotEmpty()) {
             admin.createTopics(faltantes).all().get(10, TimeUnit.SECONDS)
         }

@@ -1,10 +1,12 @@
 package com.rutaexpress.audit
 import com.rutaexpress.audit.configuracion.KafkaErrorConfig
 import com.rutaexpress.audit.consumidor.AuditoriaKafkaConsumidor
+import com.rutaexpress.audit.consumidor.EventoAuditoriaPayloadDto
 import com.rutaexpress.audit.dominio.EventoAuditoria
 import com.rutaexpress.audit.dominio.ProcessedMessage
 import com.rutaexpress.audit.repositorio.AuditoriaRepositorio
 import com.rutaexpress.audit.repositorio.ProcessedMessageRepositorio
+import com.rutaexpress.audit.servicio.AuditoriaEventoServicio
 import jakarta.validation.ConstraintViolationException
 import jakarta.validation.Validation
 import org.apache.kafka.clients.consumer.Consumer
@@ -21,6 +23,7 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 import tools.jackson.databind.json.JsonMapper
 import java.nio.charset.StandardCharsets
+import java.time.format.DateTimeParseException
 
 class AuditConsumerTests {
     private val repository = mock(AuditoriaRepositorio::class.java)
@@ -111,5 +114,29 @@ class AuditConsumerTests {
         val template = mock(KafkaTemplate::class.java) as KafkaTemplate<Any, Any>
         val handler = config.kafkaErrorHandler(template)
         assertThat(handler).isNotNull()
+
+        val dltShipments = config.shipmentsEventsAuditDltTopic(3)
+        assertThat(dltShipments.name()).isEqualTo("shipments.events.audit.DLT")
+        assertThat(dltShipments.numPartitions()).isEqualTo(3)
+        assertThat(dltShipments.replicationFactor()).isEqualTo(3.toShort())
+        assertThat(dltShipments.configs()["min.insync.replicas"]).isEqualTo("2")
+
+        val dltTimeline = config.auditTimelineAuditDltTopic(1)
+        assertThat(dltTimeline.name()).isEqualTo("audit.timeline.audit.DLT")
+        assertThat(dltTimeline.replicationFactor()).isEqualTo(1.toShort())
+        assertThat(dltTimeline.configs()["min.insync.replicas"]).isEqualTo("1")
+    }
+
+    @Test fun `AuditoriaEventoServicio separa dominio y rechaza timestamp invalido`() {
+        val validator = Validation.buildDefaultValidatorFactory().validator
+        val service = AuditoriaEventoServicio(repository, null, validator)
+        val invalidDto = EventoAuditoriaPayloadDto(
+            eventId = "evt-bad-date",
+            shipmentId = "env-3",
+            timestamp = "no-es-fecha-iso"
+        )
+        assertThrows(DateTimeParseException::class.java) {
+            service.registrarEvento(invalidDto, "{}", "shipments.events", 0, 1L, "env-3", "corr-3")
+        }
     }
 }

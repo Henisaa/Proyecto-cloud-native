@@ -1119,14 +1119,28 @@
         </div>
       </div>
 
-      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
-        <h3 class="text-sm font-bold text-white">Consultar retraso</h3>
+      <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-white">Consumer Groups y Retraso (Lag)</h3>
+            <p class="text-xs text-zinc-500">Inspección de miembros activos, assignor, coordinador y offsets por partición</p>
+          </div>
+          <button type="button" data-accion="kafkaGrupos" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white">Refrescar grupos</button>
+        </div>
+
+        <div id="kafka-groups-list" class="flex flex-wrap gap-2 text-xs">
+          <span class="text-zinc-500">Cargando grupos de consumo…</span>
+        </div>
+
         <form id="form-lag" class="flex flex-wrap gap-2">
           <input type="text" id="kafka-grupo" placeholder="Grupo de consumo, p. ej. ms-rutaexpress-report-group"
                  class="flex-1 min-w-[260px] bg-[#151515] border border-white/[0.08] text-xs text-zinc-200 px-3 py-2 rounded-sm focus:outline-none focus:border-zinc-400">
-          <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-2 rounded-sm hover:bg-zinc-200 transition-colors">Consultar</button>
+          <button type="submit" class="text-xs bg-white text-black font-semibold px-4 py-2 rounded-sm hover:bg-zinc-200 transition-colors">Inspeccionar grupo</button>
         </form>
         <p id="kafka-lag-aviso" class="hidden text-xs text-zinc-400"></p>
+
+        <div id="kafka-group-detalle" class="hidden bg-[#151515] border border-white/[0.06] rounded-sm p-3 space-y-3 text-xs"></div>
+
         <div class="overflow-x-auto">
           <table class="w-full min-w-[520px] text-left text-xs">
             <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">
@@ -1138,22 +1152,103 @@
                 <th class="px-3 py-2">Retraso</th>
               </tr>
             </thead>
-            <tbody id="kafka-lag-tbody" class="divide-y divide-white/[0.04]"><tr><td colspan="5" class="px-3 py-6 text-center text-zinc-500">Escribe un grupo de consumo y pulsa Consultar.</td></tr></tbody>
+            <tbody id="kafka-lag-tbody" class="divide-y divide-white/[0.04]"><tr><td colspan="5" class="px-3 py-6 text-center text-zinc-500">Selecciona o escribe un grupo de consumo para inspeccionar su estado y lag.</td></tr></tbody>
           </table>
         </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-white">Tópicos</h3>
-            <button type="button" data-accion="kafkaTopicos" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white">Consultar tópicos</button>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white">Administración de Tópicos</h3>
+            <div class="flex gap-2">
+              <button type="button" data-toggle="form-kafka-topic" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200 transition-colors">+ Crear tópico</button>
+              <button type="button" data-accion="kafkaTopicos" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-300 hover:text-white">Consultar tópicos</button>
+            </div>
           </div>
-          <ul id="kafka-topicos" class="font-mono text-xs text-zinc-300 space-y-1"></ul>
+
+          <form id="form-kafka-topic" class="hidden bg-[#151515] border border-white/[0.08] p-3 rounded-sm grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <h4 class="text-xs font-bold text-white col-span-2 sm:col-span-3">Nuevo tópico Kafka (prefijo <code class="text-zinc-300">rutaexpress.*</code> o dominio)</h4>
+            <div class="col-span-2 sm:col-span-3">
+              <label class="block text-[10px] text-zinc-400 mb-1">Nombre del tópico</label>
+              <input type="text" id="ktp-name" required placeholder="rutaexpress.demo.ep5" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">Particiones</label>
+              <input type="number" id="ktp-partitions" min="1" max="100" value="3" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">Réplicas</label>
+              <input type="number" id="ktp-replicas" min="1" max="3" value="3" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">Cleanup Policy</label>
+              <select id="ktp-cleanup" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2 py-1.5 rounded-sm text-zinc-200">
+                <option value="delete">delete</option>
+                <option value="compact">compact</option>
+                <option value="compact,delete">compact,delete</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-zinc-400 mb-1">Retención (ms)</label>
+              <input type="number" id="ktp-retention-ms" min="60000" max="2592000000" value="604800000" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+            </div>
+            <div class="col-span-1 sm:col-span-2">
+              <label class="block text-[10px] text-zinc-400 mb-1">Retención máx. bytes (opcional, min 1 MB)</label>
+              <input type="number" id="ktp-retention-bytes" min="1048576" placeholder="52428800" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+            </div>
+            <div class="col-span-2 sm:col-span-3 flex justify-end gap-2 pt-1">
+              <button type="button" data-toggle="form-kafka-topic" class="text-xs border border-white/[0.08] px-3 py-1.5 rounded-sm text-zinc-400">Cancelar</button>
+              <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm">Crear tópico</button>
+            </div>
+          </form>
+
+          <ul id="kafka-topicos" class="font-mono text-xs text-zinc-300 space-y-1.5"></ul>
         </div>
-        <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
-          <h3 class="text-sm font-bold text-white">Clúster</h3>
-          <div id="kafka-cluster" class="font-mono text-xs text-zinc-300 space-y-1"></div>
+
+        <div class="space-y-4">
+          <div class="bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white">Clúster</h3>
+            <div id="kafka-cluster" class="font-mono text-xs text-zinc-300 space-y-1"></div>
+          </div>
+
+          <div id="kafka-topic-detalle" class="hidden bg-[#1A1A1A] border border-white/[0.06] rounded-sm p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-white/[0.06] pb-2">
+              <div>
+                <h3 class="text-sm font-bold text-white font-mono" id="ktd-name">—</h3>
+                <span id="ktd-badge" class="text-[10px] font-mono text-zinc-400"></span>
+              </div>
+              <button type="button" data-accion="kafkaCerrarDetalle" class="text-zinc-400 hover:text-white p-1" title="Cerrar detalle"><i class="ti ti-x"></i></button>
+            </div>
+
+            <div id="ktd-partitions" class="space-y-1 text-[11px] font-mono text-zinc-300"></div>
+
+            <form id="form-kafka-partitions" class="flex flex-wrap items-end gap-2 border-t border-white/[0.06] pt-3">
+              <div class="flex-1 min-w-[140px]">
+                <label class="block text-[10px] text-zinc-400 mb-1">Aumentar particiones</label>
+                <input type="number" id="kpd-partitions" min="1" max="100" value="6" class="w-full bg-[#151515] border border-white/[0.08] text-xs px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+              </div>
+              <button type="submit" class="text-xs border border-white/[0.12] px-3 py-1.5 rounded-sm text-zinc-200 hover:bg-white/[0.06]">Ampliar</button>
+            </form>
+
+            <div class="border-t border-white/[0.06] pt-3 space-y-2">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-zinc-400">Configuraciones del tópico</h4>
+              <div id="ktd-configs" class="space-y-1 text-[11px] font-mono"></div>
+              <form id="form-kafka-config" class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                <select id="kcfg-key" class="bg-[#151515] border border-white/[0.08] text-xs px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+                  <option value="retention.ms">retention.ms</option>
+                  <option value="retention.bytes">retention.bytes</option>
+                  <option value="cleanup.policy">cleanup.policy</option>
+                  <option value="min.insync.replicas">min.insync.replicas</option>
+                  <option value="compression.type">compression.type</option>
+                  <option value="segment.ms">segment.ms</option>
+                  <option value="max.message.bytes">max.message.bytes</option>
+                </select>
+                <input type="text" id="kcfg-value" required placeholder="Ej: 300000 o compact" class="bg-[#151515] border border-white/[0.08] text-xs px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+                <button type="submit" class="text-xs bg-white text-black font-semibold px-3 py-1.5 rounded-sm hover:bg-zinc-200">Actualizar config</button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
     </section>

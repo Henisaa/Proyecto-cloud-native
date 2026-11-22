@@ -1,16 +1,20 @@
 package com.rutaexpress.audit.configuracion
 
 import jakarta.validation.ConstraintViolationException
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.annotation.EnableKafka
 import org.springframework.kafka.annotation.KafkaListenerConfigurer
 import org.springframework.kafka.config.KafkaListenerEndpointRegistrar
+import org.springframework.kafka.config.TopicBuilder
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
 import org.springframework.kafka.listener.DefaultErrorHandler
@@ -20,7 +24,9 @@ import org.springframework.kafka.support.serializer.DeserializationException
 import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException
 import org.springframework.util.backoff.ExponentialBackOff
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
+import tools.jackson.core.JacksonException
 import java.nio.charset.StandardCharsets
+import java.time.format.DateTimeParseException
 
 @Configuration
 @EnableKafka
@@ -73,6 +79,8 @@ class KafkaErrorConfig(
         return DefaultErrorHandler(recoverer, backOff).apply {
             addNotRetryableExceptions(
                 DeserializationException::class.java,
+                JacksonException::class.java,
+                DateTimeParseException::class.java,
                 MethodArgumentNotValidException::class.java,
                 ConstraintViolationException::class.java,
                 IllegalArgumentException::class.java
@@ -85,5 +93,28 @@ class KafkaErrorConfig(
                 )
             })
         }
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = ["app.kafka.topics.auto-create"], havingValue = "true", matchIfMissing = true)
+    fun shipmentsEventsAuditDltTopic(
+        @Value("\${app.kafka.replication-factor:3}") replicas: Int
+    ): NewTopic = construirDltTopic("shipments.events.audit.DLT", replicas)
+
+    @Bean
+    @ConditionalOnProperty(name = ["app.kafka.topics.auto-create"], havingValue = "true", matchIfMissing = true)
+    fun auditTimelineAuditDltTopic(
+        @Value("\${app.kafka.replication-factor:3}") replicas: Int
+    ): NewTopic = construirDltTopic("audit.timeline.audit.DLT", replicas)
+
+    private fun construirDltTopic(name: String, replicas: Int): NewTopic {
+        val factor = replicas.coerceIn(1, 3)
+        return TopicBuilder.name(name)
+            .partitions(3)
+            .replicas(factor)
+            .config("retention.ms", "1209600000")
+            .config("cleanup.policy", "delete")
+            .config("min.insync.replicas", if (factor >= 3) "2" else "1")
+            .build()
     }
 }

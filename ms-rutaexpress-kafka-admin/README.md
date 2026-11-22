@@ -2,7 +2,7 @@ ms-rutaexpress-kafka-admin
 Administración de Kafka
 
 Funcionamiento
-Sin base de datos. Utiliza Kafka AdminClient para consultar brokers, crear tópicos, ampliar particiones, cambiar retención y medir lag de los grupos de auditoría, reportes, tutorial educativo, procesamiento en streaming y análisis lento. La administración de tópicos está reservada para el rol Admin, mientras que las rutas de demostración y simulación (/api/kafka/* y /api/test/*) operan sin autenticación en entornos locales o protegidas a través del BFF. No borra tópicos ni reduce particiones y las consultas tienen timeout limitado.
+Sin base de datos. Utiliza Kafka AdminClient para consultar brokers, crear, modificar, inspeccionar y eliminar tópicos (protegiendo los tópicos núcleo salvo `force=true`), administrar configuraciones por tópico (`retention.ms`, `retention.bytes`, `cleanup.policy`, `min.insync.replicas`, `compression.type`, etc.), ampliar particiones, listar e inspeccionar consumer groups (estado, miembros, asignaciones y lag) de auditoría, reportes, tutorial educativo, procesamiento en streaming y análisis lento. La administración de tópicos está reservada para el rol Admin, mientras que las rutas de demostración y simulación (/api/kafka/* y /api/test/*) operan sin autenticación en entornos locales o protegidas a través del BFF. No reduce particiones y las consultas tienen timeout limitado. También se provee el script CLI replicable `infra/kafka/kafka-ops.sh`.
 
 POST /api/kafka-admin/topology crea los tópicos base faltantes sin reemplazar los existentes: tutorial-particiones, shipments.events, catalog.events, audit.timeline, shipments.events.audit.DLT, audit.timeline.audit.DLT y shipments.events.report.DLT (tres particiones y tres réplicas por defecto, min.insync.replicas=2). Adicionalmente, POST /api/kafka/tuning/init inicializa los tópicos de tuning y manejo de errores: sensor-topic (3 particiones, retención de 5 minutos), ordenes-creadas (3 particiones) y ordenes-creadas.DLT (3 particiones). Los cambios de retención sobre tópicos existentes se realizan explícitamente mediante PUT y admiten desde 60000 ms (1 minuto).
 
@@ -39,10 +39,15 @@ GET /api/kafka-admin/cluster
 GET /api/kafka-admin/topics
 GET /api/kafka-admin/topics/{name}
 POST /api/kafka-admin/topics
+DELETE /api/kafka-admin/topics/{name}?force=false
 POST /api/kafka-admin/topology
 PUT /api/kafka-admin/topics/{name}/partitions
 PUT /api/kafka-admin/topics/{name}/retention
-GET /api/kafka-admin/groups/{group}/lag (grupos permitidos: ms-rutaexpress-audit-group, ms-rutaexpress-report-group, mi-grupo-educativo, rutaexpress-streams-processor, analytics-group, error-handling-group)
+PUT /api/kafka-admin/topics/{name}/configs
+DELETE /api/kafka-admin/topics/{name}/configs/{configKey}
+GET /api/kafka-admin/groups
+GET /api/kafka-admin/groups/{group}
+GET /api/kafka-admin/groups/{group}/lag (grupos permitidos: ms-rutaexpress-audit-group, ms-rutaexpress-report-group, mi-grupo-educativo, rutaexpress-streams-processor, analytics-group, error-handling-group, dlt-audit-group)
 GET /api/kafka/health
 GET /api/kafka/send?message=...&key=...
 POST /api/kafka/send

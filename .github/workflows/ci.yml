@@ -33,7 +33,7 @@ jobs:
           bash -n infra/mq/start-rabbit.sh
           sh -n frontend-v2/docker/40-runtime-config.sh
           docker run --rm -v "$PWD":/repo -w /repo node:22-alpine node --test frontend-v2/tests/*.test.cjs
-          for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh; do bash -n "$script"; done
+          for script in infra/scripts/*.sh infra/apps/oracle-init/*.sh infra/kafka/*.sh; do bash -n "$script"; done
           docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
 
   build:

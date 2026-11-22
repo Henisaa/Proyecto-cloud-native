@@ -1,10 +1,13 @@
 package com.rutaexpress.catalog.event
 
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
+import java.nio.charset.StandardCharsets
 
 @Component
 class CatalogEventPublisher(
@@ -93,20 +96,34 @@ class CatalogEventPublisher(
             return
         }
 
+        val correlationId = envelope.correlationId ?: key
+        val prevCorrelation = MDC.get("correlationId")
+        MDC.put("correlationId", correlationId)
         try {
-            kafkaTemplate.send(catalogTopic, key, envelope)
+            val record = ProducerRecord<String, Any>(catalogTopic, key, envelope)
+            record.headers().add("X-Correlation-Id", correlationId.toByteArray(StandardCharsets.UTF_8))
+            record.headers().add("X-Trace-Id", envelope.traceId.toByteArray(StandardCharsets.UTF_8))
+            record.headers().add("X-Event-Id", envelope.eventId.toByteArray(StandardCharsets.UTF_8))
+            kafkaTemplate.send(record)
                 .whenComplete { result, ex ->
-                    if (ex != null) {
-                        logger.warn("Could not publish Kafka event {}: {}", envelope.type, ex.message)
-                    } else {
-                        logger.info(
-                            "Published Kafka event {} with key {} to partition {}",
-                            envelope.type, key, result?.recordMetadata?.partition()
-                        )
+                    MDC.put("correlationId", correlationId)
+                    try {
+                        if (ex != null) {
+                            logger.warn("Could not publish Kafka event {} [correlationId={}]: {}", envelope.type, correlationId, ex.message)
+                        } else {
+                            logger.info(
+                                "Published Kafka event {} with key {} to partition {} [correlationId={}]",
+                                envelope.type, key, result?.recordMetadata?.partition(), correlationId
+                            )
+                        }
+                    } finally {
+                        MDC.remove("correlationId")
                     }
                 }
         } catch (ex: Exception) {
-            logger.warn("Error attempting to send Kafka event {}: {}", envelope.type, ex.message)
+            logger.warn("Error attempting to send Kafka event {} [correlationId={}]: {}", envelope.type, correlationId, ex.message)
+        } finally {
+            if (prevCorrelation != null) MDC.put("correlationId", prevCorrelation) else MDC.remove("correlationId")
         }
     }
 }

@@ -130,7 +130,14 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: rutaexpress
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
-    depends_on: [kafka-1, kafka-2, kafka-3]
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
 
 volumes:
   zookeeper-1:

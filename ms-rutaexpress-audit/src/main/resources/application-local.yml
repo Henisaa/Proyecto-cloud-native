@@ -19,3 +19,6 @@ spring:
 app:
   security:
     enabled: ${SECURITY_ENABLED:false}
+  kafka:
+    topics:
+      auto-create: ${KAFKA_TOPICS_AUTO_CREATE:false}

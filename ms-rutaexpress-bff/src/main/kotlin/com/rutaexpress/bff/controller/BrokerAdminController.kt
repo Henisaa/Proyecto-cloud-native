@@ -124,9 +124,87 @@ class BrokerAdminController(
         }
     }
     @GetMapping("/kafka/topics/{name}")
-    fun topic(@PathVariable name: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/topics/{name}", jwt, name)
+    fun topic(@PathVariable("name") name: String, @AuthenticationPrincipal jwt: Jwt?) =
+        get(kafkaDisponible(), "/api/kafka-admin/topics/{name}", jwt, name)
+
+    @PostMapping("/kafka/topics")
+    fun crearTopicoKafka(@RequestBody body: Any, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> =
+        enviarKafka(HttpMethod.POST, "/api/kafka-admin/topics", jwt, body)
+
+    @DeleteMapping("/kafka/topics/{name}")
+    fun eliminarTopicoKafka(
+        @PathVariable("name") name: String,
+        @RequestParam("force", defaultValue = "false") force: Boolean,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.DELETE,
+        "/api/kafka-admin/topics/{name}?force={force}",
+        jwt,
+        uriVariables = arrayOf(name, force)
+    )
+
+    @PutMapping("/kafka/topics/{name}/partitions")
+    fun actualizarParticionesKafka(
+        @PathVariable("name") name: String,
+        @RequestBody body: Any,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.PUT,
+        "/api/kafka-admin/topics/{name}/partitions",
+        jwt,
+        body,
+        arrayOf(name)
+    )
+
+    @PutMapping("/kafka/topics/{name}/retention")
+    fun actualizarRetencionKafka(
+        @PathVariable("name") name: String,
+        @RequestBody body: Any,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.PUT,
+        "/api/kafka-admin/topics/{name}/retention",
+        jwt,
+        body,
+        arrayOf(name)
+    )
+
+    @PutMapping("/kafka/topics/{name}/configs")
+    fun actualizarConfigsKafka(
+        @PathVariable("name") name: String,
+        @RequestBody body: Any,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.PUT,
+        "/api/kafka-admin/topics/{name}/configs",
+        jwt,
+        body,
+        arrayOf(name)
+    )
+
+    @DeleteMapping("/kafka/topics/{name}/configs/{configKey}")
+    fun eliminarConfigKafka(
+        @PathVariable("name") name: String,
+        @PathVariable("configKey") configKey: String,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.DELETE,
+        "/api/kafka-admin/topics/{name}/configs/{configKey}",
+        jwt,
+        uriVariables = arrayOf(name, configKey)
+    )
+
+    @GetMapping("/kafka/groups")
+    fun gruposKafka(@AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> =
+        enviarKafka(HttpMethod.GET, "/api/kafka-admin/groups", jwt)
+
+    @GetMapping("/kafka/groups/{group}")
+    fun grupoKafka(@PathVariable("group") group: String, @AuthenticationPrincipal jwt: Jwt?): ResponseEntity<String> =
+        enviarKafka(HttpMethod.GET, "/api/kafka-admin/groups/{group}", jwt, uriVariables = arrayOf(group))
+
     @GetMapping("/kafka/groups/{group}/lag")
-    fun lag(@PathVariable group: String, @AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
+    fun lag(@PathVariable("group") group: String, @AuthenticationPrincipal jwt: Jwt?) =
+        get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
     @GetMapping("/kafka/streams/state")
     fun streamsState(@AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka/streams/state", jwt)
     @PostMapping("/kafka/streams/simulate")
@@ -326,6 +404,33 @@ class BrokerAdminController(
     }
     private fun kafkaDisponible(): RestClient = kafka
         ?: throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Administrador de Kafka no desplegado")
+
+    private fun enviarKafka(
+        method: HttpMethod,
+        path: String,
+        jwt: Jwt?,
+        body: Any? = null,
+        uriVariables: Array<out Any> = emptyArray()
+    ): ResponseEntity<String> = try {
+        val request = kafkaDisponible().method(method).uri(path, *uriVariables)
+            .headers { headers -> jwt?.let { headers.setBearerAuth(it.tokenValue) } }
+        val response = if (body == null) {
+            request.retrieve().toEntity(String::class.java)
+        } else {
+            request.contentType(MediaType.APPLICATION_JSON).body(body)
+                .retrieve().toEntity(String::class.java)
+        }
+        val builder = ResponseEntity.status(response.statusCode)
+        response.headers.contentType?.let(builder::contentType)
+        builder.body(response.body)
+    } catch (ex: RestClientResponseException) {
+        val contentType = ex.responseHeaders?.contentType ?: MediaType.APPLICATION_PROBLEM_JSON
+        ResponseEntity.status(ex.statusCode)
+            .contentType(contentType)
+            .body(ex.responseBodyAsString)
+    } catch (ex: org.springframework.web.client.RestClientException) {
+        throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Administrador de Kafka no disponible", ex)
+    }
 
     private fun requireResource(value: String, allowed: Set<String>) {
         if(value !in allowed) throw ResponseStatusException(HttpStatus.NOT_FOUND, "Recurso desconocido")

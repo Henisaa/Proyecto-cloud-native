@@ -4,18 +4,28 @@ Plataforma de envíos de última milla del Caso 3. La EP2 incorpora reservas de 
 
 ```mermaid
 flowchart LR
-  Angular[Angular + MSAL] -->|JWT| Gateway[API Gateway + CORS]
+  Angular[Frontend / Console v2 + MSAL] -->|JWT| Gateway[API Gateway + CORS]
   Gateway --> Caddy
   Caddy --> BFF
   BFF --> Shipments
   BFF --> Catalog
   BFF --> Admin[Rabbit Admin]
-  Shipments --> RabbitMQ
+  BFF --> KafkaAdmin[Kafka Admin]
+  BFF --> Audit
+  BFF --> Report
+  Shipments -->|Comandos/Eventos/DLQ| RabbitMQ
   RabbitMQ --> Catalog
   RabbitMQ --> Notify
   RabbitMQ --> Shipments
+  Shipments -.->|"afterCommit: shipments.events / audit.timeline"| Kafka[Kafka 3 Brokers + 3 ZK]
+  Catalog -.->|"catalog.events"| Kafka
+  Kafka -->|"ms-rutaexpress-audit-group"| Audit
+  Kafka -->|"ms-rutaexpress-report-group"| Report
+  Kafka <-->|"AdminClient + Streams + DLT"| KafkaAdmin
   Shipments --> Oracle
   Catalog --> Oracle
+  Audit --> Oracle
+  Report --> Oracle
   Notify --> Redis
   Notify --> Mailpit
 ```
@@ -67,7 +77,7 @@ Detalles y variables: [infra/README.md](infra/README.md). Interfaz y roles: [fro
 
 Tres colas funcionales en RabbitMQ: command, notification y audit; cada una tiene su DLQ. Comandos por exchange direct, eventos por topic, ACK manual, reintentos acotados, NACK sin reencolar y registro de DLQ. El frontend muestra PENDIENTE → RESERVADA/RECHAZADA, permite reintento y visualiza la compensación. Catalog deduplica por commandId y reserva por shipmentId, con bloqueo y clave única.
 
-En Apache Kafka, los productores de shipments, catalog, audit, report y kafka-admin utilizan `batch.size=32768` (32 KB), `linger.ms=20`, `compression.type=snappy`, `buffer.memory=67108864` (64 MB) e idempotencia, junto con retención por defecto de 5 minutos o 50 MB y `num.network.threads=8` / `num.io.threads=8` en los brokers. La plataforma incluye tutorial de particiones y offsets (`tutorial-particiones`), topología Kafka Streams en tiempo real sobre `shipments.events` (State Stores y ventanas Tumbling/Hopping), generador de pruebas de carga (`/api/test/health`, `/api/test/start`, `/api/test/sustained`, `/api/test/status`) sobre `sensor-topic` con `SlowConsumer` (`analytics-group`, `concurrency=3`, `max.poll.records=500`) para medir Consumer Lag, y manejo de errores en streaming en audit, report y kafka-admin (ErrorHandlingDeserializer, validación JSR-380, ExponentialBackOff, DeadLetterPublishingRecoverer con reprocesamiento DLT, tabla PROCESSED_MESSAGES en audit y propagación de X-Correlation-Id con SLF4J MDC), todo operable desde frontend-v2 a través del BFF.
+En Apache Kafka, los productores de shipments, catalog, audit, report y kafka-admin utilizan `batch.size=32768` (32 KB), `linger.ms=20`, `compression.type=snappy`, `buffer.memory=67108864` (64 MB) e idempotencia, junto con retención por defecto de 5 minutos o 50 MB y `num.network.threads=8` / `num.io.threads=8` en los brokers. RabbitMQ resuelve la coordinación transaccional asíncrona (reservas/liberaciones de capacidad, notificaciones y auditoría operativa con DLQ), mientras Kafka complementa la arquitectura para streaming de eventos de dominio (`shipments.events`, `audit.timeline`, `catalog.events`), analítica en tiempo real (`ms-rutaexpress-report` + Kafka Streams) y auditoría histórica (`ms-rutaexpress-audit` con `concurrency=3` y `CooperativeStickyAssignor`). La plataforma incluye tutorial de particiones y offsets (`tutorial-particiones`), topología Kafka Streams en tiempo real sobre `shipments.events` (State Stores y ventanas Tumbling/Hopping), generador de pruebas de carga (`/api/test/health`, `/api/test/start`, `/api/test/sustained`, `/api/test/status`) sobre `sensor-topic` con `SlowConsumer` (`analytics-group`, `concurrency=3`, `max.poll.records=500`) para medir Consumer Lag, manejo de errores en streaming en audit, report y kafka-admin (ErrorHandlingDeserializer, validación JSR-380, ExponentialBackOff, DeadLetterPublishingRecoverer con reprocesamiento DLT, tabla PROCESSED_MESSAGES en audit y propagación de X-Correlation-Id con SLF4J MDC), administración completa de tópicos/configuraciones/consumer groups (CRUD + protección de tópicos núcleo) vía `ms-rutaexpress-kafka-admin` y scripts replicables en `infra/kafka/kafka-ops.sh`, todo operable desde frontend-v2 a través del BFF.
 
 MSAL obtiene el access token. Gateway y BFF validan JWT; el BFF aplica roles y conserva Bearer. Cliente solo consulta envíos de su oid. Solo Admin administra RabbitMQ y Kafka. No exponer servicios internos ni desactivar seguridad en nube. La coordinación entre base y RabbitMQ usa confirmaciones y reconciliación; outbox sigue como mejora prevista en el plan.
 

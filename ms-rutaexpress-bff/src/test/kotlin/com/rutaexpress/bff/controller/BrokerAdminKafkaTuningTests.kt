@@ -36,6 +36,10 @@ class BrokerAdminKafkaTuningTests {
                 path == "/api/test/health" -> Triple(200, "text/plain", "✓ Load Test Controller está corriendo en puerto 8080")
                 path == "/api/test/start" && query?.contains("topic=invalido") == true ->
                     Triple(400, "application/json", """{"error":"Tópico inválido"}""")
+                path == "/api/kafka-admin/topics" && ex.requestMethod == "POST" ->
+                    Triple(201, "application/json", """{"name":"rutaexpress.demo.ep5"}""")
+                path == "/api/kafka-admin/topics/shipments.events" && ex.requestMethod == "DELETE" && (query == null || !query.contains("force=true")) ->
+                    Triple(409, "application/problem+json", """{"status":409,"detail":"Tópico protegido"}""")
                 else -> Triple(200, "application/json", """{"topic":"sensor-topic","lastCount":100}""")
             }
             val bytes = body.toByteArray(StandardCharsets.UTF_8)
@@ -65,6 +69,22 @@ class BrokerAdminKafkaTuningTests {
 
             val init = controller.initTuningTopics(jwt)
             assertThat(init).isInstanceOf(Map::class.java)
+
+            val created = controller.crearTopicoKafka(mapOf("name" to "rutaexpress.demo.ep5"), jwt)
+            assertThat(created.statusCode).isEqualTo(HttpStatus.CREATED)
+
+            val conflict = controller.eliminarTopicoKafka("shipments.events", false, jwt)
+            assertThat(conflict.statusCode).isEqualTo(HttpStatus.CONFLICT)
+
+            val deleted = controller.eliminarTopicoKafka("rutaexpress.demo.ep5", false, jwt)
+            assertThat(deleted.statusCode).isEqualTo(HttpStatus.OK)
+
+            assertThat(controller.actualizarParticionesKafka("rutaexpress.demo.ep5", mapOf("partitions" to 6), jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.actualizarRetencionKafka("rutaexpress.demo.ep5", mapOf("retentionMs" to 300000), jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.actualizarConfigsKafka("rutaexpress.demo.ep5", mapOf("configs" to mapOf("retention.ms" to "300000")), jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.eliminarConfigKafka("rutaexpress.demo.ep5", "retention.ms", jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.gruposKafka(jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.grupoKafka("ms-rutaexpress-audit-group", jwt).statusCode).isEqualTo(HttpStatus.OK)
 
             assertThatThrownBy {
                 controller.ejecutarPruebaCarga(count = 10, topic = "invalido", jwt = jwt)

@@ -33,19 +33,28 @@ import org.springframework.stereotype.Service
 import org.springframework.util.backoff.ExponentialBackOff
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 import org.springframework.web.server.ResponseStatusException
+import tools.jackson.core.JacksonException
 import java.nio.charset.StandardCharsets
+import java.time.format.DateTimeParseException
 import java.util.concurrent.TimeUnit
 
 data class TopicRequest(
-    @field:Pattern(regexp = "(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones|sensor-topic|ordenes-creadas|[a-zA-Z0-9._-]+[.]DLT)") val name: String,
+    @field:Size(max = 249)
+    @field:Pattern(regexp = "(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones|sensor-topic|ordenes-creadas|rutaexpress[.][a-zA-Z0-9._-]+|[a-zA-Z0-9._-]+[.]DLT)")
+    val name: String,
     @field:Min(1) @field:Max(100) val partitions: Int = 3,
     @field:Min(1) @field:Max(3) val replicas: Short = 3,
     @field:Min(60000) @field:Max(2592000000) val retentionMs: Long = 604800000,
-    @field:Pattern(regexp = "delete|compact,delete") val cleanupPolicy: String = "delete"
+    @field:Pattern(regexp = "delete|compact|compact,delete") val cleanupPolicy: String = "delete",
+    @field:Min(1048576) val retentionBytes: Long? = null
 )
 data class PartitionRequest(@field:Min(1) @field:Max(100) val partitions: Int)
-data class TopicRetention(@field:Min(60000) @field:Max(2592000000) val retentionMs: Long,
-    @field:Pattern(regexp = "delete|compact,delete") val cleanupPolicy: String = "delete")
+data class TopicRetention(
+    @field:Min(60000) @field:Max(2592000000) val retentionMs: Long,
+    @field:Pattern(regexp = "delete|compact|compact,delete") val cleanupPolicy: String = "delete",
+    @field:Min(1048576) val retentionBytes: Long? = null
+)
+data class TopicConfigUpdateRequest(@field:NotEmpty val configs: Map<String, String>)
 
 @Configuration
 @EnableKafka
@@ -131,6 +140,8 @@ class KafkaClientConfig(
         return DefaultErrorHandler(recoverer, backOff).apply {
             addNotRetryableExceptions(
                 DeserializationException::class.java,
+                JacksonException::class.java,
+                DateTimeParseException::class.java,
                 MethodArgumentNotValidException::class.java,
                 ConstraintViolationException::class.java,
                 IllegalArgumentException::class.java
@@ -153,25 +164,65 @@ class KafkaAdminService(private val admin: AdminClient,
             "nodes" to cluster.nodes().get(timeout, TimeUnit.SECONDS).map { mapOf("id" to it.id(), "host" to it.host(), "port" to it.port()) })
     }
     fun topics(): List<String> = admin.listTopics().names().get(timeout, TimeUnit.SECONDS).filter(::managed).sorted()
+
     fun describe(name: String): Map<String, Any> {
         requireManaged(name)
-        val topic = admin.describeTopics(listOf(name)).allTopicNames().get(timeout, TimeUnit.SECONDS)[name]!!
+        val topic = admin.describeTopics(listOf(name)).allTopicNames().get(timeout, TimeUnit.SECONDS)[name]
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Tópico '$name' no encontrado")
         val resource = ConfigResource(ConfigResource.Type.TOPIC, name)
-        val config = admin.describeConfigs(listOf(resource)).all().get(timeout, TimeUnit.SECONDS)[resource]!!
-        return mapOf("name" to name, "partitions" to topic.partitions().map { p -> mapOf(
-            "partition" to p.partition(), "leader" to (p.leader()?.id() ?: -1),
-            "replicas" to p.replicas().map { it.id() }, "inSyncReplicas" to p.isr().map { it.id() }) },
-            "retentionMs" to config.get("retention.ms").value(), "cleanupPolicy" to config.get("cleanup.policy").value())
+        val config = admin.describeConfigs(listOf(resource)).all().get(timeout, TimeUnit.SECONDS)[resource]
+        val entries = config?.entries().orEmpty()
+            .filter { it.name() in ALLOWED_TOPIC_CONFIGS }
+            .associate { it.name() to (it.value() ?: "") }
+        return mapOf(
+            "name" to name,
+            "protected" to (name in PROTECTED_TOPICS),
+            "partitions" to topic.partitions().map { p ->
+                mapOf(
+                    "partition" to p.partition(),
+                    "leader" to (p.leader()?.id() ?: -1),
+                    "replicas" to p.replicas().map { it.id() },
+                    "inSyncReplicas" to p.isr().map { it.id() }
+                )
+            },
+            "retentionMs" to (config?.get("retention.ms")?.value() ?: entries["retention.ms"] ?: ""),
+            "retentionBytes" to (config?.get("retention.bytes")?.value() ?: entries["retention.bytes"] ?: "-1"),
+            "cleanupPolicy" to (config?.get("cleanup.policy")?.value() ?: entries["cleanup.policy"] ?: "delete"),
+            "minInsyncReplicas" to (config?.get("min.insync.replicas")?.value() ?: entries["min.insync.replicas"] ?: ""),
+            "compressionType" to (config?.get("compression.type")?.value() ?: entries["compression.type"] ?: "producer"),
+            "configs" to entries
+        )
     }
+
     fun create(request: TopicRequest): Map<String, Any> {
         requireManaged(request.name)
         if (request.name in topics()) throw ResponseStatusException(HttpStatus.CONFLICT, "El tópico ya existe")
-        admin.createTopics(listOf(NewTopic(request.name, request.partitions, request.replicas).configs(mapOf(
-            "retention.ms" to request.retentionMs.toString(), "cleanup.policy" to request.cleanupPolicy,
-            "min.insync.replicas" to (if(request.replicas >= 3) "2" else "1")))
-        )).all().get(timeout, TimeUnit.SECONDS)
+        val topicConfigs = mutableMapOf(
+            "retention.ms" to request.retentionMs.toString(),
+            "cleanup.policy" to request.cleanupPolicy,
+            "min.insync.replicas" to (if (request.replicas >= 3) "2" else "1")
+        )
+        request.retentionBytes?.let { topicConfigs["retention.bytes"] = it.toString() }
+        admin.createTopics(listOf(NewTopic(request.name, request.partitions, request.replicas).configs(topicConfigs)))
+            .all().get(timeout, TimeUnit.SECONDS)
         return describe(request.name)
     }
+
+    fun deleteTopic(name: String, force: Boolean = false): Map<String, Any> {
+        requireManaged(name)
+        if (name !in topics()) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "El tópico '$name' no existe")
+        }
+        if (name in PROTECTED_TOPICS && !force) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "El tópico '$name' forma parte de la topología protegida del clúster; repita la operación con force=true si realmente desea eliminarlo"
+            )
+        }
+        admin.deleteTopics(listOf(name)).all().get(timeout, TimeUnit.SECONDS)
+        return mapOf("name" to name, "deleted" to true, "forced" to force)
+    }
+
     fun partitions(name: String, count: Int): Map<String, Any> {
         requireManaged(name)
         val current = admin.describeTopics(listOf(name)).allTopicNames().get(timeout, TimeUnit.SECONDS)[name]!!.partitions().size
@@ -179,29 +230,63 @@ class KafkaAdminService(private val admin: AdminClient,
         admin.createPartitions(mapOf(name to NewPartitions.increaseTo(count))).all().get(timeout, TimeUnit.SECONDS)
         return describe(name)
     }
+
     fun retention(name: String, request: TopicRetention): Map<String, Any> {
         requireManaged(name)
         val resource = ConfigResource(ConfigResource.Type.TOPIC, name)
-        admin.incrementalAlterConfigs(mapOf(resource to listOf(
+        val ops = mutableListOf(
             AlterConfigOp(ConfigEntry("retention.ms", request.retentionMs.toString()), AlterConfigOp.OpType.SET),
             AlterConfigOp(ConfigEntry("cleanup.policy", request.cleanupPolicy), AlterConfigOp.OpType.SET)
-        ))).all().get(timeout, TimeUnit.SECONDS)
+        )
+        request.retentionBytes?.let {
+            ops += AlterConfigOp(ConfigEntry("retention.bytes", it.toString()), AlterConfigOp.OpType.SET)
+        }
+        admin.incrementalAlterConfigs(mapOf(resource to ops)).all().get(timeout, TimeUnit.SECONDS)
         return describe(name)
     }
+
+    fun updateConfigs(name: String, request: TopicConfigUpdateRequest): Map<String, Any> {
+        requireManaged(name)
+        require(request.configs.isNotEmpty()) { "Debe indicar al menos una configuración para actualizar" }
+        val ops = request.configs.map { (rawKey, rawValue) ->
+            val key = rawKey.trim()
+            val value = rawValue.trim()
+            validateTopicConfigEntry(key, value)
+            AlterConfigOp(ConfigEntry(key, value), AlterConfigOp.OpType.SET)
+        }
+        val resource = ConfigResource(ConfigResource.Type.TOPIC, name)
+        admin.incrementalAlterConfigs(mapOf(resource to ops)).all().get(timeout, TimeUnit.SECONDS)
+        return describe(name)
+    }
+
+    fun deleteConfig(name: String, configKey: String): Map<String, Any> {
+        requireManaged(name)
+        val key = configKey.trim()
+        require(key in ALLOWED_TOPIC_CONFIGS) {
+            "Configuración no administrable: '$key'. Permitidas: ${ALLOWED_TOPIC_CONFIGS.sorted().joinToString(", ")}"
+        }
+        val resource = ConfigResource(ConfigResource.Type.TOPIC, name)
+        admin.incrementalAlterConfigs(
+            mapOf(resource to listOf(AlterConfigOp(ConfigEntry(key, ""), AlterConfigOp.OpType.DELETE)))
+        ).all().get(timeout, TimeUnit.SECONDS)
+        return describe(name)
+    }
+
     fun reconcile(): List<String> {
         val existing = topics().toSet()
         val defaults = listOf(
             TopicRequest("tutorial-particiones", partitions = 3, replicas = replicas.coerceAtMost(3.toShort())),
-            TopicRequest("shipments.events", replicas=replicas),
-            TopicRequest("audit.timeline", replicas=replicas, retentionMs=2592000000, cleanupPolicy="compact,delete"),
-            TopicRequest("catalog.events", replicas=replicas),
-            TopicRequest("shipments.events.report.DLT", replicas=replicas, retentionMs=1209600000),
-            TopicRequest("shipments.events.audit.DLT", replicas=replicas, retentionMs=1209600000),
-            TopicRequest("audit.timeline.audit.DLT", replicas=replicas, retentionMs=1209600000)
+            TopicRequest("shipments.events", replicas = replicas),
+            TopicRequest("audit.timeline", replicas = replicas, retentionMs = 2592000000, cleanupPolicy = "compact,delete"),
+            TopicRequest("catalog.events", replicas = replicas),
+            TopicRequest("shipments.events.report.DLT", replicas = replicas, retentionMs = 1209600000),
+            TopicRequest("shipments.events.audit.DLT", replicas = replicas, retentionMs = 1209600000),
+            TopicRequest("audit.timeline.audit.DLT", replicas = replicas, retentionMs = 1209600000)
         )
         defaults.filter { it.name !in existing }.forEach(::create)
         return topics()
     }
+
     fun reconcileTuningAndErrorTopics(): List<String> {
         val existing = topics().toSet()
         val extras = listOf(
@@ -217,17 +302,129 @@ class KafkaAdminService(private val admin: AdminClient,
         }
         return topics()
     }
+
+    @Suppress("DEPRECATION")
+    fun listGroups(): List<Map<String, Any>> = admin.listConsumerGroups().all().get(timeout, TimeUnit.SECONDS)
+        .filter { managedGroup(it.groupId()) }
+        .sortedBy { it.groupId() }
+        .map { listing ->
+            mapOf(
+                "groupId" to listing.groupId(),
+                "isSimpleConsumerGroup" to listing.isSimpleConsumerGroup(),
+                "state" to (listing.groupState()?.map { it.name }?.orElse("UNKNOWN") ?: "UNKNOWN")
+            )
+        }
+
+    fun describeGroup(group: String): Map<String, Any> {
+        requireManagedGroup(group)
+        val desc = admin.describeConsumerGroups(listOf(group)).all().get(timeout, TimeUnit.SECONDS)[group]
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Grupo '$group' no encontrado")
+        val offsets = lag(group)
+        val members = desc.members().orEmpty().map { m ->
+            mapOf(
+                "memberId" to (m.consumerId() ?: ""),
+                "clientId" to (m.clientId() ?: ""),
+                "host" to (m.host() ?: ""),
+                "assignedPartitions" to m.assignment()?.topicPartitions().orEmpty()
+                    .map { "${it.topic()}[${it.partition()}]" }
+                    .sorted()
+            )
+        }
+        return mapOf(
+            "groupId" to desc.groupId(),
+            "state" to (desc.groupState()?.name ?: "UNKNOWN"),
+            "isSimpleConsumerGroup" to desc.isSimpleConsumerGroup(),
+            "partitionAssignor" to (desc.partitionAssignor() ?: ""),
+            "coordinator" to (desc.coordinator()?.let { mapOf("id" to it.id(), "host" to it.host(), "port" to it.port()) } ?: emptyMap<String, Any>()),
+            "members" to members,
+            "partitions" to offsets,
+            "totalLag" to offsets.sumOf { (it["lag"] as Number).toLong() }
+        )
+    }
+
     fun lag(group: String): List<Map<String, Any>> {
-        require(group.matches(Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo|rutaexpress-streams-processor|analytics-group|error-handling-group"))) { "Grupo fuera del dominio RutaExpress" }
+        requireManagedGroup(group)
         val offsets: Map<TopicPartition, OffsetAndMetadata> = admin.listConsumerGroupOffsets(group)
             .partitionsToOffsetAndMetadata().get(timeout, TimeUnit.SECONDS).filterKeys { managed(it.topic()) }
-        if(offsets.isEmpty()) return emptyList()
+        if (offsets.isEmpty()) return emptyList()
         val ends = admin.listOffsets(offsets.keys.associateWith { OffsetSpec.latest() }).all().get(timeout, TimeUnit.SECONDS)
-        return offsets.map { (partition, offset) -> mapOf("topic" to partition.topic(), "partition" to partition.partition(),
-            "committedOffset" to offset.offset(), "endOffset" to ends[partition]!!.offset(),
-            "lag" to maxOf(0L, ends[partition]!!.offset()-offset.offset())) }
+        return offsets.map { (partition, offset) ->
+            mapOf(
+                "topic" to partition.topic(),
+                "partition" to partition.partition(),
+                "committedOffset" to offset.offset(),
+                "endOffset" to ends[partition]!!.offset(),
+                "lag" to maxOf(0L, ends[partition]!!.offset() - offset.offset())
+            )
+        }
     }
-    private fun managed(name: String) = name in setOf("shipments.events", "audit.timeline", "catalog.events", "tutorial-particiones", "sensor-topic", "ordenes-creadas") ||
+
+    private fun validateTopicConfigEntry(key: String, value: String) {
+        require(key in ALLOWED_TOPIC_CONFIGS) {
+            "Configuración no administrable: '$key'. Permitidas: ${ALLOWED_TOPIC_CONFIGS.sorted().joinToString(", ")}"
+        }
+        require(value.isNotEmpty()) { "El valor de '$key' no puede estar vacío" }
+        when (key) {
+            "retention.ms", "segment.ms" -> {
+                val ms = value.toLongOrNull() ?: throw IllegalArgumentException("'$key' debe ser un número entero en milisegundos")
+                require(ms in 60_000L..2_592_000_000L) { "'$key' debe estar entre 60000 y 2592000000 ms" }
+            }
+            "retention.bytes" -> {
+                val bytes = value.toLongOrNull() ?: throw IllegalArgumentException("'retention.bytes' debe ser entero (-1 o >= 1048576)")
+                require(bytes == -1L || bytes >= 1_048_576L) { "'retention.bytes' debe ser -1 o al menos 1048576 bytes" }
+            }
+            "max.message.bytes" -> {
+                val bytes = value.toLongOrNull() ?: throw IllegalArgumentException("'max.message.bytes' debe ser entero")
+                require(bytes in 1024L..10_485_760L) { "'max.message.bytes' debe estar entre 1024 y 10485760 bytes" }
+            }
+            "min.insync.replicas" -> {
+                val isr = value.toIntOrNull() ?: throw IllegalArgumentException("'min.insync.replicas' debe ser entero")
+                require(isr in 1..3) { "'min.insync.replicas' debe estar entre 1 y 3" }
+            }
+            "cleanup.policy" -> require(value in setOf("delete", "compact", "compact,delete")) {
+                "'cleanup.policy' debe ser delete, compact o compact,delete"
+            }
+            "compression.type" -> require(value in setOf("producer", "uncompressed", "snappy", "lz4", "zstd", "gzip")) {
+                "'compression.type' inválido: '$value'"
+            }
+        }
+    }
+
+    private fun managed(name: String) = name in CORE_TOPICS ||
+        (name.length <= 249 && name.matches(Regex("rutaexpress[.][a-zA-Z0-9._-]+"))) ||
         (name.endsWith(".DLT") && name.length <= 249 && name.matches(Regex("(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones|sensor-topic|ordenes-creadas)([.][a-zA-Z0-9._-]+)?[.]DLT")))
+
     private fun requireManaged(name: String) = require(managed(name)) { "Tópico fuera del dominio RutaExpress" }
+
+    private fun managedGroup(group: String) = group.matches(
+        Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo|rutaexpress-streams-processor|analytics-group|error-handling-group|dlt-audit-group")
+    )
+
+    private fun requireManagedGroup(group: String) = require(managedGroup(group)) { "Grupo fuera del dominio RutaExpress" }
+
+    companion object {
+        private val CORE_TOPICS = setOf(
+            "shipments.events",
+            "audit.timeline",
+            "catalog.events",
+            "tutorial-particiones",
+            "sensor-topic",
+            "ordenes-creadas"
+        )
+        private val PROTECTED_TOPICS = CORE_TOPICS + setOf(
+            "shipments.events.report.DLT",
+            "shipments.events.audit.DLT",
+            "audit.timeline.audit.DLT",
+            "ordenes-creadas.DLT"
+        )
+        private val ALLOWED_TOPIC_CONFIGS = setOf(
+            "retention.ms",
+            "retention.bytes",
+            "cleanup.policy",
+            "min.insync.replicas",
+            "segment.ms",
+            "max.message.bytes",
+            "compression.type"
+        )
+    }
 }
