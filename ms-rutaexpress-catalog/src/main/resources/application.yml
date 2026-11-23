@@ -89,6 +89,10 @@ app:
     replication-factor: ${KAFKA_REPLICATION_FACTOR:3}
     topics:
       catalog-events: ${KAFKA_TOPIC_CATALOG_EVENTS:catalog.events}
+      config:
+        partitions: ${KAFKA_TOPIC_PARTITIONS:3}
+        retention-ms: ${KAFKA_TOPIC_CATALOG_RETENTION_MS:604800000}
+        cleanup-policy: ${KAFKA_TOPIC_CATALOG_CLEANUP_POLICY:delete}
 
 # Topología RabbitMQ compartida por todos los microservicios (nombres centralizados)
 app.rabbit:

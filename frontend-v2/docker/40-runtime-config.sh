@@ -7,6 +7,6 @@ jq -n \
   --arg authority "${MSAL_AUTHORITY:?falta MSAL_AUTHORITY}" \
   --arg scope "${MSAL_SCOPE:?falta MSAL_SCOPE}" \
   --arg redirectUri "${MSAL_REDIRECT_URI:-http://localhost:4200}" \
-  '{apiBaseUrl:"",authMode:"msal",msal:{clientId:$clientId,authority:$authority,scope:$scope,redirectUri:$redirectUri},kafkaGroups:["ms-rutaexpress-report-group","ms-rutaexpress-audit-group"]}' \
+  '{apiBaseUrl:"",authMode:"msal",msal:{clientId:$clientId,authority:$authority,scope:$scope,redirectUri:$redirectUri},kafkaGroups:["ms-rutaexpress-report-group","ms-rutaexpress-audit-group","rutaexpress-streams-processor","mi-grupo-educativo","analytics-group","error-handling-group"]}' \
   >> /usr/share/nginx/html/config.js
 printf ';\n' >> /usr/share/nginx/html/config.js

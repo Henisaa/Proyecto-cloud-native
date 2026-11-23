@@ -61,4 +61,16 @@ class KafkaAdminController(private val service: KafkaAdminService) {
 
     @GetMapping("/groups/{group}/lag")
     fun lag(@PathVariable group: String) = service.lag(group)
+
+    @PostMapping("/groups/{group}/reset-offsets")
+    fun resetGroupOffsets(
+        @PathVariable group: String,
+        @Valid @RequestBody request: ResetOffsetsRequest
+    ) = service.resetGroupOffsets(group, request)
+
+    @DeleteMapping("/groups/{group}")
+    fun deleteGroup(
+        @PathVariable group: String,
+        @RequestParam(defaultValue = "false") force: Boolean
+    ) = service.deleteGroup(group, force)
 }

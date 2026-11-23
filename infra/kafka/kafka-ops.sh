@@ -13,6 +13,8 @@
 #   bash infra/kafka/kafka-ops.sh delete-topic rutaexpress.demo.ep5
 #   bash infra/kafka/kafka-ops.sh list-groups
 #   bash infra/kafka/kafka-ops.sh describe-group ms-rutaexpress-audit-group
+#   bash infra/kafka/kafka-ops.sh reset-group-offsets mi-grupo-educativo tutorial-particiones earliest
+#   bash infra/kafka/kafka-ops.sh delete-group mi-grupo-educativo
 
 set -euo pipefail
 
@@ -71,6 +73,8 @@ Comandos disponibles:
   delete-topic <topic>
   list-groups
   describe-group <group_id>
+  reset-group-offsets <group_id> <topic> [earliest|latest]
+  delete-group <group_id>
 EOF
 }
 
@@ -87,6 +91,7 @@ case "$cmd" in
     ensure_topic "ordenes-creadas" 3 604800000 "delete"
     ensure_topic "shipments.events.audit.DLT" 3 1209600000 "delete"
     ensure_topic "audit.timeline.audit.DLT" 3 1209600000 "delete"
+    ensure_topic "catalog.events.audit.DLT" 3 1209600000 "delete"
     ensure_topic "shipments.events.report.DLT" 3 1209600000 "delete"
     ensure_topic "ordenes-creadas.DLT" 3 1209600000 "delete"
     ;;
@@ -139,6 +144,21 @@ case "$cmd" in
   describe-group)
     group="${1:?Indique el group_id}"
     run_kafka_tool kafka-consumer-groups.sh --describe --group "$group"
+    ;;
+  reset-group-offsets)
+    group="${1:?Indique el group_id}"
+    topic="${2:?Indique el nombre del tópico}"
+    strategy="${3:-earliest}"
+    case "$strategy" in
+      earliest) flag="--to-earliest" ;;
+      latest) flag="--to-latest" ;;
+      *) echo "Estrategia inválida '$strategy': use earliest o latest" >&2; exit 1 ;;
+    esac
+    run_kafka_tool kafka-consumer-groups.sh --group "$group" --topic "$topic" --reset-offsets "$flag" --execute
+    ;;
+  delete-group)
+    group="${1:?Indique el group_id}"
+    run_kafka_tool kafka-consumer-groups.sh --delete --group "$group"
     ;;
   *)
     usage

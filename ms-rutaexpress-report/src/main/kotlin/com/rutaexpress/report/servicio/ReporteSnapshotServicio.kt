@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolationException
 import jakarta.validation.Validator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -14,7 +15,7 @@ import java.time.OffsetDateTime
 
 /**
  * Lógica de dominio para construir y actualizar los snapshots de KPIs de envíos
- * manteniendo idempotencia temporal ante eventos repetidos o desordenados.
+ * manteniendo idempotencia por eventId y temporal ante eventos repetidos o desordenados.
  */
 @Service
 class ReporteSnapshotServicio(
@@ -25,6 +26,7 @@ class ReporteSnapshotServicio(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional
+    @CacheEvict(value = ["kpis", "top-services"], allEntries = true)
     fun procesarSnapshot(evento: EnvioEventoKafka, correlationId: String): Boolean {
         if (validator != null) {
             val violations = validator.validate(evento)
@@ -44,6 +46,14 @@ class ReporteSnapshotServicio(
             )
         }
 
+        if (!evento.eventId.isNullOrBlank() && evento.eventId == snapshot.lastEventId) {
+            logger.info(
+                "Evento duplicado por eventId para ID: {}, ignorando (idempotencia, correlationId={})",
+                evento.eventId, correlationId
+            )
+            return false
+        }
+
         if (ahora.isBefore(snapshot.updatedAt)) {
             logger.info(
                 "Evento duplicado o desordenado para ID: {}, ignorando (idempotencia, correlationId={})",
@@ -57,6 +67,9 @@ class ReporteSnapshotServicio(
             snapshot.serviceType = evento.serviceType
         }
         snapshot.updatedAt = ahora
+        if (!evento.eventId.isNullOrBlank()) {
+            snapshot.lastEventId = evento.eventId
+        }
 
         if (evento.status.equals("ENTREGADO", ignoreCase = true) && snapshot.deliveredAt == null) {
             snapshot.deliveredAt = ahora

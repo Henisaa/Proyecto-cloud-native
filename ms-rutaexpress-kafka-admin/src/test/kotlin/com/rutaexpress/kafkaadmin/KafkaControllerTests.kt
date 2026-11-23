@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -30,14 +31,29 @@ class KafkaControllerTests {
     @MockitoBean lateinit var decoder: JwtDecoder
 
     @Test
-    fun `health responde sin autenticacion con mensaje tutorial`() {
+    fun `endpoints de api kafka exigen JWT y rol ADMIN`() {
+        mvc.perform(get("/api/kafka/health")).andExpect(status().isUnauthorized)
+        mvc.perform(get("/api/kafka/send").param("message", "Mensaje1")).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    @WithMockUser(roles = ["CLIENTE"])
+    fun `endpoints de api kafka rechazan rol sin privilegios de administrador`() {
+        mvc.perform(get("/api/kafka/health")).andExpect(status().isForbidden)
+        mvc.perform(get("/api/kafka/messages")).andExpect(status().isForbidden)
+    }
+
+    @Test
+    @WithMockUser(roles = ["ADMIN"])
+    fun `health responde con rol ADMIN con mensaje tutorial`() {
         mvc.perform(get("/api/kafka/health"))
             .andExpect(status().isOk)
             .andExpect(content().string("Aplicación de Kafka Tutorial está corriendo en puerto 8888"))
     }
 
     @Test
-    fun `send sin key realiza distribucion automatica sin requerir autenticacion`() {
+    @WithMockUser(roles = ["ADMIN"])
+    fun `send sin key realiza distribucion automatica`() {
         mvc.perform(get("/api/kafka/send").param("message", "Mensaje1"))
             .andExpect(status().isOk)
             .andExpect(content().string("Mensaje enviado al topic 'tutorial-particiones' (sin key - distribución automática) | MENSAJE: Mensaje1"))
@@ -46,7 +62,8 @@ class KafkaControllerTests {
     }
 
     @Test
-    fun `send con key garantiza sticky partitioning sin requerir autenticacion`() {
+    @WithMockUser(roles = ["ADMIN"])
+    fun `send con key garantiza sticky partitioning`() {
         mvc.perform(get("/api/kafka/send").param("message", "Paso1-Creada").param("key", "orden-555"))
             .andExpect(status().isOk)
             .andExpect(content().string("Mensaje enviado al topic 'tutorial-particiones' con KEY: orden-555 | MENSAJE: Paso1-Creada"))
@@ -55,6 +72,7 @@ class KafkaControllerTests {
     }
 
     @Test
+    @WithMockUser(roles = ["ADMIN"])
     fun `send via POST soporta mensaje y key`() {
         mvc.perform(post("/api/kafka/send").param("message", "Paso2-Pagada").param("key", "orden-555"))
             .andExpect(status().isOk)
@@ -64,6 +82,7 @@ class KafkaControllerTests {
     }
 
     @Test
+    @WithMockUser(roles = ["ADMIN"])
     fun `messages devuelve historial del consumidor`() {
         `when`(consumer.ultimosMensajes()).thenReturn(listOf(
             MensajeRecibido(partition = 1, offset = 0, key = "orden-555", message = "Paso1-Creada")
@@ -74,6 +93,7 @@ class KafkaControllerTests {
     }
 
     @Test
+    @WithMockUser(roles = ["ADMIN"])
     fun `streams state y simulate procesan envios y consultan State Store`() {
         mvc.perform(get("/api/kafka/streams/simulate").param("scenario", "rafaga"))
             .andExpect(status().isOk)

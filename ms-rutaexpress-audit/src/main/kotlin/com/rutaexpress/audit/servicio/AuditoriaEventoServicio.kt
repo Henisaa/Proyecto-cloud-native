@@ -13,6 +13,8 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
 
 /**
  * Lógica de dominio de auditoría desacoplada del transporte Kafka.
@@ -47,13 +49,8 @@ class AuditoriaEventoServicio(
         }
 
         logger.info(
-            "Evento {} recibido ID: {} (tópico={}, partición={}, offset={})",
-            dto.type, dto.eventId, topic, partition, offset
-        )
-
-        System.out.printf(
-            "[AUDITORIA KAFKA] 📍Partición: %d | Offset: %d | Key: %s | Tópico: %s | Evento: %s | CorrelationId: %s%n",
-            partition, offset, key ?: "(sin key)", topic, dto.eventId, correlationId
+            "Evento {} recibido ID: {} (tópico={}, partición={}, offset={}, key={}, correlationId={})",
+            dto.type, dto.eventId, topic, partition, offset, key ?: "(sin key)", correlationId
         )
 
         if (processedMessageRepositorio?.existsById(dto.eventId) == true || auditoriaRepositorio.existsByEventId(dto.eventId)) {
@@ -70,11 +67,15 @@ class AuditoriaEventoServicio(
             }
         }
 
-        val timestamp = Instant.parse(dto.timestamp)
+        val timestamp = try {
+            Instant.parse(dto.timestamp)
+        } catch (_: DateTimeParseException) {
+            OffsetDateTime.parse(dto.timestamp).toInstant()
+        }
         auditoriaRepositorio.save(
             EventoAuditoria(
                 idEntidad = dto.shipmentId,
-                tipoEntidad = "ENVIO",
+                tipoEntidad = dto.entityType,
                 tipoEvento = dto.type,
                 origen = dto.source,
                 datosPayload = rawPayload,

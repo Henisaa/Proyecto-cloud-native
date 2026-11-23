@@ -142,6 +142,8 @@ class BrokerAdminSecurityTests {
         mvc.perform(delete("/api/bff/admin/kafka/topics/rutaexpress.demo/configs/retention.ms")).andExpect(status().isServiceUnavailable)
         mvc.perform(get("/api/bff/admin/kafka/groups")).andExpect(status().isServiceUnavailable)
         mvc.perform(get("/api/bff/admin/kafka/groups/ms-rutaexpress-audit-group")).andExpect(status().isServiceUnavailable)
+        mvc.perform(post("/api/bff/admin/kafka/groups/mi-grupo-educativo/reset-offsets").contentType(MediaType.APPLICATION_JSON).content("""{"topic":"tutorial-particiones","strategy":"earliest"}""")).andExpect(status().isServiceUnavailable)
+        mvc.perform(delete("/api/bff/admin/kafka/groups/mi-grupo-educativo")).andExpect(status().isServiceUnavailable)
     }
 
     @Test
@@ -152,5 +154,7 @@ class BrokerAdminSecurityTests {
         mvc.perform(put("/api/admin/kafka/topics/rutaexpress.demo/partitions").contentType(MediaType.APPLICATION_JSON).content("""{"partitions":6}""")).andExpect(status().isForbidden)
         mvc.perform(put("/api/admin/kafka/topics/rutaexpress.demo/configs").contentType(MediaType.APPLICATION_JSON).content("""{"configs":{"retention.ms":"300000"}}""")).andExpect(status().isForbidden)
         mvc.perform(get("/api/admin/kafka/groups")).andExpect(status().isForbidden)
+        mvc.perform(post("/api/admin/kafka/groups/mi-grupo-educativo/reset-offsets").contentType(MediaType.APPLICATION_JSON).content("""{"topic":"tutorial-particiones","strategy":"earliest"}""")).andExpect(status().isForbidden)
+        mvc.perform(delete("/api/admin/kafka/groups/mi-grupo-educativo")).andExpect(status().isForbidden)
     }
 }

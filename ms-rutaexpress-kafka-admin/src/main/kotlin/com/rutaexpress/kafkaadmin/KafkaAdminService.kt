@@ -55,6 +55,10 @@ data class TopicRetention(
     @field:Min(1048576) val retentionBytes: Long? = null
 )
 data class TopicConfigUpdateRequest(@field:NotEmpty val configs: Map<String, String>)
+data class ResetOffsetsRequest(
+    @field:NotBlank val topic: String,
+    @field:Pattern(regexp = "earliest|latest") val strategy: String = "earliest"
+)
 
 @Configuration
 @EnableKafka
@@ -292,7 +296,8 @@ class KafkaAdminService(private val admin: AdminClient,
         val extras = listOf(
             TopicRequest("sensor-topic", partitions = 3, replicas = replicas.coerceAtMost(3.toShort()), retentionMs = 300000L),
             TopicRequest("ordenes-creadas", partitions = 3, replicas = replicas.coerceAtMost(3.toShort())),
-            TopicRequest("ordenes-creadas.DLT", partitions = 3, replicas = replicas.coerceAtMost(3.toShort()), retentionMs = 1209600000L)
+            TopicRequest("ordenes-creadas.DLT", partitions = 3, replicas = replicas.coerceAtMost(3.toShort()), retentionMs = 1209600000L),
+            TopicRequest("catalog.events.audit.DLT", partitions = 3, replicas = replicas.coerceAtMost(3.toShort()), retentionMs = 1209600000L)
         )
         extras.filter { it.name !in existing }.forEach { req ->
             try {
@@ -333,6 +338,7 @@ class KafkaAdminService(private val admin: AdminClient,
         return mapOf(
             "groupId" to desc.groupId(),
             "state" to (desc.groupState()?.name ?: "UNKNOWN"),
+            "protected" to (group in PROTECTED_GROUPS),
             "isSimpleConsumerGroup" to desc.isSimpleConsumerGroup(),
             "partitionAssignor" to (desc.partitionAssignor() ?: ""),
             "coordinator" to (desc.coordinator()?.let { mapOf("id" to it.id(), "host" to it.host(), "port" to it.port()) } ?: emptyMap<String, Any>()),
@@ -340,6 +346,60 @@ class KafkaAdminService(private val admin: AdminClient,
             "partitions" to offsets,
             "totalLag" to offsets.sumOf { (it["lag"] as Number).toLong() }
         )
+    }
+
+    fun resetGroupOffsets(group: String, request: ResetOffsetsRequest): Map<String, Any> {
+        requireManagedGroup(group)
+        val topic = request.topic.trim()
+        requireManaged(topic)
+        val strategy = request.strategy.trim().lowercase()
+        require(strategy in setOf("earliest", "latest")) { "La estrategia de reinicio debe ser earliest o latest" }
+
+        val desc = admin.describeConsumerGroups(listOf(group)).all().get(timeout, TimeUnit.SECONDS)[group]
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Grupo '$group' no encontrado")
+        val state = desc.groupState()?.name ?: "UNKNOWN"
+        if (state !in setOf("EMPTY", "DEAD") && desc.members().orEmpty().isNotEmpty()) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "El grupo '$group' tiene consumidores activos (estado=$state); detenga el consumidor antes de reiniciar sus offsets"
+            )
+        }
+
+        val topicDesc = admin.describeTopics(listOf(topic)).allTopicNames().get(timeout, TimeUnit.SECONDS)[topic]
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Tópico '$topic' no encontrado")
+        val spec = if (strategy == "earliest") OffsetSpec.earliest() else OffsetSpec.latest()
+        val partitions = topicDesc.partitions().map { TopicPartition(topic, it.partition()) }
+        val targetOffsets = admin.listOffsets(partitions.associateWith { spec }).all().get(timeout, TimeUnit.SECONDS)
+            .mapValues { (_, info) -> OffsetAndMetadata(info.offset()) }
+
+        admin.alterConsumerGroupOffsets(group, targetOffsets).all().get(timeout, TimeUnit.SECONDS)
+        return mapOf(
+            "groupId" to group,
+            "topic" to topic,
+            "strategy" to strategy,
+            "partitions" to targetOffsets.map { (tp, om) -> mapOf("partition" to tp.partition(), "newOffset" to om.offset()) }
+        )
+    }
+
+    fun deleteGroup(group: String, force: Boolean = false): Map<String, Any> {
+        requireManagedGroup(group)
+        if (group in PROTECTED_GROUPS && !force) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "El grupo '$group' pertenece a un consumidor crítico del dominio; repita con force=true si realmente desea eliminarlo"
+            )
+        }
+        val desc = admin.describeConsumerGroups(listOf(group)).all().get(timeout, TimeUnit.SECONDS)[group]
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Grupo '$group' no encontrado")
+        val state = desc.groupState()?.name ?: "UNKNOWN"
+        if (state !in setOf("EMPTY", "DEAD") && desc.members().orEmpty().isNotEmpty()) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "El grupo '$group' tiene consumidores activos (estado=$state) y no puede eliminarse mientras esté activo"
+            )
+        }
+        admin.deleteConsumerGroups(listOf(group)).all().get(timeout, TimeUnit.SECONDS)
+        return mapOf("groupId" to group, "deleted" to true, "forced" to force)
     }
 
     fun lag(group: String): List<Map<String, Any>> {
@@ -391,13 +451,14 @@ class KafkaAdminService(private val admin: AdminClient,
     }
 
     private fun managed(name: String) = name in CORE_TOPICS ||
+        name in STREAMS_TOPICS ||
         (name.length <= 249 && name.matches(Regex("rutaexpress[.][a-zA-Z0-9._-]+"))) ||
         (name.endsWith(".DLT") && name.length <= 249 && name.matches(Regex("(shipments[.]events|audit[.]timeline|catalog[.]events|tutorial-particiones|sensor-topic|ordenes-creadas)([.][a-zA-Z0-9._-]+)?[.]DLT")))
 
     private fun requireManaged(name: String) = require(managed(name)) { "Tópico fuera del dominio RutaExpress" }
 
     private fun managedGroup(group: String) = group.matches(
-        Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo|rutaexpress-streams-processor|analytics-group|error-handling-group|dlt-audit-group")
+        Regex("ms-rutaexpress-(audit|report)-group|mi-grupo-educativo|rutaexpress-streams-processor|analytics-group|error-handling-group|dlt-audit-group|rutaexpress[.][a-zA-Z0-9._-]+-group")
     )
 
     private fun requireManagedGroup(group: String) = require(managedGroup(group)) { "Grupo fuera del dominio RutaExpress" }
@@ -411,11 +472,25 @@ class KafkaAdminService(private val admin: AdminClient,
             "sensor-topic",
             "ordenes-creadas"
         )
-        private val PROTECTED_TOPICS = CORE_TOPICS + setOf(
+        private val STREAMS_TOPICS = setOf(
+            "shipments.streams.alertas",
+            "shipments.streams.estandar",
+            "shipments.streams.prioritarios",
+            "shipments.streams.por-servicio",
+            "shipments.streams.por-estado",
+            "shipments.streams.total-por-zona"
+        )
+        private val PROTECTED_TOPICS = CORE_TOPICS + STREAMS_TOPICS + setOf(
             "shipments.events.report.DLT",
             "shipments.events.audit.DLT",
             "audit.timeline.audit.DLT",
+            "catalog.events.audit.DLT",
             "ordenes-creadas.DLT"
+        )
+        private val PROTECTED_GROUPS = setOf(
+            "ms-rutaexpress-audit-group",
+            "ms-rutaexpress-report-group",
+            "rutaexpress-streams-processor"
         )
         private val ALLOWED_TOPIC_CONFIGS = setOf(
             "retention.ms",

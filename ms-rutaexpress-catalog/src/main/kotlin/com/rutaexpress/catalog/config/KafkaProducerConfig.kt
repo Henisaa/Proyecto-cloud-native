@@ -19,7 +19,13 @@ class KafkaProducerConfig(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private val bootstrapServers: String,
     @Value("\${app.kafka.replication-factor:3}")
-    private val replicationFactor: Int = 3
+    private val replicationFactor: Int = 3,
+    @Value("\${app.kafka.topics.config.partitions:3}")
+    private val partitions: Int = 3,
+    @Value("\${app.kafka.topics.config.retention-ms:604800000}")
+    private val retentionMs: String = "604800000",
+    @Value("\${app.kafka.topics.config.cleanup-policy:delete}")
+    private val cleanupPolicy: String = "delete"
 ) {
 
     @Bean
@@ -53,10 +59,10 @@ class KafkaProducerConfig(
     fun catalogEventsTopic(): NewTopic {
         val replicas = replicationFactor.coerceIn(1, 3)
         return TopicBuilder.name("catalog.events")
-            .partitions(3)
+            .partitions(partitions.coerceAtLeast(1))
             .replicas(replicas)
-            .config("retention.ms", "604800000")
-            .config("cleanup.policy", "delete")
+            .config("retention.ms", retentionMs)
+            .config("cleanup.policy", cleanupPolicy)
             .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
             .build()
     }

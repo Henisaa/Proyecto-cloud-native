@@ -125,6 +125,42 @@ class AuditConsumerTests {
         assertThat(dltTimeline.name()).isEqualTo("audit.timeline.audit.DLT")
         assertThat(dltTimeline.replicationFactor()).isEqualTo(1.toShort())
         assertThat(dltTimeline.configs()["min.insync.replicas"]).isEqualTo("1")
+
+        val dltCatalog = config.catalogEventsAuditDltTopic(3)
+        assertThat(dltCatalog.name()).isEqualTo("catalog.events.audit.DLT")
+        assertThat(dltCatalog.numPartitions()).isEqualTo(3)
+        assertThat(dltCatalog.configs()["min.insync.replicas"]).isEqualTo("2")
+    }
+
+    @Test fun `consumirEventoCatalogo persiste evento de catalog_events con tipoEntidad CATALOGO e idempotencia`() {
+        val processedRepo = mock(ProcessedMessageRepositorio::class.java)
+        val validator = Validation.buildDefaultValidatorFactory().validator
+        val catalogConsumer = AuditoriaKafkaConsumidor(
+            repository,
+            JsonMapper.builder().findAndAddModules().build(),
+            processedRepo,
+            validator
+        )
+        val catalogJson = """{"eventId":"cat-evt-1","type":"catalog.service.created","timestamp":"2026-10-14T12:00:00-03:00","source":"ms-rutaexpress-catalog","payload":{"serviceId":10,"code":"EXPRESS","name":"Express"}}"""
+        val record = ConsumerRecord("catalog.events", 0, 5L, "EXPRESS", catalogJson).apply {
+            headers().add("X-Correlation-Id", "corr-cat-1".toByteArray(StandardCharsets.UTF_8))
+        }
+
+        `when`(processedRepo.existsById("cat-evt-1")).thenReturn(false)
+        `when`(repository.existsByEventId("cat-evt-1")).thenReturn(false)
+
+        catalogConsumer.consumirEventoCatalogo(record)
+
+        val captured = ArgumentCaptor.forClass(EventoAuditoria::class.java)
+        verify(repository).save(captured.capture())
+        assertThat(captured.value.tipoEntidad).isEqualTo("CATALOGO")
+        assertThat(captured.value.idEntidad).isEqualTo("EXPRESS")
+        assertThat(captured.value.tipoEvento).isEqualTo("catalog.service.created")
+        assertThat(captured.value.eventId).isEqualTo("cat-evt-1")
+
+        assertThrows(IllegalArgumentException::class.java) {
+            catalogConsumer.consumirEventoCatalogo(ConsumerRecord("catalog.events", 0, 6L, "EXPRESS", "{}"))
+        }
     }
 
     @Test fun `AuditoriaEventoServicio separa dominio y rechaza timestamp invalido`() {

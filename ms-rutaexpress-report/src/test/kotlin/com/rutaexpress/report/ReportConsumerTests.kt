@@ -48,7 +48,12 @@ class ReportConsumerTests {
         verify(repo).save(snapshot)
         assertThat(snapshot.currentStatus).isEqualTo("ENTREGADO")
         assertThat(snapshot.leadTimeMinutes).isEqualByComparingTo("60")
+        assertThat(snapshot.lastEventId).isEqualTo("e-2")
         assertThat(MDC.get("correlationId")).isNull()
+
+        // Mismo evento con mismo eventId y mismo timestamp se ignora por deduplicación de eventId
+        consumer.consumirEventoEnvio(entregadoJson)
+        verify(repo, times(1)).save(snapshot)
 
         // Payload inválido JSR-380 (status en blanco)
         val badJson = """{"shipmentId":"env-10","status":""}"""

@@ -134,6 +134,9 @@ class KafkaErrorHandlingService(
 
     @KafkaListener(topics = [TOPIC_PRINCIPAL], groupId = CONSUMER_GROUP)
     fun consumirOrden(record: ConsumerRecord<String, String>) {
+        if (record.headers().lastHeader("X-Locally-Simulated") != null) {
+            return
+        }
         val headerCorr = record.headers().lastHeader("X-Correlation-Id")?.value()
             ?.let { String(it, StandardCharsets.UTF_8) }
         procesarMensaje(record.topic(), record.key(), record.value(), headerCorr, enviarADltSiFalla = false)
@@ -146,6 +149,9 @@ class KafkaErrorHandlingService(
         @Header(name = KafkaHeaders.DLT_EXCEPTION_MESSAGE, required = false) exMsg: ByteArray? = null,
         @Header(name = KafkaHeaders.DLT_EXCEPTION_STACKTRACE, required = false) exStack: ByteArray? = null
     ) {
+        if (record.headers().lastHeader("X-Locally-Simulated") != null) {
+            return
+        }
         val correlationId = record.headers().lastHeader("X-Correlation-Id")?.value()
             ?.let { String(it, StandardCharsets.UTF_8) }
             ?: record.key()
@@ -344,6 +350,7 @@ class KafkaErrorHandlingService(
             try {
                 val record = ProducerRecord(TOPIC_PRINCIPAL, orderId, payload)
                 record.headers().add("X-Correlation-Id", corrId.toByteArray(StandardCharsets.UTF_8))
+                record.headers().add("X-Locally-Simulated", "true".toByteArray(StandardCharsets.UTF_8))
                 kafkaTemplate.send(record)
             } catch (_: Exception) {
             }
@@ -374,6 +381,7 @@ class KafkaErrorHandlingService(
                 try {
                     val record = ProducerRecord(item.originalTopic, item.key ?: item.correlationId, corregido)
                     record.headers().add("X-Correlation-Id", item.correlationId.toByteArray(StandardCharsets.UTF_8))
+                    record.headers().add("X-Locally-Simulated", "true".toByteArray(StandardCharsets.UTF_8))
                     kafkaTemplate.send(record)
                 } catch (_: Exception) {
                 }
@@ -415,6 +423,7 @@ class KafkaErrorHandlingService(
                 val dltTopic = "$topic.DLT"
                 val record = ProducerRecord(dltTopic, key ?: correlationId, payload)
                 record.headers().add("X-Correlation-Id", correlationId.toByteArray(StandardCharsets.UTF_8))
+                record.headers().add("X-Locally-Simulated", "true".toByteArray(StandardCharsets.UTF_8))
                 record.headers().add(KafkaHeaders.DLT_EXCEPTION_FQCN, ex.javaClass.name.toByteArray(StandardCharsets.UTF_8))
                 record.headers().add(KafkaHeaders.DLT_EXCEPTION_MESSAGE, (ex.message ?: "").toByteArray(StandardCharsets.UTF_8))
                 record.headers().add(KafkaHeaders.DLT_EXCEPTION_STACKTRACE, stack.toByteArray(StandardCharsets.UTF_8))

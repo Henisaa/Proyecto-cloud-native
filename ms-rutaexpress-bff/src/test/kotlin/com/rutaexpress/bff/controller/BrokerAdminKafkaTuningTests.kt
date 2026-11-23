@@ -85,6 +85,8 @@ class BrokerAdminKafkaTuningTests {
             assertThat(controller.eliminarConfigKafka("rutaexpress.demo.ep5", "retention.ms", jwt).statusCode).isEqualTo(HttpStatus.OK)
             assertThat(controller.gruposKafka(jwt).statusCode).isEqualTo(HttpStatus.OK)
             assertThat(controller.grupoKafka("ms-rutaexpress-audit-group", jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.resetearOffsetsGrupoKafka("mi-grupo-educativo", mapOf("topic" to "tutorial-particiones", "strategy" to "earliest"), jwt).statusCode).isEqualTo(HttpStatus.OK)
+            assertThat(controller.eliminarGrupoKafka("mi-grupo-educativo", false, jwt).statusCode).isEqualTo(HttpStatus.OK)
 
             assertThatThrownBy {
                 controller.ejecutarPruebaCarga(count = 10, topic = "invalido", jwt = jwt)

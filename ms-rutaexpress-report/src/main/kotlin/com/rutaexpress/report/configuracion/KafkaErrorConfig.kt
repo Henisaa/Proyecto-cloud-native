@@ -32,7 +32,13 @@ import java.time.format.DateTimeParseException
 @EnableKafka
 class KafkaErrorConfig(
     @Autowired(required = false)
-    private val validator: LocalValidatorFactoryBean? = null
+    private val validator: LocalValidatorFactoryBean? = null,
+    @Value("\${app.kafka.topics.dlt-partitions:3}")
+    private val dltPartitions: Int = 3,
+    @Value("\${app.kafka.topics.dlt-retention-ms:1209600000}")
+    private val dltRetentionMs: String = "1209600000",
+    @Value("\${app.kafka.topics.dlt-cleanup-policy:delete}")
+    private val dltCleanupPolicy: String = "delete"
 ) : KafkaListenerConfigurer {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -102,10 +108,10 @@ class KafkaErrorConfig(
     ): NewTopic {
         val factor = replicas.coerceIn(1, 3)
         return TopicBuilder.name("shipments.events.report.DLT")
-            .partitions(3)
+            .partitions(dltPartitions.coerceAtLeast(1))
             .replicas(factor)
-            .config("retention.ms", "1209600000")
-            .config("cleanup.policy", "delete")
+            .config("retention.ms", dltRetentionMs)
+            .config("cleanup.policy", dltCleanupPolicy)
             .config("min.insync.replicas", if (factor >= 3) "2" else "1")
             .build()
     }

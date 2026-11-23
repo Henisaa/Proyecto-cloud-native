@@ -19,7 +19,17 @@ class KafkaProducerConfig(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private val bootstrapServers: String,
     @Value("\${app.kafka.replication-factor:3}")
-    private val replicationFactor: Int = 3
+    private val replicationFactor: Int = 3,
+    @Value("\${app.kafka.topics.config.partitions:3}")
+    private val partitions: Int = 3,
+    @Value("\${app.kafka.topics.config.shipments-retention-ms:604800000}")
+    private val shipmentsRetentionMs: String = "604800000",
+    @Value("\${app.kafka.topics.config.shipments-cleanup-policy:delete}")
+    private val shipmentsCleanupPolicy: String = "delete",
+    @Value("\${app.kafka.topics.config.audit-retention-ms:2592000000}")
+    private val auditRetentionMs: String = "2592000000",
+    @Value("\${app.kafka.topics.config.audit-cleanup-policy:compact,delete}")
+    private val auditCleanupPolicy: String = "compact,delete"
 ) {
 
     @Bean
@@ -55,10 +65,10 @@ class KafkaProducerConfig(
     fun shipmentsEventsTopic(): NewTopic {
         val replicas = replicationFactor.coerceIn(1, 3)
         return TopicBuilder.name("shipments.events")
-            .partitions(3)
+            .partitions(partitions.coerceAtLeast(1))
             .replicas(replicas)
-            .config("retention.ms", "604800000")
-            .config("cleanup.policy", "delete")
+            .config("retention.ms", shipmentsRetentionMs)
+            .config("cleanup.policy", shipmentsCleanupPolicy)
             .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
             .build()
     }
@@ -67,10 +77,10 @@ class KafkaProducerConfig(
     fun auditTimelineTopic(): NewTopic {
         val replicas = replicationFactor.coerceIn(1, 3)
         return TopicBuilder.name("audit.timeline")
-            .partitions(3)
+            .partitions(partitions.coerceAtLeast(1))
             .replicas(replicas)
-            .config("retention.ms", "2592000000")
-            .config("cleanup.policy", "compact,delete")
+            .config("retention.ms", auditRetentionMs)
+            .config("cleanup.policy", auditCleanupPolicy)
             .config("min.insync.replicas", if (replicas >= 3) "2" else "1")
             .build()
     }

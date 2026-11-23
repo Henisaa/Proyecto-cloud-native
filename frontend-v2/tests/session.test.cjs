@@ -166,4 +166,21 @@ test('Admin can create, configure, delete Kafka topics and inspect consumer grou
   documentEvents.click({ target: groupBtn, preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(calls.includes('/api/admin/kafka/groups/ms-rutaexpress-audit-group'));
+
+  node('#kgo-topic').value = 'tutorial-particiones';
+  node('#kgo-strategy').value = 'earliest';
+  documentEvents.submit({ target: { id: 'form-kafka-reset-offsets' }, preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(posts[1].path, '/api/admin/kafka/groups/ms-rutaexpress-audit-group/reset-offsets');
+  assert.deepEqual(posts[1].body, { topic: 'tutorial-particiones', strategy: 'earliest' });
+
+  const delGroupBtn = {
+    tagName: 'BUTTON',
+    dataset: { accion: 'kafkaEliminarGrupo', group: 'mi-grupo-educativo' },
+    closest: sel => (sel === '[data-accion]' ? delGroupBtn : null),
+  };
+  documentEvents.click({ target: delGroupBtn, preventDefault() {} });
+  await node('#confirmar-si').events.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(dels[1].path, '/api/admin/kafka/groups/mi-grupo-educativo');
 });

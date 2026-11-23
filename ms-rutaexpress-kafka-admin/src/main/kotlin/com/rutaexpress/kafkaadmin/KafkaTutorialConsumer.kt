@@ -1,5 +1,6 @@
 package com.rutaexpress.kafkaadmin
 
+import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
@@ -26,6 +27,7 @@ data class MensajeRecibido(
  */
 @Service
 class KafkaTutorialConsumer {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val historial = ConcurrentLinkedDeque<MensajeRecibido>()
 
     fun ultimosMensajes(): List<MensajeRecibido> = historial.toList()
@@ -40,14 +42,10 @@ class KafkaTutorialConsumer {
         @Header(KafkaHeaders.OFFSET) offset: Long,
         @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) key: String?
     ) {
-        // Imprimir información de manera clara y visual idéntica a la guía
-        println("\n" + "=".repeat(100))
-        System.out.printf(" MENSAJE RECIBIDO%n")
-        System.out.printf(" 📍Partición: %d%n", partition)
-        System.out.printf(" Offset: %d%n", offset)
-        System.out.printf(" Key: %s%n", if (key != null) key else "(sin key)")
-        System.out.printf(" Mensaje: %s%n", message)
-        println("=".repeat(100) + "\n")
+        logger.info(
+            "MENSAJE RECIBIDO [tutorial-particiones] Partición: {} | Offset: {} | Key: {} | Mensaje: {}",
+            partition, offset, key ?: "(sin key)", message
+        )
 
         historial.addFirst(MensajeRecibido(partition, offset, key, message))
         while (historial.size > 100) {

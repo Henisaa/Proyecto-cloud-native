@@ -247,3 +247,38 @@ test('notificación recuperable reintenta y termina en DLQ con SMTP detenido', a
     await expect.poll(async () => (await queue(request, 'q.rutaexpress.notification.dlq')).message_stats?.ack || 0, { timeout: 60_000 }).toBeGreaterThan(before);
   } finally { execFileSync('docker', ['start', mailpit]); }
 });
+
+test('administrador Kafka gestiona tópicos, configuraciones, consumer groups y protege núcleo', async ({ request }) => {
+  const { accessToken } = await session(request);
+  const headers = bearer(accessToken);
+  const topic = `rutaexpress.ci.${randomUUID().slice(0, 8)}`;
+
+  expect((await request.delete(`${API}/api/admin/kafka/topics/shipments.events`, { headers })).status()).toBe(409);
+
+  const created = await request.post(`${API}/api/admin/kafka/topics`, {
+    headers,
+    data: { name: topic, partitions: 3, replicas: 3, retentionMs: 300000, cleanupPolicy: 'delete' },
+  });
+  expect(created.status()).toBe(201);
+
+  const updatedCfg = await request.put(`${API}/api/admin/kafka/topics/${topic}/configs`, {
+    headers,
+    data: { configs: { 'retention.ms': '600000', 'cleanup.policy': 'compact,delete' } },
+  });
+  expect(updatedCfg.status()).toBe(200);
+
+  const expanded = await request.put(`${API}/api/admin/kafka/topics/${topic}/partitions`, {
+    headers,
+    data: { partitions: 4 },
+  });
+  expect(expanded.status()).toBe(200);
+  expect(((await expanded.json()).partitions || []).length).toBe(4);
+
+  expect((await request.delete(`${API}/api/admin/kafka/topics/${topic}/configs/retention.ms`, { headers })).status()).toBe(200);
+  expect((await request.delete(`${API}/api/admin/kafka/topics/${topic}`, { headers })).status()).toBe(200);
+
+  const groups = await request.get(`${API}/api/admin/kafka/groups`, { headers });
+  expect(groups.status()).toBe(200);
+  const groupDetail = await request.get(`${API}/api/admin/kafka/groups/ms-rutaexpress-audit-group`, { headers });
+  expect(groupDetail.status()).toBe(200);
+});

@@ -40,6 +40,9 @@ class AdminSecurityTests {
         mvc.perform(delete("/api/kafka-admin/topics/shipments.events/configs/retention.ms")).andExpect(status().isForbidden)
         mvc.perform(get("/api/kafka-admin/groups")).andExpect(status().isForbidden)
         mvc.perform(get("/api/kafka-admin/groups/ms-rutaexpress-audit-group")).andExpect(status().isForbidden)
+        mvc.perform(post("/api/kafka-admin/groups/mi-grupo-educativo/reset-offsets")
+            .contentType("application/json").content("""{"topic":"tutorial-particiones","strategy":"earliest"}""")).andExpect(status().isForbidden)
+        mvc.perform(delete("/api/kafka-admin/groups/mi-grupo-educativo")).andExpect(status().isForbidden)
     }
 
     @Test @WithMockUser(roles=["ADMIN"])
@@ -50,6 +53,9 @@ class AdminSecurityTests {
         `when`(service.deleteConfig("shipments.events", "retention.ms")).thenReturn(mapOf("name" to "shipments.events"))
         `when`(service.listGroups()).thenReturn(listOf(mapOf("groupId" to "ms-rutaexpress-audit-group", "state" to "STABLE")))
         `when`(service.describeGroup("ms-rutaexpress-audit-group")).thenReturn(mapOf("groupId" to "ms-rutaexpress-audit-group", "state" to "STABLE"))
+        `when`(service.resetGroupOffsets("mi-grupo-educativo", ResetOffsetsRequest("tutorial-particiones", "earliest")))
+            .thenReturn(mapOf("groupId" to "mi-grupo-educativo", "strategy" to "earliest"))
+        `when`(service.deleteGroup("mi-grupo-educativo", false)).thenReturn(mapOf("groupId" to "mi-grupo-educativo", "deleted" to true))
 
         mvc.perform(delete("/api/kafka-admin/topics/rutaexpress.demo.ep5")).andExpect(status().isOk)
         mvc.perform(put("/api/kafka-admin/topics/shipments.events/configs")
@@ -57,5 +63,8 @@ class AdminSecurityTests {
         mvc.perform(delete("/api/kafka-admin/topics/shipments.events/configs/retention.ms")).andExpect(status().isOk)
         mvc.perform(get("/api/kafka-admin/groups")).andExpect(status().isOk)
         mvc.perform(get("/api/kafka-admin/groups/ms-rutaexpress-audit-group")).andExpect(status().isOk)
+        mvc.perform(post("/api/kafka-admin/groups/mi-grupo-educativo/reset-offsets")
+            .contentType("application/json").content("""{"topic":"tutorial-particiones","strategy":"earliest"}""")).andExpect(status().isOk)
+        mvc.perform(delete("/api/kafka-admin/groups/mi-grupo-educativo")).andExpect(status().isOk)
     }
 }

@@ -112,4 +112,47 @@ class EnvioEventPublisherTests {
         )
         verifyNoInteractions(template)
     }
+
+    @Test
+    fun `publicarCambioEstado espera a afterCommit cuando hay transaccion activa`() {
+        @Suppress("UNCHECKED_CAST")
+        val template = mock(KafkaTemplate::class.java) as KafkaTemplate<String, Any>
+        val enviados = mutableListOf<ProducerRecord<String, Any>>()
+        whenever(template.send(any<ProducerRecord<String, Any>>())).thenAnswer { inv ->
+            val rec = inv.getArgument<ProducerRecord<String, Any>>(0)
+            enviados.add(rec)
+            @Suppress("UNCHECKED_CAST")
+            CompletableFuture.completedFuture(null) as CompletableFuture<SendResult<String, Any>>
+        }
+
+        val publisher = EnvioEventPublisher(template, "shipments.events", "audit.timeline", true)
+        val envio = Envio(
+            id = "env-tx-1",
+            trackingCode = "RX-TX1",
+            serviceId = 1L,
+            serviceType = "ESTANDAR",
+            zone = "SUR",
+            recipientName = "Luis",
+            originAddress = "A",
+            destinationAddress = "B",
+            status = EstadoEnvio.EN_RUTA
+        )
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization()
+        try {
+            publisher.publicarCambioEstado(envio, "despachador@rutaexpress.cl")
+            assertThat(enviados).isEmpty()
+
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                .forEach { it.afterCommit() }
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization()
+        }
+
+        val deadline = System.currentTimeMillis() + 3000
+        while (enviados.size < 2 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        assertThat(enviados).hasSize(2)
+    }
 }

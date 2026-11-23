@@ -22,6 +22,7 @@ import org.springframework.http.MediaType
 import org.springframework.kafka.config.KafkaListenerEndpointRegistrar
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -194,7 +195,7 @@ class KafkaTuningAndErrorTests {
     @Test
     fun `KafkaAdminService reconcilia topicos de tuning y errores y admite analytics-group`() {
         val admin = mock(AdminClient::class.java, RETURNS_DEEP_STUBS)
-        `when`(admin.listTopics().names()).thenReturn(KafkaFuture.completedFuture(setOf("sensor-topic", "ordenes-creadas", "ordenes-creadas.DLT")))
+        `when`(admin.listTopics().names()).thenReturn(KafkaFuture.completedFuture(setOf("sensor-topic", "ordenes-creadas", "ordenes-creadas.DLT", "catalog.events.audit.DLT")))
         `when`(admin.listConsumerGroupOffsets("analytics-group").partitionsToOffsetAndMetadata())
             .thenReturn(KafkaFuture.completedFuture(emptyMap()))
         `when`(admin.listConsumerGroupOffsets("error-handling-group").partitionsToOffsetAndMetadata())
@@ -202,7 +203,7 @@ class KafkaTuningAndErrorTests {
 
         val service = KafkaAdminService(admin, 3, 2)
         assertThat(service.reconcileTuningAndErrorTopics())
-            .containsExactly("ordenes-creadas", "ordenes-creadas.DLT", "sensor-topic")
+            .containsExactly("catalog.events.audit.DLT", "ordenes-creadas", "ordenes-creadas.DLT", "sensor-topic")
         assertThat(service.lag("analytics-group")).isEmpty()
         assertThat(service.lag("error-handling-group")).isEmpty()
 
@@ -238,6 +239,7 @@ class KafkaTuningAndErrorWebMvcTests {
     @MockitoBean lateinit var decoder: JwtDecoder
 
     @Test
+    @WithMockUser(roles = ["ADMIN"])
     fun `endpoints de load test y manejo de errores responden correctamente via HTTP`() {
         mvc.perform(get("/api/test/health"))
             .andExpect(status().isOk)

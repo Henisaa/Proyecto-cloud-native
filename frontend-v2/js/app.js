@@ -1653,11 +1653,18 @@
     var box = document.getElementById('kafka-group-detalle');
     if (!box || !det) return;
     box.classList.remove('hidden');
+    var formReset = document.getElementById('form-kafka-reset-offsets');
+    if (formReset) formReset.classList.remove('hidden');
+    var topicInput = document.getElementById('kgo-topic');
+    if (topicInput && !topicInput.value && det.partitions && det.partitions.length) {
+      topicInput.value = det.partitions[0].topic || '';
+    }
     var coord = det.coordinator && det.coordinator.host ? ('Broker ' + det.coordinator.id + ' (' + det.coordinator.host + ':' + det.coordinator.port + ')') : '—';
     var miembros = det.members || [];
+    var btnEliminar = boton('kafkaEliminarGrupo', { group: det.groupId }, 'Eliminar grupo', 'border border-rose-900/60 text-rose-300 hover:bg-rose-950/40');
     box.innerHTML = '<div class="flex flex-wrap items-center justify-between gap-2">' +
       '<div class="font-mono"><strong class="text-white">' + esc(det.groupId) + '</strong> · Estado: <span class="text-emerald-300">' + esc(det.state) + '</span> · Assignor: <span class="text-sky-300">' + esc(det.partitionAssignor || '—') + '</span></div>' +
-      '<div class="font-mono text-zinc-400">Coordinador: ' + esc(coord) + ' · Lag total: <strong class="text-white">' + num(det.totalLag || 0) + '</strong></div>' +
+      '<div class="flex items-center gap-2 font-mono text-zinc-400"><span>Coordinador: ' + esc(coord) + ' · Lag total: <strong class="text-white">' + num(det.totalLag || 0) + '</strong></span>' + btnEliminar + '</div>' +
     '</div>' +
     '<div class="space-y-1">' +
       (miembros.length ? miembros.map(function (m) {
@@ -1667,6 +1674,45 @@
         '</div>';
       }).join('') : '<div class="text-zinc-500 text-[11px]">Grupo sin consumidores conectados actualmente (EMPTY).</div>') +
     '</div>';
+  }
+
+  function resetearOffsetsGrupoKafka(ev) {
+    var grupo = ($('#kafka-grupo').value || '').trim();
+    var topic = ((document.getElementById('kgo-topic') || {}).value || '').trim();
+    var strategy = ((document.getElementById('kgo-strategy') || {}).value || 'earliest').trim();
+    if (!grupo || !topic) return toast('Indica el grupo y el tópico para reiniciar offsets.', true);
+    return ejecutar(ev.submitter, function () {
+      return RX.post('/api/admin/kafka/groups/' + encodeURIComponent(grupo) + '/reset-offsets', { topic: topic, strategy: strategy });
+    }).then(function (r) {
+      if (!r.ok) return toast(r.error.message, true);
+      toast('Offsets de «' + grupo + '» en «' + topic + '» reiniciados a ' + strategy);
+      return consultarLag();
+    });
+  }
+
+  function eliminarGrupoKafka(group) {
+    if (!group) return;
+    var ruta = '/api/admin/kafka/groups/' + encodeURIComponent(group);
+    confirmar('¿Eliminar el consumer group «' + group + '»?', function () {
+      return RX.del(ruta).then(function () {
+        toast('Consumer group «' + group + '» eliminado');
+        var box = document.getElementById('kafka-group-detalle');
+        if (box) box.classList.add('hidden');
+        var formReset = document.getElementById('form-kafka-reset-offsets');
+        if (formReset) formReset.classList.add('hidden');
+        return cargarKafkaGrupos();
+      }, function (e) {
+        if (e.status !== 409) return toast(e.message, true);
+        confirmar(e.message + ' ¿Forzar eliminación?', function () {
+          return RX.del(ruta, { force: true }).then(function () {
+            toast('Consumer group eliminado (forzado)');
+            var box = document.getElementById('kafka-group-detalle');
+            if (box) box.classList.add('hidden');
+            return cargarKafkaGrupos();
+          }, function (e2) { toast(e2.message, true); });
+        }, 'Forzar');
+      });
+    }, 'Sí, eliminar');
   }
 
   function consultarLag() {
@@ -1776,6 +1822,7 @@
         if (inp) inp.value = d.group || '';
         return consultarLag();
       },
+      kafkaEliminarGrupo: function () { return eliminarGrupoKafka(d.group); },
       kafkaReconciliar: function () {
         return RX.post('/api/admin/kafka/topology', {}).then(function () {
           toast('Topología Kafka aplicada: tutorial-particiones (3 particiones)');
@@ -1841,6 +1888,7 @@
       'form-kafka-topic': crearTopicoKafka,
       'form-kafka-partitions': ampliarParticionesKafka,
       'form-kafka-config': actualizarConfigKafka,
+      'form-kafka-reset-offsets': resetearOffsetsGrupoKafka,
       'form-kafka-send': enviarFormularioKafka,
       'form-ks-simulate': enviarSimulacionStreams,
       'form-kt-load': lanzarPruebaCargaKafka,

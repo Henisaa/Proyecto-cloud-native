@@ -83,6 +83,9 @@ app:
       concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
     topics:
       auto-create: ${KAFKA_TOPICS_AUTO_CREATE:true}
+      dlt-partitions: ${KAFKA_DLT_PARTITIONS:3}
+      dlt-retention-ms: ${KAFKA_DLT_RETENTION_MS:1209600000}
+      dlt-cleanup-policy: ${KAFKA_DLT_CLEANUP_POLICY:delete}
 
 logging:
   pattern:

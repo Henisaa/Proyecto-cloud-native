@@ -189,11 +189,56 @@ class KafkaAdminServiceTests {
 
         val detail = service.describeGroup("ms-rutaexpress-audit-group")
         assertThat(detail["state"]).isEqualTo("STABLE")
+        assertThat(detail["protected"]).isEqualTo(true)
         assertThat(detail["partitionAssignor"]).isEqualTo("CooperativeStickyAssignor")
         assertThat(detail["totalLag"]).isEqualTo(0L)
         @Suppress("UNCHECKED_CAST")
         val members = detail["members"] as List<Map<String, Any>>
         assertThat(members).hasSize(1)
         assertThat(members[0]["assignedPartitions"]).isEqualTo(listOf("shipments.events[0]"))
+
+        // Un grupo con consumidores activos (STABLE) no permite resetear offsets ni eliminarse -> 409
+        assertThatThrownBy {
+            service.resetGroupOffsets("ms-rutaexpress-audit-group", ResetOffsetsRequest("shipments.events", "earliest"))
+        }.isInstanceOf(ResponseStatusException::class.java).hasMessageContaining("409")
+
+        assertThatThrownBy {
+            service.deleteGroup("ms-rutaexpress-audit-group", force = true)
+        }.isInstanceOf(ResponseStatusException::class.java).hasMessageContaining("409")
+
+        // Un grupo protegido sin force=true responde 409 aunque esté EMPTY
+        assertThatThrownBy {
+            service.deleteGroup("ms-rutaexpress-audit-group", force = false)
+        }.isInstanceOf(ResponseStatusException::class.java).hasMessageContaining("409")
+
+        // Un grupo no protegido en estado EMPTY permite resetear offsets y eliminarse
+        val emptyDesc = mock(ConsumerGroupDescription::class.java).apply {
+            `when`(groupId()).thenReturn("mi-grupo-educativo")
+            `when`(groupState()).thenReturn(GroupState.EMPTY)
+            `when`(members()).thenReturn(emptyList())
+        }
+        val node = Node(1, "kafka-1", 29092)
+        val tp = TopicPartition("tutorial-particiones", 0)
+        val topicDesc = TopicDescription("tutorial-particiones", false, listOf(TopicPartitionInfo(0, node, listOf(node), listOf(node))))
+        val offsetResult = mock(org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo::class.java).apply {
+            `when`(offset()).thenReturn(0L)
+        }
+        `when`(admin.describeConsumerGroups(listOf("mi-grupo-educativo")).all())
+            .thenReturn(KafkaFuture.completedFuture(mapOf("mi-grupo-educativo" to emptyDesc)))
+        `when`(admin.describeTopics(listOf("tutorial-particiones")).allTopicNames())
+            .thenReturn(KafkaFuture.completedFuture(mapOf("tutorial-particiones" to topicDesc)))
+        `when`(admin.listOffsets(anyMap()).all())
+            .thenReturn(KafkaFuture.completedFuture(mapOf(tp to offsetResult)))
+        `when`(admin.alterConsumerGroupOffsets(eq("mi-grupo-educativo"), anyMap()).all())
+            .thenReturn(KafkaFuture.completedFuture(null))
+        `when`(admin.deleteConsumerGroups(listOf("mi-grupo-educativo")).all())
+            .thenReturn(KafkaFuture.completedFuture(null))
+
+        val resetRes = service.resetGroupOffsets("mi-grupo-educativo", ResetOffsetsRequest("tutorial-particiones", "earliest"))
+        assertThat(resetRes["groupId"]).isEqualTo("mi-grupo-educativo")
+        assertThat(resetRes["strategy"]).isEqualTo("earliest")
+
+        val delRes = service.deleteGroup("mi-grupo-educativo", force = false)
+        assertThat(delRes["deleted"]).isEqualTo(true)
     }
 }

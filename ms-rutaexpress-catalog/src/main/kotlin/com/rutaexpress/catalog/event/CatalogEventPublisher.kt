@@ -7,7 +7,12 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 @Component
 class CatalogEventPublisher(
@@ -19,6 +24,12 @@ class CatalogEventPublisher(
     private val kafkaEnabled: Boolean = true
 ) {
     private val logger = LoggerFactory.getLogger(CatalogEventPublisher::class.java)
+
+    private val ejecutor = ThreadPoolExecutor(
+        1, 2, 30, TimeUnit.SECONDS, LinkedBlockingQueue(1000),
+        { tarea -> Thread(tarea, "kafka-catalog-eventos").apply { isDaemon = true } },
+        { _, _ -> logger.warn("Cola de eventos Kafka de catálogo llena; se omite publicación para no bloquear el servicio") }
+    )
 
     fun publishServiceCreated(serviceId: Long, code: String, name: String, category: String, basePrice: Double, estimatedHours: Int) {
         val payload = ServiceCreatedPayload(serviceId, code, name, category, basePrice, estimatedHours)
@@ -95,7 +106,23 @@ class CatalogEventPublisher(
             logger.debug("Kafka publishing disabled or template not present. Skipping event {}", envelope.type)
             return
         }
+        despuesDelCommit {
+            publicarRegistro(key, envelope)
+        }
+    }
 
+    private fun despuesDelCommit(accion: () -> Unit) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() = ejecutor.execute(accion)
+            })
+        } else {
+            accion()
+        }
+    }
+
+    private fun publicarRegistro(key: String, envelope: EventEnvelope<*>) {
+        if (kafkaTemplate == null) return
         val correlationId = envelope.correlationId ?: key
         val prevCorrelation = MDC.get("correlationId")
         MDC.put("correlationId", correlationId)

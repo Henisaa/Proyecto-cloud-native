@@ -76,6 +76,12 @@ app:
     topics:
       shipments-events: ${KAFKA_TOPIC_SHIPMENTS_EVENTS:shipments.events}
       envios-events: ${KAFKA_TOPIC_AUDIT_TIMELINE:audit.timeline}
+      config:
+        partitions: ${KAFKA_TOPIC_PARTITIONS:3}
+        shipments-retention-ms: ${KAFKA_TOPIC_SHIPMENTS_RETENTION_MS:604800000}
+        shipments-cleanup-policy: ${KAFKA_TOPIC_SHIPMENTS_CLEANUP_POLICY:delete}
+        audit-retention-ms: ${KAFKA_TOPIC_AUDIT_RETENTION_MS:2592000000}
+        audit-cleanup-policy: ${KAFKA_TOPIC_AUDIT_CLEANUP_POLICY:compact,delete}
   # Topología RabbitMQ compartida por todos los microservicios (nombres centralizados)
   rabbit:
     enabled: ${RABBIT_ENABLED:true}

@@ -30,5 +30,8 @@ class SnapshotEnvio(
     var leadTimeMinutes: BigDecimal? = null,
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: OffsetDateTime = OffsetDateTime.now()
+    var updatedAt: OffsetDateTime = OffsetDateTime.now(),
+
+    @Column(name = "last_event_id", length = 100)
+    var lastEventId: String? = null
 )

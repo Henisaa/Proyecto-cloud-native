@@ -40,7 +40,7 @@ class EnvioEventPublisher(
     private val ejecutor = ThreadPoolExecutor(
         1, 2, 30, TimeUnit.SECONDS, LinkedBlockingQueue(1000),
         { tarea -> Thread(tarea, "kafka-eventos").apply { isDaemon = true } },
-        ThreadPoolExecutor.DiscardPolicy(),
+        { _, _ -> logger.warn("Cola de publicación Kafka de envíos llena; se descarta evento para no afectar transacción") },
     )
 
     fun publicarCambioEstado(envio: Envio, actor: String = "SISTEMA") {

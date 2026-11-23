@@ -1141,6 +1141,21 @@
 
         <div id="kafka-group-detalle" class="hidden bg-[#151515] border border-white/[0.06] rounded-sm p-3 space-y-3 text-xs"></div>
 
+        <form id="form-kafka-reset-offsets" class="hidden bg-[#151515] border border-white/[0.06] rounded-sm p-3 flex flex-wrap items-end gap-2 text-xs">
+          <div class="flex-1 min-w-[180px]">
+            <label class="block text-[10px] text-zinc-400 mb-1">Tópico para reiniciar offsets (grupo EMPTY)</label>
+            <input type="text" id="kgo-topic" required placeholder="Ej: tutorial-particiones" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+          </div>
+          <div class="w-36">
+            <label class="block text-[10px] text-zinc-400 mb-1">Estrategia</label>
+            <select id="kgo-strategy" class="w-full bg-[#1A1A1A] border border-white/[0.08] px-2.5 py-1.5 rounded-sm text-zinc-200 font-mono">
+              <option value="earliest">earliest</option>
+              <option value="latest">latest</option>
+            </select>
+          </div>
+          <button type="submit" class="text-xs border border-white/[0.12] px-3 py-1.5 rounded-sm text-zinc-200 hover:bg-white/[0.06]">Reiniciar Offsets</button>
+        </form>
+
         <div class="overflow-x-auto">
           <table class="w-full min-w-[520px] text-left text-xs">
             <thead class="border-b border-white/[0.06] text-[10px] uppercase tracking-wider text-zinc-500">

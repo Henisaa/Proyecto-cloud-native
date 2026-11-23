@@ -115,7 +115,9 @@ class BrokerAdminController(
             get(kafkaDisponible(), "/api/kafka/messages", jwt)
         } else if (resource == "health") {
             try {
-                kafkaDisponible().get().uri("/api/kafka/health").retrieve().body(String::class.java) ?: ""
+                kafkaDisponible().get().uri("/api/kafka/health")
+                    .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
+                    .retrieve().body(String::class.java) ?: ""
             } catch (ex: Exception) {
                 mapOf("status" to "DOWN", "error" to (ex.message ?: "Unavailable"))
             }
@@ -205,6 +207,31 @@ class BrokerAdminController(
     @GetMapping("/kafka/groups/{group}/lag")
     fun lag(@PathVariable("group") group: String, @AuthenticationPrincipal jwt: Jwt?) =
         get(kafkaDisponible(), "/api/kafka-admin/groups/{group}/lag", jwt, group)
+
+    @PostMapping("/kafka/groups/{group}/reset-offsets")
+    fun resetearOffsetsGrupoKafka(
+        @PathVariable("group") group: String,
+        @RequestBody body: Any,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.POST,
+        "/api/kafka-admin/groups/{group}/reset-offsets",
+        jwt,
+        body,
+        arrayOf(group)
+    )
+
+    @DeleteMapping("/kafka/groups/{group}")
+    fun eliminarGrupoKafka(
+        @PathVariable("group") group: String,
+        @RequestParam("force", defaultValue = "false") force: Boolean,
+        @AuthenticationPrincipal jwt: Jwt?
+    ): ResponseEntity<String> = enviarKafka(
+        HttpMethod.DELETE,
+        "/api/kafka-admin/groups/{group}?force={force}",
+        jwt,
+        uriVariables = arrayOf(group, force)
+    )
     @GetMapping("/kafka/streams/state")
     fun streamsState(@AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka/streams/state", jwt)
     @PostMapping("/kafka/streams/simulate")
@@ -256,6 +283,7 @@ class BrokerAdminController(
                     if (!key.isNullOrBlank()) b.queryParam("key", key)
                     b.build()
                 }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
                 .retrieve().body(String::class.java) ?: ""
         } catch (e: Exception) {
             throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo enviar mensaje a Kafka: ${e.message}", e)
@@ -275,6 +303,7 @@ class BrokerAdminController(
                     if (!key.isNullOrBlank()) b.queryParam("key", key)
                     b.build()
                 }
+                .headers { if (jwt != null) it.setBearerAuth(jwt.tokenValue) }
                 .retrieve().body(String::class.java) ?: ""
         } catch (e: Exception) {
             throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo enviar mensaje a Kafka: ${e.message}", e)

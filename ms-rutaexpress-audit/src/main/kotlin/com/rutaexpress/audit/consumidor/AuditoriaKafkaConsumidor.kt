@@ -23,7 +23,8 @@ data class EventoAuditoriaPayloadDto(
     val type: String = "shipment.status.changed",
     val source: String = "ms-rutaexpress-shipments",
     val actor: String = "SISTEMA",
-    val correlationId: String? = null
+    val correlationId: String? = null,
+    val entityType: String = "ENVIO"
 )
 
 @Component
@@ -66,6 +67,55 @@ class AuditoriaKafkaConsumidor @Autowired constructor(
             source = data.path("source").asText("ms-rutaexpress-shipments"),
             actor = data.path("actor").asText("SISTEMA"),
             correlationId = headerCorrelation ?: data.path("correlationId").asText(entity)
+        )
+
+        val correlationId = dto.correlationId ?: entity
+        val previousMdc = MDC.get("correlationId")
+        MDC.put("correlationId", correlationId)
+        try {
+            auditoriaEventoServicio.registrarEvento(
+                dto = dto,
+                rawPayload = registro.value(),
+                topic = registro.topic(),
+                partition = registro.partition(),
+                offset = registro.offset(),
+                key = registro.key(),
+                correlationId = correlationId
+            )
+        } finally {
+            if (previousMdc != null) MDC.put("correlationId", previousMdc) else MDC.remove("correlationId")
+        }
+    }
+
+    @KafkaListener(
+        topics = ["catalog.events"],
+        groupId = "\${spring.kafka.consumer.group-id:ms-rutaexpress-audit-group}",
+        concurrency = "\${app.kafka.listener.concurrency:3}"
+    )
+    fun consumirEventoCatalogo(registro: ConsumerRecord<String, String>) {
+        val headerCorrelation = registro.headers().lastHeader("X-Correlation-Id")?.value()
+            ?.let { String(it, StandardCharsets.UTF_8) }
+
+        val data = mapper.readTree(registro.value())
+        val eventId = data.path("eventId").asText("")
+        require(eventId.isNotBlank()) { "Evento de catálogo sin eventId" }
+
+        val payloadNode = data.path("payload")
+        val entity = payloadNode.path("code").asText("").ifBlank {
+            payloadNode.path("serviceId").asText("").ifBlank { registro.key() ?: "" }
+        }
+        require(entity.isNotBlank()) { "Evento de catálogo sin identificador de entidad" }
+
+        val timestampRaw = data.path("timestamp").asText("")
+        val dto = EventoAuditoriaPayloadDto(
+            eventId = eventId,
+            shipmentId = entity,
+            timestamp = timestampRaw,
+            type = data.path("type").asText("catalog.event"),
+            source = data.path("source").asText("ms-rutaexpress-catalog"),
+            actor = data.path("actor").asText("SISTEMA"),
+            correlationId = headerCorrelation ?: data.path("correlationId").asText("").ifBlank { entity },
+            entityType = "CATALOGO"
         )
 
         val correlationId = dto.correlationId ?: entity

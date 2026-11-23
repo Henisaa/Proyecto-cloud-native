@@ -19,5 +19,5 @@ window.RUTAEXPRESS_CONFIG = {
   },
 
   /* Grupos de consumo Kafka que se muestran en el panel («Kafka Consumer Lag»). */
-  kafkaGroups: ['ms-rutaexpress-report-group', 'ms-rutaexpress-audit-group', 'mi-grupo-educativo', 'analytics-group', 'error-handling-group'],
+  kafkaGroups: ['ms-rutaexpress-report-group', 'ms-rutaexpress-audit-group', 'rutaexpress-streams-processor', 'mi-grupo-educativo', 'analytics-group', 'error-handling-group'],
 };
