@@ -3,6 +3,7 @@ package com.rutaexpress.catalog.config
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
@@ -15,7 +16,7 @@ import org.springframework.kafka.support.serializer.JacksonJsonSerializer
 
 @Configuration
 @ConditionalOnProperty(name = ["app.kafka.enabled"], havingValue = "true", matchIfMissing = true)
-class KafkaProducerConfig(
+class KafkaProducerConfig @Autowired constructor(
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private val bootstrapServers: String,
     @Value("\${app.kafka.replication-factor:3}")
