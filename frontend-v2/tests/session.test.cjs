@@ -12,6 +12,8 @@ async function session(roles, hash = '#/panel') {
   const posts = [];
   const puts = [];
   const dels = [];
+  // Payloads originate inside the vm realm; clone them so deepStrictEqual can compare prototypes.
+  const plain = value => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
   const documentEvents = {};
   function node(id) {
     if (!nodes.has(id)) {
@@ -39,19 +41,23 @@ async function session(roles, hash = '#/panel') {
         if (path.endsWith('/shipments/summary')) return { total: 0, byStatus: {}, byCapacity: {}, recent: [] };
         if (path.endsWith('/shipments')) return { content: [], totalPages: 0, totalElements: 0 };
         if (path === '/api/admin/kafka/topics' || path === '/api/admin/kafka/messages' || path === '/api/admin/kafka/groups') return [];
+        const topicPrefix = '/api/admin/kafka/topics/';
+        if (path.startsWith(topicPrefix) && !path.slice(topicPrefix.length).includes('/')) {
+          return { name: decodeURIComponent(path.slice(topicPrefix.length)), protected: false, partitions: [], configs: { 'retention.ms': '300000' } };
+        }
         if (path.startsWith('/api/admin/kafka/groups/')) return { groupId: 'ms-rutaexpress-audit-group', state: 'STABLE', partitionAssignor: 'CooperativeStickyAssignor', members: [], partitions: [], totalLag: 0 };
         return {};
       },
       post: async (path, body, query) => {
-        posts.push({ path, body, query });
+        posts.push({ path, body: plain(body), query: plain(query) });
         return {};
       },
       put: async (path, body) => {
-        puts.push({ path, body });
+        puts.push({ path, body: plain(body) });
         return { name: 'rutaexpress.demo.ep5', protected: false, partitions: [], configs: { 'retention.ms': '300000' } };
       },
       del: async (path, query) => {
-        dels.push({ path, query });
+        dels.push({ path, query: plain(query) });
         return { deleted: true };
       },
     },
