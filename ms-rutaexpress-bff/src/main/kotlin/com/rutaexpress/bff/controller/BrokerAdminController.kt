@@ -142,7 +142,7 @@ class BrokerAdminController(
         HttpMethod.DELETE,
         "/api/kafka-admin/topics/{name}?force={force}",
         jwt,
-        uriVariables = arrayOf(name, force)
+        uriVariables = arrayOf<Any>(name, force)
     )
 
     @PutMapping("/kafka/topics/{name}/partitions")
@@ -230,7 +230,7 @@ class BrokerAdminController(
         HttpMethod.DELETE,
         "/api/kafka-admin/groups/{group}?force={force}",
         jwt,
-        uriVariables = arrayOf(group, force)
+        uriVariables = arrayOf<Any>(group, force)
     )
     @GetMapping("/kafka/streams/state")
     fun streamsState(@AuthenticationPrincipal jwt: Jwt?) = get(kafkaDisponible(), "/api/kafka/streams/state", jwt)
