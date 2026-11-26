@@ -30,10 +30,8 @@ LABEL org.opencontainers.image.title="ms-rutaexpress-shipments" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.source="https://github.com/Henisaa/Proyecto-cloud-native"
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
- && useradd --system --uid 10001 app
+# curl ya viene en eclipse-temurin (lo usa el HEALTHCHECK): no se instala con apt-get, así el build no depende de los mirrors de Ubuntu.
+RUN useradd --system --uid 10001 app
 # MaxRAMPercentage=65 deja espacio para metaspace, hilos y buffers dentro del límite de memoria del contenedor.
 ENV TZ=UTC \
     PORT=${SERVICE_PORT} \
